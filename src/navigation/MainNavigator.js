@@ -10,6 +10,8 @@ import ScheduleScreen from '../screens/Timer/ScheduleScreen';
 import SettingsScreen from '../screens/Settings/SettingsScreen';
 import { COLORS } from '../constants/colors';
 import PowerSafetyScreen from '../screens/PowerSafetyManagement/PowerSafetyScreen';
+import BudgetTrackingScreen from '../screens/BudgetTracking/BudgetTrackingScreen';
+import ReferenceComparisonScreen from '../screens/ReferenceComparison/ReferenceComparisonScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -102,6 +104,16 @@ export const MainNavigator = () => {
       <Stack.Screen
         name="PowerSafety"
         component={PowerSafetyScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="BudgetTracking"
+        component={BudgetTrackingScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="ReferenceComparison"
+        component={ReferenceComparisonScreen}
         options={{ headerShown: false }}
       />
     </Stack.Navigator>

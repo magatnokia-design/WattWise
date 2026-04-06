@@ -7,6 +7,7 @@ import {
   ScrollView,
   TouchableOpacity,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { COLORS } from '../../constants/colors';
 import { SIZES, FONTS } from '../../constants/theme';
@@ -124,7 +125,11 @@ export const DashboardScreen = ({ navigation }) => {
         />
 
         {/* Budget Overview */}
-        <View style={styles.budgetCard}>
+        <TouchableOpacity
+          style={styles.budgetCard}
+          onPress={() => navigation.navigate('BudgetTracking')}
+          activeOpacity={0.8}
+        >
           <View style={styles.budgetHeader}>
             <Text style={styles.budgetTitle}>Monthly Budget</Text>
             <Text style={styles.budgetAmount}>₱0.00 / ₱0.00</Text>
@@ -133,7 +138,17 @@ export const DashboardScreen = ({ navigation }) => {
             <View style={[styles.budgetFill, { width: '0%' }]} />
           </View>
           <Text style={styles.budgetRemaining}>₱0.00 remaining</Text>
-        </View>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.comparisonCard}
+          onPress={() => navigation.navigate('ReferenceComparison')}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="bar-chart" size={24} color={COLORS.primary} />
+          <Text style={styles.comparisonTitle}>Compare Usage</Text>
+          <Text style={styles.comparisonSubtitle}>View month-over-month trends</Text>
+        </TouchableOpacity>
       </ScrollView>
 
       {/* Notification Panel */}
@@ -391,5 +406,25 @@ const styles = StyleSheet.create({
   budgetRemaining: {
     ...FONTS.small,
     color: COLORS.textLight,
+  },
+  comparisonCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: SIZES.radius,
+    padding: SIZES.padding,
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    alignItems: 'flex-start',
+  },
+  comparisonTitle: {
+    ...FONTS.h4,
+    color: COLORS.textDark,
+    fontWeight: 'bold',
+    marginTop: 8,
+  },
+  comparisonSubtitle: {
+    ...FONTS.small,
+    color: COLORS.textLight,
+    marginTop: 4,
   },
 });
