@@ -16,6 +16,7 @@ import { Button } from '../../../components/common/Button';
 import { authService } from '../../../services/firebase';
 import { COLORS } from '../../../constants/colors';
 import { SIZES, FONTS } from '../../../constants/theme';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export const RegisterScreen = ({ navigation }) => {
   const [formData, setFormData] = useState({
@@ -83,31 +84,30 @@ export const RegisterScreen = ({ navigation }) => {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleRegister = async () => {
-    if (!validate()) return;
+ const handleRegister = async () => {
+  if (!validate()) return;
 
-    setLoading(true);
-    try {
-      await authService.register(formData.email, formData.password, formData.name);
-      Alert.alert('Success', 'Account created successfully!', [
-        { text: 'OK', onPress: () => navigation.replace('Login') }
-      ]);
-    } catch (error) {
-      let errorMessage = 'Registration failed';
-      
-      if (error.code === 'auth/email-already-in-use') {
-        errorMessage = 'Email already in use';
-      } else if (error.code === 'auth/invalid-email') {
-        errorMessage = 'Invalid email address';
-      } else if (error.code === 'auth/weak-password') {
-        errorMessage = 'Password is too weak';
-      }
-      
-      Alert.alert('Error', errorMessage);
-    } finally {
-      setLoading(false);
+  setLoading(true);
+  try {
+    await AsyncStorage.removeItem('onboarding_complete');
+    await authService.register(formData.email, formData.password, formData.name);
+    // User automatically logged in, AppNavigator handles onboarding
+  } catch (error) {
+    let errorMessage = 'Registration failed';
+    
+    if (error.code === 'auth/email-already-in-use') {
+      errorMessage = 'Email already in use';
+    } else if (error.code === 'auth/invalid-email') {
+      errorMessage = 'Invalid email address';
+    } else if (error.code === 'auth/weak-password') {
+      errorMessage = 'Password is too weak';
     }
-  };
+    
+    Alert.alert('Error', errorMessage);
+  } finally {
+    setLoading(false);
+  }
+};
 
   const passwordValidation = validatePassword(formData.password);
 

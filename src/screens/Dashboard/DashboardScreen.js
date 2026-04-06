@@ -1,5 +1,5 @@
 // Dashboard Screen - Design Only (No ESP32 data yet)
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { COLORS } from '../../constants/colors';
 import { SIZES, FONTS } from '../../constants/theme';
+import NotificationPanel from '../Notifications/components/NotificationPanel';
 
 const OutletCard = ({ outletNumber, applianceName, status }) => (
   <View style={styles.outletCard}>
@@ -50,6 +51,8 @@ const OutletCard = ({ outletNumber, applianceName, status }) => (
 );
 
 export const DashboardScreen = ({ navigation }) => {
+  const [notificationVisible, setNotificationVisible] = useState(false);
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScrollView
@@ -62,7 +65,11 @@ export const DashboardScreen = ({ navigation }) => {
             <Text style={styles.greeting}>Good Morning 👋</Text>
             <Text style={styles.headerTitle}>WattWise</Text>
           </View>
-          <TouchableOpacity style={styles.notificationButton}>
+          <TouchableOpacity
+            style={styles.notificationButton}
+            onPress={() => setNotificationVisible(true)}
+            activeOpacity={0.7}
+          >
             <Text style={styles.notificationIcon}>🔔</Text>
           </TouchableOpacity>
         </View>
@@ -124,6 +131,12 @@ export const DashboardScreen = ({ navigation }) => {
           <Text style={styles.budgetRemaining}>₱0.00 remaining</Text>
         </View>
       </ScrollView>
+
+      {/* Notification Panel */}
+      <NotificationPanel
+        visible={notificationVisible}
+        onClose={() => setNotificationVisible(false)}
+      />
     </SafeAreaView>
   );
 };

@@ -29,16 +29,16 @@ export const AppNavigator = () => {
     }
   }, []);
 
-  useEffect(() => {
-    if (!loading) {
-      if (user) {
-        checkOnboarding();
-      } else {
-        setOnboardingComplete(null);
-        setCheckingOnboarding(false);
-      }
+ useEffect(() => {
+  if (!loading) {
+    if (user) {
+      checkOnboarding();
+    } else {
+      setOnboardingComplete(null);
+      setCheckingOnboarding(false);
     }
-  }, [user, loading]);
+  }
+}, [user, loading, checkOnboarding]);
 
   // Wait for Firebase auth + onboarding check to complete
   if (loading || checkingOnboarding || (user && onboardingComplete === null)) {
