@@ -93,7 +93,11 @@ export const DashboardScreen = ({ navigation }) => {
         </View>
 
         {/* Power Safety Status */}
-        <View style={styles.safetyCard}>
+        <TouchableOpacity
+          style={styles.safetyCard}
+          onPress={() => navigation.navigate('PowerSafety')}
+          activeOpacity={0.8}
+        >
           <Text style={styles.safetyIcon}>🛡️</Text>
           <View style={styles.safetyInfo}>
             <Text style={styles.safetyTitle}>Power Safety Status</Text>
@@ -102,7 +106,7 @@ export const DashboardScreen = ({ navigation }) => {
           <View style={styles.safetyBadge}>
             <Text style={styles.safetyBadgeText}>Safe</Text>
           </View>
-        </View>
+        </TouchableOpacity>
 
         {/* Outlets Section */}
         <Text style={styles.sectionTitle}>Smart Outlets</Text>

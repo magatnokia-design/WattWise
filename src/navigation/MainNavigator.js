@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, Platform } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { createStackNavigator } from '@react-navigation/stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { DashboardScreen } from '../screens/Dashboard/DashboardScreen';
 import { AnalyticsScreen } from '../screens/Analytics/AnalyticsScreen';
@@ -8,8 +9,10 @@ import HistoryScreen from '../screens/History/HistoryScreen';
 import ScheduleScreen from '../screens/Timer/ScheduleScreen';
 import SettingsScreen from '../screens/Settings/SettingsScreen';
 import { COLORS } from '../constants/colors';
+import PowerSafetyScreen from '../screens/PowerSafetyManagement/PowerSafetyScreen';
 
 const Tab = createBottomTabNavigator();
+const Stack = createStackNavigator();
 
 const TabIcon = ({ emoji, label, focused }) => (
   <View style={styles.tabIconContainer}>
@@ -20,7 +23,7 @@ const TabIcon = ({ emoji, label, focused }) => (
   </View>
 );
 
-export const MainNavigator = () => {
+const MainTabs = () => {
   const insets = useSafeAreaInsets();
 
   return (
@@ -89,6 +92,19 @@ export const MainNavigator = () => {
         }}
       />
     </Tab.Navigator>
+  );
+};
+
+export const MainNavigator = () => {
+  return (
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="MainTabs" component={MainTabs} />
+      <Stack.Screen
+        name="PowerSafety"
+        component={PowerSafetyScreen}
+        options={{ headerShown: false }}
+      />
+    </Stack.Navigator>
   );
 };
 
