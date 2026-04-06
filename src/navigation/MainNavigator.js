@@ -1,14 +1,13 @@
-// Main Navigator with Bottom Tab Bar
 import React from 'react';
 import { View, Text, StyleSheet, Platform } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { DashboardScreen } from '../screens/Dashboard/DashboardScreen';
 import { AnalyticsScreen } from '../screens/Analytics/AnalyticsScreen';
-import { ScheduleScreen } from '../screens/Timer/ScheduleScreen';
-import { SettingsScreen } from '../screens/Settings/SettingsScreen';
-import { COLORS } from '../constants/colors';
 import HistoryScreen from '../screens/History/HistoryScreen';
+import ScheduleScreen from '../screens/Timer/ScheduleScreen';
+import SettingsScreen from '../screens/Settings/SettingsScreen';
+import { COLORS } from '../constants/colors';
 
 const Tab = createBottomTabNavigator();
 
