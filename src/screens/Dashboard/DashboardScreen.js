@@ -12,6 +12,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { COLORS } from '../../constants/colors';
 import { SIZES, FONTS } from '../../constants/theme';
 import NotificationPanel from '../Notifications/components/NotificationPanel';
+import OutletControlModal from './components/OutletControlModal';
+import EditApplianceNameModal from './components/EditApplianceNameModal';
+import { useOutletControl } from './hooks/useOutletControl';
 
 const OutletCard = ({ outletNumber, applianceName, status }) => (
   <View style={styles.outletCard}>
@@ -53,6 +56,49 @@ const OutletCard = ({ outletNumber, applianceName, status }) => (
 
 export const DashboardScreen = ({ navigation }) => {
   const [notificationVisible, setNotificationVisible] = useState(false);
+
+  // Outlet control hook
+  const {
+    outlet1Status,
+    outlet2Status,
+    outlet1Name,
+    outlet2Name,
+    isToggling,
+    toggleOutlet,
+    updateApplianceName,
+  } = useOutletControl();
+
+  // Modal states
+  const [controlModal, setControlModal] = useState({ visible: false, outlet: null });
+  const [editModal, setEditModal] = useState({ visible: false, outlet: null });
+
+  // Handle toggle outlet
+  const handleToggleOutlet = (outletNumber) => {
+    setControlModal({ visible: true, outlet: outletNumber });
+  };
+
+  // Confirm toggle
+  const handleConfirmToggle = async () => {
+    const { outlet } = controlModal;
+    const currentStatus = outlet === 1 ? outlet1Status : outlet2Status;
+    const result = await toggleOutlet(outlet, !currentStatus);
+
+    if (result.success) {
+      setControlModal({ visible: false, outlet: null });
+    }
+  };
+
+  // Handle edit name
+  const handleEditName = (outletNumber) => {
+    setEditModal({ visible: true, outlet: outletNumber });
+  };
+
+  // Save appliance name
+  const handleSaveName = async (newName) => {
+    const { outlet } = editModal;
+    await updateApplianceName(outlet, newName);
+    setEditModal({ visible: false, outlet: null });
+  };
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -112,16 +158,144 @@ export const DashboardScreen = ({ navigation }) => {
         {/* Outlets Section */}
         <Text style={styles.sectionTitle}>Smart Outlets</Text>
 
-        <OutletCard
-          outletNumber={1}
-          applianceName="No Device"
-          status={false}
+        {/* Outlet Cards */}
+        <View style={styles.outletsContainer}>
+          {/* Outlet 1 */}
+          <View style={styles.outletCard}>
+            <View style={styles.outletHeader}>
+              <View style={styles.outletTitleRow}>
+                <Text style={styles.outletTitle}>{outlet1Name}</Text>
+                <TouchableOpacity
+                  style={styles.editButton}
+                  onPress={() => handleEditName(1)}
+                >
+                  <Ionicons name="create-outline" size={16} color={COLORS.primary} />
+                </TouchableOpacity>
+              </View>
+              <View style={[styles.statusBadge, outlet1Status ? styles.statusOn : styles.statusOff]}>
+                <View style={[styles.statusDot, outlet1Status ? styles.dotOn : styles.dotOff]} />
+                <Text style={[styles.statusText, outlet1Status ? styles.statusTextOn : styles.statusTextOff]}>
+                  {outlet1Status ? 'ON' : 'OFF'}
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.metricsGrid}>
+              <View style={styles.metricItem}>
+                <Ionicons name="flash" size={20} color={COLORS.primary} />
+                <Text style={styles.metricValue}>0 W</Text>
+                <Text style={styles.metricLabel}>Power</Text>
+              </View>
+              <View style={styles.metricItem}>
+                <Ionicons name="speedometer" size={20} color={COLORS.primary} />
+                <Text style={styles.metricValue}>0 V</Text>
+                <Text style={styles.metricLabel}>Voltage</Text>
+              </View>
+              <View style={styles.metricItem}>
+                <Ionicons name="pulse" size={20} color={COLORS.primary} />
+                <Text style={styles.metricValue}>0 A</Text>
+                <Text style={styles.metricLabel}>Current</Text>
+              </View>
+              <View style={styles.metricItem}>
+                <Ionicons name="time" size={20} color={COLORS.primary} />
+                <Text style={styles.metricValue}>0 kWh</Text>
+                <Text style={styles.metricLabel}>Energy</Text>
+              </View>
+            </View>
+
+            <TouchableOpacity
+              style={[styles.toggleButton, outlet1Status ? styles.toggleButtonOn : styles.toggleButtonOff]}
+              onPress={() => handleToggleOutlet(1)}
+              disabled={isToggling}
+            >
+              <Ionicons
+                name={outlet1Status ? 'power' : 'power-outline'}
+                size={20}
+                color={COLORS.white}
+              />
+              <Text style={styles.toggleButtonText}>
+                {outlet1Status ? 'Turn OFF' : 'Turn ON'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Outlet 2 */}
+          <View style={styles.outletCard}>
+            <View style={styles.outletHeader}>
+              <View style={styles.outletTitleRow}>
+                <Text style={styles.outletTitle}>{outlet2Name}</Text>
+                <TouchableOpacity
+                  style={styles.editButton}
+                  onPress={() => handleEditName(2)}
+                >
+                  <Ionicons name="create-outline" size={16} color={COLORS.primary} />
+                </TouchableOpacity>
+              </View>
+              <View style={[styles.statusBadge, outlet2Status ? styles.statusOn : styles.statusOff]}>
+                <View style={[styles.statusDot, outlet2Status ? styles.dotOn : styles.dotOff]} />
+                <Text style={[styles.statusText, outlet2Status ? styles.statusTextOn : styles.statusTextOff]}>
+                  {outlet2Status ? 'ON' : 'OFF'}
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.metricsGrid}>
+              <View style={styles.metricItem}>
+                <Ionicons name="flash" size={20} color={COLORS.primary} />
+                <Text style={styles.metricValue}>0 W</Text>
+                <Text style={styles.metricLabel}>Power</Text>
+              </View>
+              <View style={styles.metricItem}>
+                <Ionicons name="speedometer" size={20} color={COLORS.primary} />
+                <Text style={styles.metricValue}>0 V</Text>
+                <Text style={styles.metricLabel}>Voltage</Text>
+              </View>
+              <View style={styles.metricItem}>
+                <Ionicons name="pulse" size={20} color={COLORS.primary} />
+                <Text style={styles.metricValue}>0 A</Text>
+                <Text style={styles.metricLabel}>Current</Text>
+              </View>
+              <View style={styles.metricItem}>
+                <Ionicons name="time" size={20} color={COLORS.primary} />
+                <Text style={styles.metricValue}>0 kWh</Text>
+                <Text style={styles.metricLabel}>Energy</Text>
+              </View>
+            </View>
+
+            <TouchableOpacity
+              style={[styles.toggleButton, outlet2Status ? styles.toggleButtonOn : styles.toggleButtonOff]}
+              onPress={() => handleToggleOutlet(2)}
+              disabled={isToggling}
+            >
+              <Ionicons
+                name={outlet2Status ? 'power' : 'power-outline'}
+                size={20}
+                color={COLORS.white}
+              />
+              <Text style={styles.toggleButtonText}>
+                {outlet2Status ? 'Turn OFF' : 'Turn ON'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Modals */}
+        <OutletControlModal
+          visible={controlModal.visible}
+          onClose={() => setControlModal({ visible: false, outlet: null })}
+          outletNumber={controlModal.outlet}
+          outletName={controlModal.outlet === 1 ? outlet1Name : outlet2Name}
+          currentStatus={controlModal.outlet === 1 ? outlet1Status : outlet2Status}
+          onConfirm={handleConfirmToggle}
+          isLoading={isToggling}
         />
 
-        <OutletCard
-          outletNumber={2}
-          applianceName="No Device"
-          status={false}
+        <EditApplianceNameModal
+          visible={editModal.visible}
+          onClose={() => setEditModal({ visible: false, outlet: null })}
+          outletNumber={editModal.outlet}
+          currentName={editModal.outlet === 1 ? outlet1Name : outlet2Name}
+          onSave={handleSaveName}
         />
 
         {/* Budget Overview */}
@@ -289,6 +463,9 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     marginBottom: 12,
   },
+  outletsContainer: {
+    marginBottom: 8,
+  },
   outletCard: {
     backgroundColor: COLORS.white,
     borderRadius: SIZES.radius,
@@ -308,26 +485,53 @@ const styles = StyleSheet.create({
     color: COLORS.textDark,
     fontWeight: 'bold',
   },
+  outletTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  editButton: {
+    padding: 4,
+  },
   applianceName: {
     ...FONTS.small,
     color: COLORS.textLight,
     marginTop: 2,
   },
   statusBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    gap: 4,
   },
   statusOn: {
-    backgroundColor: COLORS.primary,
+    backgroundColor: COLORS.success + '20',
   },
   statusOff: {
-    backgroundColor: COLORS.border,
+    backgroundColor: COLORS.textLight + '20',
+  },
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  dotOn: {
+    backgroundColor: COLORS.success,
+  },
+  dotOff: {
+    backgroundColor: COLORS.textLight,
   },
   statusText: {
-    ...FONTS.small,
-    color: COLORS.white,
+    fontSize: 11,
     fontWeight: '600',
+  },
+  statusTextOn: {
+    color: COLORS.success,
+  },
+  statusTextOff: {
+    color: COLORS.textLight,
   },
   metricsGrid: {
     flexDirection: 'row',
@@ -353,6 +557,26 @@ const styles = StyleSheet.create({
     color: COLORS.textLight,
     marginTop: 2,
     fontSize: 10,
+  },
+  toggleButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    borderRadius: 8,
+    gap: 8,
+    marginTop: 12,
+  },
+  toggleButtonOn: {
+    backgroundColor: COLORS.error,
+  },
+  toggleButtonOff: {
+    backgroundColor: COLORS.success,
+  },
+  toggleButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.white,
   },
   outletFooter: {
     flexDirection: 'row',
