@@ -314,14 +314,19 @@ export const DashboardScreen = ({ navigation }) => {
           <Text style={styles.budgetRemaining}>₱0.00 remaining</Text>
         </TouchableOpacity>
 
+        {/* Reference Comparison Card */}
         <TouchableOpacity
           style={styles.comparisonCard}
           onPress={() => navigation.navigate('ReferenceComparison')}
-          activeOpacity={0.8}
         >
-          <Ionicons name="bar-chart" size={24} color={COLORS.primary} />
-          <Text style={styles.comparisonTitle}>Compare Usage</Text>
-          <Text style={styles.comparisonSubtitle}>View month-over-month trends</Text>
+          <View style={styles.comparisonIcon}>
+            <Ionicons name="bar-chart" size={24} color={COLORS.primary} />
+          </View>
+          <View style={styles.comparisonContent}>
+            <Text style={styles.comparisonTitle}>Compare Usage</Text>
+            <Text style={styles.comparisonSubtitle}>View month-over-month trends</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color={COLORS.textLight} />
         </TouchableOpacity>
       </ScrollView>
 
@@ -632,23 +637,36 @@ const styles = StyleSheet.create({
     color: COLORS.textLight,
   },
   comparisonCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: COLORS.white,
-    borderRadius: SIZES.radius,
-    padding: SIZES.padding,
-    marginBottom: 24,
+    padding: 16,
+    marginHorizontal: 20,
+    marginTop: 12,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: COLORS.border,
-    alignItems: 'flex-start',
+  },
+  comparisonIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: COLORS.primaryLight + '20',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  comparisonContent: {
+    flex: 1,
   },
   comparisonTitle: {
-    ...FONTS.h4,
-    color: COLORS.textDark,
-    fontWeight: 'bold',
-    marginTop: 8,
+    fontSize: 15,
+    fontWeight: '600',
+    color: COLORS.text,
+    marginBottom: 2,
   },
   comparisonSubtitle: {
-    ...FONTS.small,
+    fontSize: 12,
     color: COLORS.textLight,
-    marginTop: 4,
   },
 });
