@@ -1,0 +1,138 @@
+import {
+  collection,
+  query,
+  where,
+  orderBy,
+  limit,
+  getDocs,
+  startAfter,
+  doc,
+  getDoc,
+  addDoc,
+} from 'firebase/firestore';
+import { db } from './config';
+
+export const historyService = {
+  // Get activity logs with pagination
+  getActivityLogs: async (userId, filters = {}, lastDoc = null, limitCount = 20) => {
+    try {
+      const logsRef = collection(db, 'users', userId, 'history_logs');
+      let q = query(logsRef, orderBy('timestamp', 'desc'), limit(limitCount));
+
+      // Apply outlet filter
+      if (filters.outlet && filters.outlet !== 'all') {
+        q = query(
+          logsRef,
+          where('outlet', '==', parseInt(filters.outlet)),
+          orderBy('timestamp', 'desc'),
+          limit(limitCount)
+        );
+      }
+
+      // Pagination
+      if (lastDoc) {
+        q = query(q, startAfter(lastDoc));
+      }
+
+      const snapshot = await getDocs(q);
+      const logs = [];
+      snapshot.forEach((doc) => {
+        logs.push({ id: doc.id, ...doc.data() });
+      });
+
+      return {
+        success: true,
+        data: logs,
+        lastDoc: snapshot.docs[snapshot.docs.length - 1],
+        hasMore: snapshot.docs.length === limitCount,
+      };
+    } catch (error) {
+      console.error('Error getting activity logs:', error);
+      return { success: false, error: error.message };
+    }
+  },
+
+  // Get daily usage history
+  getDailyUsage: async (userId, filters = {}, lastDoc = null, limitCount = 30) => {
+    try {
+      const dailyRef = collection(db, 'users', userId, 'history_daily');
+      let q = query(dailyRef, orderBy('date', 'desc'), limit(limitCount));
+
+      // Pagination
+      if (lastDoc) {
+        q = query(q, startAfter(lastDoc));
+      }
+
+      const snapshot = await getDocs(q);
+      const usage = [];
+      snapshot.forEach((doc) => {
+        usage.push({ id: doc.id, ...doc.data() });
+      });
+
+      return {
+        success: true,
+        data: usage,
+        lastDoc: snapshot.docs[snapshot.docs.length - 1],
+        hasMore: snapshot.docs.length === limitCount,
+      };
+    } catch (error) {
+      console.error('Error getting daily usage:', error);
+      return { success: false, error: error.message };
+    }
+  },
+
+  // Get usage for specific date
+  getUsageByDate: async (userId, date) => {
+    try {
+      const usageDoc = await getDoc(
+        doc(db, 'users', userId, 'history_daily', date)
+      );
+      if (usageDoc.exists()) {
+        return { success: true, data: usageDoc.data() };
+      }
+      return { success: false, error: 'No data for this date' };
+    } catch (error) {
+      console.error('Error getting usage by date:', error);
+      return { success: false, error: error.message };
+    }
+  },
+
+  // Get usage for date range (for Analytics screen)
+  getUsageByDateRange: async (userId, startDate, endDate) => {
+    try {
+      const dailyRef = collection(db, 'users', userId, 'history_daily');
+      const q = query(
+        dailyRef,
+        where('date', '>=', startDate),
+        where('date', '<=', endDate),
+        orderBy('date', 'asc')
+      );
+
+      const snapshot = await getDocs(q);
+      const usage = [];
+      snapshot.forEach((doc) => {
+        usage.push({ id: doc.id, ...doc.data() });
+      });
+
+      return { success: true, data: usage };
+    } catch (error) {
+      console.error('Error getting usage by date range:', error);
+      return { success: false, error: error.message };
+    }
+  },
+
+  // Add activity log (for testing - in production, server-side only)
+  addActivityLog: async (userId, logData) => {
+    try {
+      const logsRef = collection(db, 'users', userId, 'history_logs');
+      await addDoc(logsRef, {
+        ...logData,
+        timestamp: new Date(),
+      });
+      return { success: true };
+    } catch (error) {
+      console.error('Error adding activity log:', error);
+      return { success: false, error: error.message };
+    }
+  },
+};

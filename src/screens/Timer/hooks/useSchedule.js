@@ -1,51 +1,118 @@
-// TODO: Connect to Firebase when backend is ready
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
+import { scheduleService } from '../../../services/firebase';
+import { auth } from '../../../services/firebase/config';
 
 export const useSchedule = () => {
   const [schedules, setSchedules] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  // TODO: Replace with Firebase fetch
+  // Load schedules on mount with real-time listener
+  useEffect(() => {
+    const userId = auth.currentUser?.uid;
+    if (!userId) return;
+
+    const unsubscribe = scheduleService.subscribeToSchedules(
+      userId,
+      (schedulesData) => {
+        setSchedules(schedulesData);
+      },
+      (err) => {
+        setError(err.message);
+        console.error('Schedule subscription error:', err);
+      }
+    );
+
+    return () => unsubscribe();
+  }, []);
+
+  // Fetch schedules
   const fetchSchedules = useCallback(async () => {
     setLoading(true);
+    setError(null);
+    
     try {
-      // Firebase fetch will go here
-      setSchedules([]);
+      const userId = auth.currentUser?.uid;
+      if (!userId) throw new Error('User not authenticated');
+
+      const result = await scheduleService.getSchedules(userId);
+
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+
+      setSchedules(result.data);
     } catch (err) {
       setError(err.message);
+      console.error('Error fetching schedules:', err);
     } finally {
       setLoading(false);
     }
   }, []);
 
-  // TODO: Replace with Firebase save
+  // Add schedule
   const addSchedule = useCallback(async (scheduleData) => {
+    setError(null);
+    
     try {
-      // Firebase save will go here
-      console.log('Add schedule:', scheduleData);
+      const userId = auth.currentUser?.uid;
+      if (!userId) throw new Error('User not authenticated');
+
+      const result = await scheduleService.createSchedule(userId, scheduleData);
+
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+
+      return { success: true };
     } catch (err) {
       setError(err.message);
+      console.error('Error adding schedule:', err);
+      return { success: false, error: err.message };
     }
   }, []);
 
-  // TODO: Replace with Firebase delete
+  // Delete schedule
   const deleteSchedule = useCallback(async (scheduleId) => {
+    setError(null);
+    
     try {
-      // Firebase delete will go here
-      console.log('Delete schedule:', scheduleId);
+      const userId = auth.currentUser?.uid;
+      if (!userId) throw new Error('User not authenticated');
+
+      const result = await scheduleService.deleteSchedule(userId, scheduleId);
+
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+
+      return { success: true };
     } catch (err) {
       setError(err.message);
+      console.error('Error deleting schedule:', err);
+      return { success: false, error: err.message };
     }
   }, []);
 
-  // TODO: Replace with Firebase update
+  // Toggle schedule active state
   const toggleSchedule = useCallback(async (scheduleId, active) => {
+    setError(null);
+    
     try {
-      // Firebase update will go here
-      console.log('Toggle schedule:', scheduleId, active);
+      const userId = auth.currentUser?.uid;
+      if (!userId) throw new Error('User not authenticated');
+
+      const result = await scheduleService.updateSchedule(userId, scheduleId, { active });
+
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+
+      return { success: true };
     } catch (err) {
       setError(err.message);
+      console.error('Error toggling schedule:', err);
+      return { success: false, error: err.message };
     }
   }, []);
 

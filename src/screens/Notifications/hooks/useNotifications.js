@@ -1,5 +1,6 @@
-// TODO: Connect to Firebase when backend is ready
-import React, { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
+import { notificationService } from '../../../services/firebase';
+import { auth } from '../../../services/firebase/config';
 
 export const useNotifications = () => {
   const [notifications, setNotifications] = useState([]);
@@ -7,52 +8,130 @@ export const useNotifications = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  // TODO: Replace with Firebase fetch
+  // Load notifications on mount with real-time listener
+  useEffect(() => {
+    const userId = auth.currentUser?.uid;
+    if (!userId) return;
+
+    const unsubscribe = notificationService.subscribeToNotifications(
+      userId,
+      (notificationsData) => {
+        setNotifications(notificationsData);
+      },
+      (err) => {
+        setError(err.message);
+        console.error('Notifications subscription error:', err);
+      }
+    );
+
+    return () => unsubscribe();
+  }, []);
+
+  // Load unread count with real-time listener
+  useEffect(() => {
+    const userId = auth.currentUser?.uid;
+    if (!userId) return;
+
+    const unsubscribe = notificationService.subscribeToUnreadCount(
+      userId,
+      (count) => {
+        setUnreadCount(count);
+      },
+      (err) => {
+        console.error('Unread count subscription error:', err);
+      }
+    );
+
+    return () => unsubscribe();
+  }, []);
+
+  // Fetch notifications
   const fetchNotifications = useCallback(async () => {
     setLoading(true);
+    setError(null);
+    
     try {
-      // Firebase fetch will go here
-      setNotifications([]);
-      setUnreadCount(0);
+      const userId = auth.currentUser?.uid;
+      if (!userId) throw new Error('User not authenticated');
+
+      const result = await notificationService.getNotifications(userId);
+
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+
+      setNotifications(result.data);
     } catch (err) {
       setError(err.message);
+      console.error('Error fetching notifications:', err);
     } finally {
       setLoading(false);
     }
   }, []);
 
-  // TODO: Replace with Firebase update
+  // Mark as read
   const markAsRead = useCallback(async (notificationId) => {
+    setError(null);
+    
     try {
-      // Firebase update will go here
-      setNotifications(prev =>
-        prev.map(n => n.id === notificationId ? { ...n, read: true } : n)
-      );
-      setUnreadCount(prev => Math.max(0, prev - 1));
+      const userId = auth.currentUser?.uid;
+      if (!userId) throw new Error('User not authenticated');
+
+      const result = await notificationService.markAsRead(userId, notificationId);
+
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+
+      return { success: true };
     } catch (err) {
       setError(err.message);
+      console.error('Error marking as read:', err);
+      return { success: false, error: err.message };
     }
   }, []);
 
-  // TODO: Replace with Firebase update
+  // Mark all as read
   const markAllAsRead = useCallback(async () => {
+    setError(null);
+    
     try {
-      // Firebase update will go here
-      setNotifications(prev => prev.map(n => ({ ...n, read: true })));
-      setUnreadCount(0);
+      const userId = auth.currentUser?.uid;
+      if (!userId) throw new Error('User not authenticated');
+
+      const result = await notificationService.markAllAsRead(userId);
+
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+
+      return { success: true };
     } catch (err) {
       setError(err.message);
+      console.error('Error marking all as read:', err);
+      return { success: false, error: err.message };
     }
   }, []);
 
-  // TODO: Replace with Firebase delete
+  // Clear all
   const clearAll = useCallback(async () => {
+    setError(null);
+    
     try {
-      // Firebase delete will go here
-      setNotifications([]);
-      setUnreadCount(0);
+      const userId = auth.currentUser?.uid;
+      if (!userId) throw new Error('User not authenticated');
+
+      const result = await notificationService.clearAllNotifications(userId);
+
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+
+      return { success: true };
     } catch (err) {
       setError(err.message);
+      console.error('Error clearing notifications:', err);
+      return { success: false, error: err.message };
     }
   }, []);
 

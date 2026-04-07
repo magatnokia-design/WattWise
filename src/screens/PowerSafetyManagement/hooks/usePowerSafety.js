@@ -1,8 +1,9 @@
 import { useState, useCallback, useEffect } from 'react';
+import { safetyService } from '../../../services/firebase';
+import { auth } from '../../../services/firebase/config';
 
 const usePowerSafety = () => {
-  // TODO: Replace with Firebase real-time data
-  const [safetyStage, setSafetyStage] = useState('normal'); // normal, warning, limit, cutoff
+  const [safetyStage, setSafetyStage] = useState('normal');
   const [outlet1Status, setOutlet1Status] = useState({
     voltage: 0,
     current: 0,
@@ -22,37 +23,70 @@ const usePowerSafety = () => {
   const [alertHistory, setAlertHistory] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  // TODO: Fetch safety data from Firebase
+  // Load safety data with real-time listener
   useEffect(() => {
+    const userId = auth.currentUser?.uid;
+    if (!userId) return;
+
+    const unsubscribe = safetyService.subscribeToSafetyData(
+      userId,
+      (safetyData) => {
+        setSafetyStage(safetyData.currentStage);
+        setOutlet1Status({
+          voltage: safetyData.outlet1?.voltage || 0,
+          current: safetyData.outlet1?.current || 0,
+          power: safetyData.outlet1?.power || 0,
+        });
+        setOutlet2Status({
+          voltage: safetyData.outlet2?.voltage || 0,
+          current: safetyData.outlet2?.current || 0,
+          power: safetyData.outlet2?.power || 0,
+        });
+        setThresholds(safetyData.thresholds);
+        setProtectionEnabled(safetyData.protectionEnabled);
+      },
+      (error) => {
+        console.error('Safety data subscription error:', error);
+      }
+    );
+
     fetchSafetyData();
+
+    return () => unsubscribe();
   }, []);
 
+  // Fetch safety data
   const fetchSafetyData = useCallback(async () => {
     setLoading(true);
+    
     try {
-      // TODO: Firebase Firestore query
-      // const userId = auth.currentUser.uid;
-      // const safetyRef = doc(db, 'safety', userId);
-      // const safetyDoc = await getDoc(safetyRef);
-      // if (safetyDoc.exists()) {
-      //   const data = safetyDoc.data();
-      //   setSafetyStage(data.currentStage);
-      //   setThresholds(data.thresholds);
-      //   setProtectionEnabled(data.protectionEnabled);
-      // }
-      
-      // Fetch alert history
-      // const alertsRef = collection(db, 'safety', userId, 'alerts');
-      // const alertsQuery = query(alertsRef, orderBy('timestamp', 'desc'), limit(10));
-      // const alertsSnapshot = await getDocs(alertsQuery);
-      // const alerts = alertsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      // setAlertHistory(alerts);
+      const userId = auth.currentUser?.uid;
+      if (!userId) throw new Error('User not authenticated');
 
-      // Placeholder: All values = 0
-      setSafetyStage('normal');
-      setOutlet1Status({ voltage: 0, current: 0, power: 0 });
-      setOutlet2Status({ voltage: 0, current: 0, power: 0 });
-      setAlertHistory([]);
+      const result = await safetyService.getSafetyData(userId);
+
+      if (result.success) {
+        const data = result.data;
+        setSafetyStage(data.currentStage);
+        setOutlet1Status({
+          voltage: data.outlet1?.voltage || 0,
+          current: data.outlet1?.current || 0,
+          power: data.outlet1?.power || 0,
+        });
+        setOutlet2Status({
+          voltage: data.outlet2?.voltage || 0,
+          current: data.outlet2?.current || 0,
+          power: data.outlet2?.power || 0,
+        });
+        setThresholds(data.thresholds);
+        setProtectionEnabled(data.protectionEnabled);
+      }
+
+      // Fetch alert history
+      const alertsResult = await safetyService.getAlertHistory(userId, 10);
+      if (alertsResult.success) {
+        setAlertHistory(alertsResult.data);
+      }
     } catch (error) {
       console.error('Error fetching safety data:', error);
     } finally {
@@ -60,19 +94,27 @@ const usePowerSafety = () => {
     }
   }, []);
 
+  // Toggle protection
   const handleToggleProtection = useCallback(async (value) => {
     try {
-      // TODO: Update Firebase
-      // const userId = auth.currentUser.uid;
-      // const safetyRef = doc(db, 'safety', userId);
-      // await updateDoc(safetyRef, { protectionEnabled: value });
+      const userId = auth.currentUser?.uid;
+      if (!userId) throw new Error('User not authenticated');
+
+      const result = await safetyService.updateThresholds(userId, { protectionEnabled: value });
+
+      if (!result.success) {
+        throw new Error(result.error);
+      }
 
       setProtectionEnabled(value);
+      return { success: true };
     } catch (error) {
       console.error('Error toggling protection:', error);
+      return { success: false, error: error.message };
     }
   }, []);
 
+  // Refresh data
   const handleRefresh = useCallback(async () => {
     await fetchSafetyData();
   }, [fetchSafetyData]);

@@ -1,7 +1,8 @@
 import { useState, useCallback, useEffect } from 'react';
+import { budgetService } from '../../../services/firebase';
+import { auth } from '../../../services/firebase/config';
 
 const useBudgetTracking = () => {
-  // TODO: Replace with Firebase real-time data
   const [monthlyBudget, setMonthlyBudget] = useState(0);
   const [currentSpending, setCurrentSpending] = useState(0);
   const [outlet1Spending, setOutlet1Spending] = useState(0);
@@ -16,46 +17,39 @@ const useBudgetTracking = () => {
   const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
   const currentDay = now.getDate();
 
-  // TODO: Fetch budget data from Firebase
+  // Load budget data on mount
   useEffect(() => {
     fetchBudgetData();
   }, []);
 
+  // Fetch budget data
   const fetchBudgetData = useCallback(async () => {
     setLoading(true);
+    
     try {
-      // TODO: Firebase Firestore query
-      // const userId = auth.currentUser.uid;
-      // const budgetRef = doc(db, 'budget', userId);
-      // const budgetDoc = await getDoc(budgetRef);
-      // if (budgetDoc.exists()) {
-      //   const data = budgetDoc.data();
-      //   setMonthlyBudget(data.monthlyBudget || 0);
-      //   setCurrentSpending(data.currentSpending || 0);
-      //   setOutlet1Spending(data.outlet1Spending || 0);
-      //   setOutlet2Spending(data.outlet2Spending || 0);
-      //   
-      //   // Calculate daily average and projected cost
-      //   const avgDaily = currentDay > 0 ? data.currentSpending / currentDay : 0;
-      //   setDailyAverage(avgDaily);
-      //   setProjectedCost(avgDaily * daysInMonth);
-      // }
+      const userId = auth.currentUser?.uid;
+      if (!userId) throw new Error('User not authenticated');
 
-      // Fetch budget history
-      // const historyRef = collection(db, 'budget', userId, 'history');
-      // const historyQuery = query(historyRef, orderBy('date', 'desc'), limit(3));
-      // const historySnapshot = await getDocs(historyQuery);
-      // const history = historySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      // setBudgetHistory(history);
+      const result = await budgetService.getCurrentMonthBudget(userId);
 
-      // Placeholder: All values = 0
-      setMonthlyBudget(0);
-      setCurrentSpending(0);
-      setOutlet1Spending(0);
-      setOutlet2Spending(0);
-      setDailyAverage(0);
-      setProjectedCost(0);
-      setBudgetHistory([]);
+      if (result.success) {
+        const data = result.data;
+        setMonthlyBudget(data.monthlyBudget || 0);
+        setCurrentSpending(data.currentSpending || 0);
+        setOutlet1Spending(data.outlet1Spending || 0);
+        setOutlet2Spending(data.outlet2Spending || 0);
+
+        // Calculate daily average and projected cost
+        const avgDaily = currentDay > 0 ? (data.currentSpending || 0) / currentDay : 0;
+        setDailyAverage(avgDaily);
+        setProjectedCost(avgDaily * daysInMonth);
+      }
+
+      // Fetch budget history (last 3 months)
+      const historyResult = await budgetService.getBudgetHistory(userId, 3);
+      if (historyResult.success) {
+        setBudgetHistory(historyResult.data);
+      }
     } catch (error) {
       console.error('Error fetching budget data:', error);
     } finally {
@@ -63,19 +57,27 @@ const useBudgetTracking = () => {
     }
   }, [currentDay, daysInMonth]);
 
+  // Set monthly budget
   const handleSetBudget = useCallback(async (budget) => {
     try {
-      // TODO: Update Firebase
-      // const userId = auth.currentUser.uid;
-      // const budgetRef = doc(db, 'budget', userId);
-      // await setDoc(budgetRef, { monthlyBudget: budget }, { merge: true });
+      const userId = auth.currentUser?.uid;
+      if (!userId) throw new Error('User not authenticated');
 
-      setMonthlyBudget(budget);
+      const result = await budgetService.setMonthlyBudget(userId, parseFloat(budget));
+
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+
+      setMonthlyBudget(parseFloat(budget));
+      return { success: true };
     } catch (error) {
       console.error('Error setting budget:', error);
+      return { success: false, error: error.message };
     }
   }, []);
 
+  // Refresh data
   const handleRefresh = useCallback(async () => {
     await fetchBudgetData();
   }, [fetchBudgetData]);

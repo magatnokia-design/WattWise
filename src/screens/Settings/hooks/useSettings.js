@@ -1,5 +1,6 @@
-// TODO: Connect to Firebase when backend is ready
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
+import { userService } from '../../../services/firebase';
+import { auth } from '../../../services/firebase/config';
 
 const DEFAULT_SETTINGS = {
   electricityRate: 0,
@@ -13,46 +14,106 @@ export const useSettings = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  // TODO: Replace with Firebase fetch
+  // Load settings on mount
+  useEffect(() => {
+    fetchSettings();
+  }, []);
+
+  // Fetch settings
   const fetchSettings = useCallback(async () => {
     setLoading(true);
+    setError(null);
+    
     try {
-      // Firebase fetch will go here
-      setSettings(DEFAULT_SETTINGS);
+      const userId = auth.currentUser?.uid;
+      if (!userId) throw new Error('User not authenticated');
+
+      const result = await userService.getUserPreferences(userId);
+
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+
+      setSettings({
+        electricityRate: result.data.electricityRate || 0,
+        currency: result.data.currency || '₱',
+        notifications: result.data.notificationsEnabled ?? true,
+        darkMode: result.data.darkMode || false,
+      });
     } catch (err) {
       setError(err.message);
+      console.error('Error fetching settings:', err);
+      setSettings(DEFAULT_SETTINGS);
     } finally {
       setLoading(false);
     }
   }, []);
 
-  // TODO: Replace with Firebase save
+  // Update electricity rate
   const updateElectricityRate = useCallback(async (rate) => {
+    setError(null);
+    
     try {
-      // Firebase save will go here
-      setSettings(prev => ({ ...prev, electricityRate: rate }));
+      const userId = auth.currentUser?.uid;
+      if (!userId) throw new Error('User not authenticated');
+
+      const result = await userService.updateUserPreferences(userId, {
+        electricityRate: parseFloat(rate)
+      });
+
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+
+      setSettings(prev => ({ ...prev, electricityRate: parseFloat(rate) }));
+      return { success: true };
     } catch (err) {
       setError(err.message);
+      console.error('Error updating electricity rate:', err);
+      return { success: false, error: err.message };
     }
   }, []);
 
-  // TODO: Replace with Firebase save
+  // Update notifications
   const updateNotifications = useCallback(async (value) => {
+    setError(null);
+    
     try {
-      // Firebase save will go here
+      const userId = auth.currentUser?.uid;
+      if (!userId) throw new Error('User not authenticated');
+
+      const result = await userService.updateUserPreferences(userId, {
+        notificationsEnabled: value
+      });
+
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+
       setSettings(prev => ({ ...prev, notifications: value }));
+      return { success: true };
     } catch (err) {
       setError(err.message);
+      console.error('Error updating notifications:', err);
+      return { success: false, error: err.message };
     }
   }, []);
 
-  // TODO: ESP32 device settings will go here
+  // Update device settings (for future ESP32 integration)
   const updateDeviceSettings = useCallback(async (deviceData) => {
+    setError(null);
+    
     try {
-      // ESP32 + Firebase save will go here
+      const userId = auth.currentUser?.uid;
+      if (!userId) throw new Error('User not authenticated');
+
+      // TODO: ESP32 integration - send command to Firebase for ESP32 to read
       console.log('Update device settings:', deviceData);
+      return { success: true };
     } catch (err) {
       setError(err.message);
+      console.error('Error updating device settings:', err);
+      return { success: false, error: err.message };
     }
   }, []);
 
