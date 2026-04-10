@@ -11,25 +11,47 @@ import { auth } from "./config";
 export const authService = {
   // Register new user
   register: async (email, password, displayName) => {
-    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-    await updateProfile(userCredential.user, { displayName });
-    return userCredential.user;
+    try {
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      await updateProfile(userCredential.user, { displayName });
+      return { success: true, user: userCredential.user };
+    } catch (error) {
+      console.error('Registration error:', error);
+      return { success: false, error: error.message, code: error.code };
+    }
   },
 
   // Login user
   login: async (email, password) => {
-    const userCredential = await signInWithEmailAndPassword(auth, email, password);
-    return userCredential.user;
+    try {
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      return { success: true, user: userCredential.user };
+    } catch (error) {
+      console.error('Login error:', error);
+      return { success: false, error: error.message, code: error.code };
+    }
   },
 
   // Logout user
   logout: async () => {
-    await signOut(auth);
+    try {
+      await signOut(auth);
+      return { success: true };
+    } catch (error) {
+      console.error('Logout error:', error);
+      return { success: false, error: error.message };
+    }
   },
 
   // Forgot password
   resetPassword: async (email) => {
-    await sendPasswordResetEmail(auth, email);
+    try {
+      await sendPasswordResetEmail(auth, email);
+      return { success: true };
+    } catch (error) {
+      console.error('Password reset error:', error);
+      return { success: false, error: error.message, code: error.code };
+    }
   },
 
   // Get current user

@@ -12,6 +12,25 @@ import {
 } from 'firebase/firestore';
 import { db } from './config';
 
+const getTimestampMs = (value) => {
+  if (!value) return 0;
+
+  if (typeof value?.toDate === 'function') {
+    return value.toDate().getTime();
+  }
+
+  if (value instanceof Date) {
+    return value.getTime();
+  }
+
+  if (typeof value === 'object' && typeof value.seconds === 'number') {
+    return (value.seconds * 1000) + Math.floor((value.nanoseconds || 0) / 1000000);
+  }
+
+  const asDate = new Date(value);
+  return Number.isNaN(asDate.getTime()) ? 0 : asDate.getTime();
+};
+
 export const historyService = {
   // Get activity logs with pagination
   getActivityLogs: async (userId, filters = {}, lastDoc = null, limitCount = 20) => {
@@ -21,9 +40,10 @@ export const historyService = {
 
       // Apply outlet filter
       if (filters.outlet && filters.outlet !== 'all') {
+        const outletValue = parseInt(filters.outlet, 10);
         q = query(
           logsRef,
-          where('outlet', '==', parseInt(filters.outlet)),
+          where('outlet', 'in', [outletValue, String(outletValue)]),
           orderBy('timestamp', 'desc'),
           limit(limitCount)
         );
@@ -39,6 +59,8 @@ export const historyService = {
       snapshot.forEach((doc) => {
         logs.push({ id: doc.id, ...doc.data() });
       });
+
+      logs.sort((a, b) => getTimestampMs(b.timestamp) - getTimestampMs(a.timestamp));
 
       return {
         success: true,

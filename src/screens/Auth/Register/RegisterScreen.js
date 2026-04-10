@@ -13,7 +13,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Input } from '../../../components/common/Input';
 import { Button } from '../../../components/common/Button';
-import { authService } from '../../../services/firebase';
+import { authService, initializationService } from '../../../services/firebase';
 import { COLORS } from '../../../constants/colors';
 import { SIZES, FONTS } from '../../../constants/theme';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -84,13 +84,42 @@ export const RegisterScreen = ({ navigation }) => {
     return Object.keys(newErrors).length === 0;
   };
 
- const handleRegister = async () => {
+const handleRegister = async () => {
   if (!validate()) return;
 
   setLoading(true);
   try {
+    // Clear onboarding flag
     await AsyncStorage.removeItem('onboarding_complete');
-    await authService.register(formData.email, formData.password, formData.name);
+    
+    // Register user with Firebase Auth
+    const result = await authService.register(
+      formData.email, 
+      formData.password, 
+      formData.name
+    );
+    
+    if (!result.success) {
+      throw new Error(result.error || 'Registration failed');
+    }
+
+    // Initialize user data in Firestore
+    const initResult = await initializationService.initializeNewUser(
+      result.user.uid,
+      {
+        email: formData.email,
+        name: formData.name,
+      }
+    );
+
+    if (!initResult.success) {
+      console.error('Failed to initialize user data:', initResult.error);
+      Alert.alert(
+        'Warning',
+        'Account created but setup incomplete. Please contact support.'
+      );
+    }
+
     // User automatically logged in, AppNavigator handles onboarding
   } catch (error) {
     let errorMessage = 'Registration failed';
@@ -101,6 +130,8 @@ export const RegisterScreen = ({ navigation }) => {
       errorMessage = 'Invalid email address';
     } else if (error.code === 'auth/weak-password') {
       errorMessage = 'Password is too weak';
+    } else if (error.message) {
+      errorMessage = error.message;
     }
     
     Alert.alert('Error', errorMessage);

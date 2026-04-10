@@ -167,4 +167,33 @@ export const budgetService = {
       return { success: false, error: error.message };
     }
   },
+
+  // Initialize budget for new user (called once after registration)
+  initializeBudget: async (userId) => {
+    try {
+      const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM
+      await setDoc(doc(db, 'users', userId, 'budget', currentMonth), {
+        month: currentMonth,
+        monthlyBudget: 0,
+        currentSpending: 0,
+        outlet1Spending: 0,
+        outlet2Spending: 0,
+        dailyAverage: 0,
+        projectedTotal: 0,
+        lastUpdated: new Date(),
+        alerts: [],
+        thresholds: {
+          fifty: false,
+          seventyFive: false,
+          ninety: false,
+          hundred: false,
+        },
+      });
+      return { success: true };
+    } catch (error) {
+      console.error('Error initializing budget:', error);
+      return { success: false, error: error.message };
+    }
+  },
+
 };

@@ -51,7 +51,7 @@ const ActivityLog = ({ logs = EMPTY_LOGS }) => {
   return (
     <FlatList
       data={logs}
-      keyExtractor={(item, index) => index.toString()}
+      keyExtractor={(item, index) => item.id || `${item.timestamp || 'log'}-${index}`}
       renderItem={renderItem}
       ListEmptyComponent={renderEmpty}
       contentContainerStyle={styles.list}

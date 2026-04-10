@@ -1,6 +1,37 @@
 import { useState, useCallback, useEffect } from 'react';
 import { historyService } from '../../../services/firebase';
 import { auth } from '../../../services/firebase/config';
+import { formatDate, formatTime, getTimestampMs } from '../utils/historyHelpers';
+
+const normalizeOutletNumber = (outletValue) => {
+  if (typeof outletValue === 'number') return outletValue;
+  if (typeof outletValue === 'string') {
+    const match = outletValue.match(/\d+/);
+    if (match) {
+      const parsed = Number(match[0]);
+      return Number.isNaN(parsed) ? null : parsed;
+    }
+  }
+  return null;
+};
+
+const mapActivityLog = (log) => {
+  const timestamp = log.timestamp || log.createdAt || log.lastUpdated;
+  const outletNumber = normalizeOutletNumber(log.outlet);
+  const action = String(log.action || log.status || '').toLowerCase();
+  const isOn = action === 'on' || action === 'true';
+
+  return {
+    ...log,
+    outlet: outletNumber,
+    outletName: log.outletName || `Outlet ${outletNumber || '--'}`,
+    status: isOn ? 'ON' : 'OFF',
+    timestamp,
+    time: formatTime(timestamp),
+    date: formatDate(timestamp),
+    _sortTime: getTimestampMs(timestamp),
+  };
+};
 
 export const useHistory = () => {
   const [activityLogs, setActivityLogs] = useState([]);
@@ -26,18 +57,24 @@ export const useHistory = () => {
         20
       );
 
-      if (!result.success) {
+           if (!result.success) {
         throw new Error(result.error);
       }
 
+      const normalizedLogs = result.data
+        .map(mapActivityLog)
+        .sort((a, b) => b._sortTime - a._sortTime)
+        .map(({ _sortTime, ...rest }) => rest);
+
       if (loadMore) {
-        setActivityLogs(prev => [...prev, ...result.data.logs]);
+        setActivityLogs((prev) => [...prev, ...normalizedLogs]);
       } else {
-        setActivityLogs(result.data.logs);
+        setActivityLogs(normalizedLogs);
       }
 
-      setLastDoc(result.data.lastDoc);
-      setHasMore(result.data.hasMore);
+      setLastDoc(result.lastDoc);
+      setHasMore(result.hasMore);
+
     } catch (err) {
       setError(err.message);
       console.error('Error fetching activity logs:', err);

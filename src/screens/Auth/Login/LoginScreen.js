@@ -42,29 +42,44 @@ export const LoginScreen = ({ navigation }) => {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleLogin = async () => {
-    if (!validate()) return;
+const handleLogin = async () => {
+  if (!validate()) return;
 
-    setLoading(true);
-    try {
-      await authService.login(email, password);
-      // Navigation to Dashboard will be handled by auth state listener
-    } catch (error) {
-      let errorMessage = 'Login failed';
-      
-      if (error.code === 'auth/user-not-found') {
-        errorMessage = 'No account found with this email';
-      } else if (error.code === 'auth/wrong-password') {
-        errorMessage = 'Incorrect password';
-      } else if (error.code === 'auth/invalid-email') {
-        errorMessage = 'Invalid email address';
-      }
-      
-      Alert.alert('Error', errorMessage);
-    } finally {
-      setLoading(false);
+  setLoading(true);
+  try {
+    const result = await authService.login(email, password);
+    
+    if (!result.success) {
+      throw { code: result.code, message: result.error };
     }
-  };
+
+    // Update last login
+    if (result.user?.uid) {
+      const { userService } = require('../../../services/firebase');
+      await userService.updateLastLogin(result.user.uid);
+    }
+    
+    // Navigation handled by AppNavigator
+  } catch (error) {
+    let errorMessage = 'Login failed';
+    
+    if (error.code === 'auth/invalid-credential') {
+      errorMessage = 'Invalid email or password';
+    } else if (error.code === 'auth/user-not-found') {
+      errorMessage = 'No account found with this email';
+    } else if (error.code === 'auth/wrong-password') {
+      errorMessage = 'Incorrect password';
+    } else if (error.code === 'auth/too-many-requests') {
+      errorMessage = 'Too many failed attempts. Try again later';
+    } else if (error.message) {
+      errorMessage = error.message;
+    }
+    
+    Alert.alert('Error', errorMessage);
+  } finally {
+    setLoading(false);
+  }
+};
 
   return (
     <SafeAreaView style={styles.container}>

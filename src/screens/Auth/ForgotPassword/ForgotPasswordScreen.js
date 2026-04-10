@@ -34,31 +34,38 @@ export const ForgotPasswordScreen = ({ navigation }) => {
     return true;
   };
 
-  const handleResetPassword = async () => {
-    if (!validate()) return;
+const handleResetPassword = async () => {
+  if (!validate()) return;
 
-    setLoading(true);
-    try {
-      await authService.resetPassword(email);
-      Alert.alert(
-        'Success',
-        'Password reset email sent! Please check your inbox.',
-        [{ text: 'OK', onPress: () => navigation.navigate('Login') }]
-      );
-    } catch (error) {
-      let errorMessage = 'Failed to send reset email';
-      
-      if (error.code === 'auth/user-not-found') {
-        errorMessage = 'No account found with this email';
-      } else if (error.code === 'auth/invalid-email') {
-        errorMessage = 'Invalid email address';
-      }
-      
-      Alert.alert('Error', errorMessage);
-    } finally {
-      setLoading(false);
+  setLoading(true);
+  try {
+    const result = await authService.resetPassword(email);
+    
+    if (!result.success) {
+      throw { code: result.code, message: result.error };
     }
-  };
+
+    Alert.alert(
+      'Success',
+      'Password reset email sent! Check your inbox.',
+      [{ text: 'OK', onPress: () => navigation.navigate('Login') }]
+    );
+  } catch (error) {
+    let errorMessage = 'Failed to send reset email';
+    
+    if (error.code === 'auth/user-not-found') {
+      errorMessage = 'No account found with this email';
+    } else if (error.code === 'auth/invalid-email') {
+      errorMessage = 'Invalid email address';
+    } else if (error.message) {
+      errorMessage = error.message;
+    }
+    
+    Alert.alert('Error', errorMessage);
+  } finally {
+    setLoading(false);
+  }
+};
 
   return (
     <SafeAreaView style={styles.container}>

@@ -1,30 +1,51 @@
 import { useState, useCallback, useEffect } from 'react';
+import { onAuthStateChanged } from 'firebase/auth';
 import { scheduleService } from '../../../services/firebase';
 import { auth } from '../../../services/firebase/config';
 
 export const useSchedule = () => {
+  const [userId, setUserId] = useState(null);
   const [schedules, setSchedules] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  // Load schedules on mount with real-time listener
+  // Track auth changes so listeners attach even when user loads after mount.
   useEffect(() => {
-    const userId = auth.currentUser?.uid;
-    if (!userId) return;
+    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+      setUserId(user?.uid || null);
+      if (!user) {
+        setSchedules([]);
+      }
+    });
+
+    return unsubscribeAuth;
+  }, []);
+
+  // Load schedules with a real-time listener once we have a user.
+  useEffect(() => {
+    if (!userId) {
+      setLoading(false);
+      return undefined;
+    }
+
+    setLoading(true);
+    setError(null);
 
     const unsubscribe = scheduleService.subscribeToSchedules(
       userId,
       (schedulesData) => {
         setSchedules(schedulesData);
+        setLoading(false);
       },
       (err) => {
         setError(err.message);
+        setLoading(false);
         console.error('Schedule subscription error:', err);
       }
     );
 
     return () => unsubscribe();
-  }, []);
+  }, [userId]);
 
   // Fetch schedules
   const fetchSchedules = useCallback(async () => {
@@ -32,7 +53,6 @@ export const useSchedule = () => {
     setError(null);
     
     try {
-      const userId = auth.currentUser?.uid;
       if (!userId) throw new Error('User not authenticated');
 
       const result = await scheduleService.getSchedules(userId);
@@ -48,14 +68,13 @@ export const useSchedule = () => {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [userId]);
 
   // Add schedule
   const addSchedule = useCallback(async (scheduleData) => {
     setError(null);
     
     try {
-      const userId = auth.currentUser?.uid;
       if (!userId) throw new Error('User not authenticated');
 
       const result = await scheduleService.createSchedule(userId, scheduleData);
@@ -70,14 +89,13 @@ export const useSchedule = () => {
       console.error('Error adding schedule:', err);
       return { success: false, error: err.message };
     }
-  }, []);
+  }, [userId]);
 
   // Delete schedule
   const deleteSchedule = useCallback(async (scheduleId) => {
     setError(null);
     
     try {
-      const userId = auth.currentUser?.uid;
       if (!userId) throw new Error('User not authenticated');
 
       const result = await scheduleService.deleteSchedule(userId, scheduleId);
@@ -92,14 +110,13 @@ export const useSchedule = () => {
       console.error('Error deleting schedule:', err);
       return { success: false, error: err.message };
     }
-  }, []);
+  }, [userId]);
 
   // Toggle schedule active state
   const toggleSchedule = useCallback(async (scheduleId, active) => {
     setError(null);
     
     try {
-      const userId = auth.currentUser?.uid;
       if (!userId) throw new Error('User not authenticated');
 
       const result = await scheduleService.updateSchedule(userId, scheduleId, { active });
@@ -114,7 +131,7 @@ export const useSchedule = () => {
       console.error('Error toggling schedule:', err);
       return { success: false, error: err.message };
     }
-  }, []);
+  }, [userId]);
 
   return {
     schedules,

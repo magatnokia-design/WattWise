@@ -3,6 +3,8 @@ import React, { useState } from 'react';
 import {
   View,
   Text,
+  Alert,
+  Button,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
@@ -15,6 +17,7 @@ import NotificationPanel from '../Notifications/components/NotificationPanel';
 import OutletControlModal from './components/OutletControlModal';
 import EditApplianceNameModal from './components/EditApplianceNameModal';
 import { useOutletControl } from './hooks/useOutletControl';
+import { auth, notificationService } from '../../services/firebase';
 
 const OutletCard = ({ outletNumber, applianceName, status }) => (
   <View style={styles.outletCard}>
@@ -100,6 +103,20 @@ export const DashboardScreen = ({ navigation }) => {
     setEditModal({ visible: false, outlet: null });
   };
 
+  const createTestNotification = async () => {
+    const user = auth.currentUser;
+    if (!user) return;
+
+    await notificationService.createNotification(user.uid, {
+      type: 'high_usage',
+      title: 'Test Notification',
+      message: 'This is a test notification from the app',
+      outlet: 1,
+    });
+
+    Alert.alert('Success', 'Test notification created!');
+  };
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScrollView
@@ -120,6 +137,11 @@ export const DashboardScreen = ({ navigation }) => {
             <Text style={styles.notificationIcon}>🔔</Text>
           </TouchableOpacity>
         </View>
+
+        <Button
+          title="Create Test Notification"
+          onPress={createTestNotification}
+        />
 
         {/* Total Energy Summary Card */}
         <View style={styles.summaryCard}>

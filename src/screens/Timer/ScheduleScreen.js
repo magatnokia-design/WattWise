@@ -2,6 +2,7 @@ import React, { useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
+  Alert,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
@@ -21,7 +22,7 @@ const ScheduleScreen = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [activeFilter, setActiveFilter] = useState('All');
 
-  const { schedules, addSchedule, deleteSchedule, toggleSchedule } = useSchedule();
+  const { schedules, loading, addSchedule, deleteSchedule, toggleSchedule } = useSchedule();
 
   const handleFilterPress = useCallback((filter) => {
     setActiveFilter(filter);
@@ -36,27 +37,49 @@ const ScheduleScreen = () => {
     setModalVisible(false);
   }, []);
 
-  const handleSave = useCallback((scheduleData) => {
-    addSchedule(scheduleData);
-    // TODO: Save to Firebase when backend is ready
+  const handleSave = useCallback(async (scheduleData) => {
+    const result = await addSchedule(scheduleData);
+    if (result?.success) {
+      setModalVisible(false);
+      return result;
+    }
+
+    Alert.alert('Unable to save timer', result?.error || 'Please try again.');
+    return result;
   }, [addSchedule]);
 
-  const handleDelete = useCallback((id) => {
-    deleteSchedule(id);
-    // TODO: Delete from Firebase when backend is ready
+  const handleDelete = useCallback(async (id) => {
+    const result = await deleteSchedule(id);
+    if (!result?.success) {
+      Alert.alert('Unable to delete timer', result?.error || 'Please try again.');
+    }
   }, [deleteSchedule]);
 
-  const handleToggle = useCallback((id, active) => {
-    toggleSchedule(id, active);
-    // TODO: Update Firebase when backend is ready
+  const handleToggle = useCallback(async (id, active) => {
+    const result = await toggleSchedule(id, active);
+    if (!result?.success) {
+      Alert.alert('Unable to update timer', result?.error || 'Please try again.');
+    }
   }, [toggleSchedule]);
 
-  const summaryData = useMemo(() => ({
-    total: 0,
-    active: 0,
-    outlet1: 0,
-    outlet2: 0,
-  }), []);
+  const summaryData = useMemo(() => {
+    const filteredSchedules = activeFilter === 'All'
+      ? schedules
+      : schedules.filter((item) => String(item.outlet) === activeFilter.replace('Outlet ', ''));
+
+    return {
+      total: filteredSchedules.length,
+      active: filteredSchedules.filter((item) => item.active).length,
+      outlet1: filteredSchedules.filter((item) => String(item.outlet) === '1').length,
+      outlet2: filteredSchedules.filter((item) => String(item.outlet) === '2').length,
+    };
+  }, [activeFilter, schedules]);
+
+  const filteredSchedules = useMemo(() => {
+    if (activeFilter === 'All') return schedules;
+    const outlet = activeFilter.replace('Outlet ', '');
+    return schedules.filter((item) => String(item.outlet) === outlet);
+  }, [activeFilter, schedules]);
 
   const renderItem = useCallback(({ item }) => (
     <TimerCard
@@ -132,8 +155,8 @@ const ScheduleScreen = () => {
 
       {/* Timer List */}
       <FlatList
-        data={schedules}
-        keyExtractor={(item, index) => index.toString()}
+        data={filteredSchedules}
+        keyExtractor={(item, index) => item.id || index.toString()}
         renderItem={renderItem}
         ListEmptyComponent={renderEmpty}
         contentContainerStyle={styles.listContent}
@@ -145,6 +168,7 @@ const ScheduleScreen = () => {
         visible={modalVisible}
         onClose={handleModalClose}
         onSave={handleSave}
+        saving={loading}
       />
     </SafeAreaView>
   );

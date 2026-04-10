@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -32,7 +32,23 @@ const HistoryScreen = () => {
   const [activeTab, setActiveTab] = useState(0);
   const [activeFilter, setActiveFilter] = useState('All');
 
-  const { activityLogs, usageHistory, loading } = useHistory();
+ const { activityLogs, usageHistory, loading, fetchActivityLogs, fetchUsageHistory } = useHistory();
+
+ const filterToOutletValue = useMemo(() => ({
+   All: 'all',
+   'Outlet 1': '1',
+   'Outlet 2': '2',
+ }), []);
+
+// Fetch activity logs on filter change
+useEffect(() => {
+  fetchActivityLogs({ outlet: filterToOutletValue[activeFilter] || 'all' });
+}, [activeFilter, fetchActivityLogs, filterToOutletValue]);
+
+// Fetch usage history once on mount
+useEffect(() => {
+  fetchUsageHistory();
+}, [fetchUsageHistory]);
 
   const filters = useMemo(() => ['All', 'Outlet 1', 'Outlet 2'], []);
 
@@ -42,7 +58,6 @@ const HistoryScreen = () => {
 
   const handleFilterPress = useCallback((filter) => {
     setActiveFilter(filter);
-    // TODO: Apply filter when backend is ready
   }, []);
 
   const summaryData = useMemo(() => ({

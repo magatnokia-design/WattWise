@@ -2,6 +2,7 @@ import React, { useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
+  Alert,
   StyleSheet,
   Modal,
   TouchableOpacity,
@@ -28,7 +29,7 @@ const TimePickerBox = ({ value, onIncrease, onDecrease, label }) => (
   </View>
 );
 
-const AddTimerModal = ({ visible, onClose, onSave }) => {
+const AddTimerModal = ({ visible, onClose, onSave, saving = false }) => {
   const { width, height } = useWindowDimensions();
 
   const [timerType, setTimerType] = useState('countdown');
@@ -47,7 +48,29 @@ const AddTimerModal = ({ visible, onClose, onSave }) => {
     );
   }, []);
 
-  const handleSave = useCallback(() => {
+  const resetForm = useCallback(() => {
+    setTimerType('countdown');
+    setSelectedOutlet('1');
+    setSelectedAction('ON');
+    setSelectedDays([]);
+    setHours(0);
+    setMinutes(0);
+    setSeconds(0);
+    setSchedHours(0);
+    setSchedMinutes(0);
+  }, []);
+
+  const handleSave = useCallback(async () => {
+    if (timerType === 'countdown' && hours === 0 && minutes === 0 && seconds === 0) {
+      Alert.alert('Invalid duration', 'Set a countdown duration greater than 0 seconds.');
+      return;
+    }
+
+    if (timerType === 'scheduled' && selectedDays.length === 0) {
+      Alert.alert('Select repeat days', 'Choose at least one day for a scheduled timer.');
+      return;
+    }
+
     const scheduleData = {
       type: timerType,
       outlet: selectedOutlet,
@@ -61,27 +84,37 @@ const AddTimerModal = ({ visible, onClose, onSave }) => {
         : null,
       active: true,
     };
-    // TODO: Pass to Firebase when backend is ready
-    if (onSave) onSave(scheduleData);
-    onClose();
-  }, [timerType, selectedOutlet, selectedAction, selectedDays, hours, minutes, seconds, schedHours, schedMinutes, onSave, onClose]);
 
-  const resetForm = useCallback(() => {
-    setTimerType('countdown');
-    setSelectedOutlet('1');
-    setSelectedAction('ON');
-    setSelectedDays([]);
-    setHours(0);
-    setMinutes(0);
-    setSeconds(0);
-    setSchedHours(0);
-    setSchedMinutes(0);
-  }, []);
+    if (!onSave) {
+      resetForm();
+      onClose();
+      return;
+    }
+
+    const result = await onSave(scheduleData);
+    if (result?.success) {
+      resetForm();
+    }
+  }, [
+    timerType,
+    selectedOutlet,
+    selectedAction,
+    selectedDays,
+    hours,
+    minutes,
+    seconds,
+    schedHours,
+    schedMinutes,
+    onSave,
+    onClose,
+    resetForm,
+  ]);
 
   const handleClose = useCallback(() => {
+    if (saving) return;
     resetForm();
     onClose();
-  }, [resetForm, onClose]);
+  }, [resetForm, onClose, saving]);
 
   return (
     <Modal
@@ -226,11 +259,21 @@ const AddTimerModal = ({ visible, onClose, onSave }) => {
 
             {/* Action Buttons */}
             <View style={styles.actionRow}>
-              <TouchableOpacity style={styles.cancelBtn} onPress={handleClose} activeOpacity={0.7}>
+              <TouchableOpacity
+                style={[styles.cancelBtn, saving && styles.buttonDisabled]}
+                onPress={handleClose}
+                activeOpacity={0.7}
+                disabled={saving}
+              >
                 <Text style={styles.cancelBtnText}>Cancel</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.saveBtn} onPress={handleSave} activeOpacity={0.7}>
-                <Text style={styles.saveBtnText}>Save Timer</Text>
+              <TouchableOpacity
+                style={[styles.saveBtn, saving && styles.buttonDisabled]}
+                onPress={handleSave}
+                activeOpacity={0.7}
+                disabled={saving}
+              >
+                <Text style={styles.saveBtnText}>{saving ? 'Saving...' : 'Save Timer'}</Text>
               </TouchableOpacity>
             </View>
           </ScrollView>
@@ -425,6 +468,9 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
     color: COLORS.white,
+  },
+  buttonDisabled: {
+    opacity: 0.6,
   },
 });
 

@@ -154,6 +154,8 @@ export const outletService = {
       const outletRef = doc(db, 'users', userId, 'outlets', normalizedOutletId);
       const outletDoc = await getDoc(outletRef);
       const outletNumber = outletNumberFromId(normalizedOutletId);
+      const outletData = outletDoc.exists() ? outletDoc.data() : {};
+      
       const payload = {
         status: status ? 'on' : 'off',
         lastUpdated: new Date(),
@@ -164,14 +166,18 @@ export const outletService = {
         payload.applianceName = `Outlet ${outletNumber || ''}`.trim();
       }
 
-      // TODO: Replace with Cloud Function call
-      // const result = await httpsCallable(functions, 'processOutletToggle')({
-      //   outletId,
-      //   status,
-      // });
-      
-      // For now, directly upsert Firestore doc (development only)
+      // Update outlet status
       await setDoc(outletRef, payload, { merge: true });
+      
+      // Create history log
+      const historyService = require('./historyService').historyService;
+      await historyService.addActivityLog(userId, {
+        outlet: outletNumber,
+        outletName: outletData.applianceName || payload.applianceName || `Outlet ${outletNumber}`,
+        action: status ? 'on' : 'off',
+        source: 'manual',
+        power: outletData.power || 0,
+      });
       
       return { success: true };
     } catch (error) {

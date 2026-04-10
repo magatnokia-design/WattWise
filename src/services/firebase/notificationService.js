@@ -11,6 +11,7 @@ import {
   onSnapshot,
 } from 'firebase/firestore';
 import { db } from './config';
+import { addDoc } from 'firebase/firestore';
 
 export const notificationService = {
   // Get notifications with pagination
@@ -101,6 +102,26 @@ export const notificationService = {
     );
   },
 
+    // Create notification (for testing/manual creation)
+  createNotification: async (userId, notificationData) => {
+    try {
+      const notificationsRef = collection(db, 'users', userId, 'notifications');
+      await addDoc(notificationsRef, {
+        type: notificationData.type || 'device',
+        title: notificationData.title || 'Notification',
+        message: notificationData.message || '',
+        outlet: notificationData.outlet || null,
+        read: false,
+        timestamp: new Date(),
+        metadata: notificationData.metadata || {},
+      });
+      return { success: true };
+    } catch (error) {
+      console.error('Error creating notification:', error);
+      return { success: false, error: error.message };
+    }
+  },
+  
   // Mark notification as read
   markAsRead: async (userId, notificationId) => {
     try {
