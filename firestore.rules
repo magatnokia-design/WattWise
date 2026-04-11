@@ -1,0 +1,97 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ===========================
+    // HELPER FUNCTIONS
+    // ===========================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    // ===========================
+    // USERS COLLECTION
+    // ===========================
+    
+    match /users/{userId} {
+      // Users can read/write their own profile
+      allow read, write: if isOwner(userId);
+      
+      // ===========================
+      // OUTLETS SUBCOLLECTION
+      // ===========================
+      match /outlets/{outletId} {
+        // Users can read and write outlets (until Cloud Functions ready)
+        allow read, write: if isOwner(userId);
+      }
+      
+      // ===========================
+      // HISTORY_LOGS SUBCOLLECTION
+      // ===========================
+      match /history_logs/{logId} {
+        // Temporarily allow writes for testing (until Cloud Functions)
+        allow read, write: if isOwner(userId);
+      }
+      
+      // ===========================
+      // HISTORY_DAILY SUBCOLLECTION
+      // ===========================
+      match /history_daily/{date} {
+        // Users can READ daily summaries
+        allow read: if isOwner(userId);
+        
+        // Only server (Cloud Functions) can WRITE
+        allow write: if false;
+      }
+      
+      // ===========================
+      // SCHEDULES SUBCOLLECTION
+      // ===========================
+      match /schedules/{scheduleId} {
+        // Users can fully manage their schedules
+        allow read, write: if isOwner(userId);
+      }
+      
+      // ===========================
+      // BUDGET SUBCOLLECTION
+      // ===========================
+      match /budget/{month} {
+        // Users can READ budget data
+        allow read: if isOwner(userId);
+        
+        // Only server (Cloud Functions) can WRITE
+        allow write: if false;
+      }
+      
+      // ===========================
+      // NOTIFICATIONS SUBCOLLECTION
+      // ===========================
+      match /notifications/{notificationId} {
+        // Temporarily allow all operations for testing
+        allow read, write: if isOwner(userId);
+      }
+      
+      // ===========================
+      // POWER_SAFETY SUBCOLLECTION
+      // ===========================
+      // FIXED: power_safety is a subcollection with document ID (e.g., 'settings', 'current')
+      match /power_safety/{document=**} {
+        // Users can read and write power safety settings
+        allow read, write: if isOwner(userId);
+      }
+      
+      // ===========================
+      // REFERENCE_COMPARISON SUBCOLLECTION
+      // ===========================
+      match /reference_comparison/{month} {
+        // Users can fully manage their reference bills
+        allow read, write: if isOwner(userId);
+      }
+    }
+  }
+}

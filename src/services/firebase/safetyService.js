@@ -1,7 +1,7 @@
 import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
 import { db } from './config';
 
-const getSafetyRef = (userId) => doc(db, 'users', userId, 'power_safety', 'current');
+const getSafetyRef = (userId) => doc(db, 'users', userId, 'power_safety', 'settings');
 
 const getDefaultSafetyData = () => ({
   currentStage: 'normal',
