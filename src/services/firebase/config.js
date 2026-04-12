@@ -1,7 +1,8 @@
 // Firebase Configuration
-import { initializeApp } from "firebase/app";
-import { initializeAuth, getReactNativePersistence } from "firebase/auth";
+import { initializeApp, getApps, getApp } from "firebase/app";
+import { initializeAuth, getAuth, getReactNativePersistence } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
+import { getFunctions } from "firebase/functions";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const firebaseConfig = {
@@ -13,15 +14,24 @@ const firebaseConfig = {
   appId: "1:421489842338:web:8ff17e69503589123d1ffb"
 };
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
+// Reuse app/auth instances in Fast Refresh to avoid duplicate initialization issues.
+const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 
-// Initialize Firebase Auth with AsyncStorage persistence
-export const auth = initializeAuth(app, {
-  persistence: getReactNativePersistence(AsyncStorage)
-});
+let auth;
+try {
+  auth = initializeAuth(app, {
+    persistence: getReactNativePersistence(AsyncStorage)
+  });
+} catch (error) {
+  auth = getAuth(app);
+}
+
+export { auth };
 
 // Initialize Firestore
 export const db = getFirestore(app);
+
+// Initialize Cloud Functions (region: asia-southeast1)
+export const functions = getFunctions(app, 'asia-southeast1');
 
 export default app;

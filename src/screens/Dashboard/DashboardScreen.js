@@ -112,6 +112,10 @@ export const DashboardScreen = ({ navigation }) => {
       title: 'Test Notification',
       message: 'This is a test notification from the app',
       outlet: 1,
+      metadata: {
+        source: 'dashboard-test-button',
+        severity: 'info',
+      },
     });
 
     Alert.alert('Success', 'Test notification created!');

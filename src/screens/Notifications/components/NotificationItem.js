@@ -4,6 +4,7 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
+  Alert,
   useWindowDimensions,
 } from 'react-native';
 import { COLORS } from '../../../constants/colors';
@@ -17,9 +18,20 @@ import {
 const NotificationItem = ({ item, onPress }) => {
   const { width } = useWindowDimensions();
 
+  const detailLines = [
+    `Type: ${item.type || 'general'}`,
+    `Date: ${formatNotificationDate(item.timestamp)}`,
+    `Time: ${formatNotificationTime(item.timestamp)}`,
+    item.outlet ? `Outlet: ${item.outlet}` : null,
+    item.metadata && Object.keys(item.metadata).length > 0
+      ? `Details: ${JSON.stringify(item.metadata)}`
+      : null,
+  ].filter(Boolean);
+
   const handlePress = useCallback(() => {
+    Alert.alert(item.title || 'Notification', [item.message || '--', ...detailLines].join('\n'));
     if (onPress) onPress(item.id);
-  }, [item, onPress]);
+  }, [item, onPress, detailLines]);
 
   const iconColor = getNotificationColor(item.type);
   const icon = getNotificationIcon(item.type);

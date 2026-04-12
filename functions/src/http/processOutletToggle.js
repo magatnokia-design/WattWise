@@ -1,28 +1,34 @@
 const admin = require('firebase-admin');
 const logger = require('firebase-functions/logger');
+const { HttpsError } = require('firebase-functions/v2/https');
 
 /**
  * HTTPS Callable function for app to toggle outlets
  * Called from: Dashboard screen
  * Data: { outletId: 'outlet1' | 'outlet2', status: boolean }
  */
-async function processOutletToggle(data, context) {
+async function processOutletToggle(request) {
   try {
+    const { data, auth } = request || {};
+
     // Check authentication
-    if (!context.auth) {
-      throw new Error('Unauthenticated');
+    if (!auth) {
+      throw new HttpsError('unauthenticated', 'Authentication required');
     }
 
-    const userId = context.auth.uid;
+    const userId = auth.uid;
     const { outletId, status } = data;
 
     // Validate input
     if (!outletId || typeof status !== 'boolean') {
-      throw new Error('Invalid input: outletId and status required');
+      throw new HttpsError(
+        'invalid-argument',
+        'Invalid input: outletId (string) and status (boolean) required'
+      );
     }
 
     if (!['outlet1', 'outlet2'].includes(outletId)) {
-      throw new Error('Invalid outletId: must be outlet1 or outlet2');
+      throw new HttpsError('invalid-argument', 'Invalid outletId: must be outlet1 or outlet2');
     }
 
     const db = admin.firestore();
@@ -31,7 +37,7 @@ async function processOutletToggle(data, context) {
     // Get current outlet data
     const outletDoc = await outletRef.get();
     if (!outletDoc.exists) {
-      throw new Error('Outlet not found');
+      throw new HttpsError('not-found', 'Outlet not found');
     }
 
     const outletData = outletDoc.data();
@@ -71,8 +77,17 @@ async function processOutletToggle(data, context) {
     };
 
   } catch (error) {
-    logger.error('Error toggling outlet:', error);
-    throw new Error(error.message || 'Failed to toggle outlet');
+    logger.error('Error toggling outlet:', {
+      message: error?.message,
+      code: error?.code,
+      stack: error?.stack,
+    });
+
+    if (error instanceof HttpsError) {
+      throw error;
+    }
+
+    throw new HttpsError('internal', error?.message || 'Failed to toggle outlet');
   }
 }
 

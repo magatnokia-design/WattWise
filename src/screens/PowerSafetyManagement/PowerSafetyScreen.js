@@ -26,6 +26,7 @@ const PowerSafetyScreen = ({ navigation }) => {
     alertHistory,
     loading,
     handleToggleProtection,
+    handleSaveThresholds,
     handleRefresh,
   } = usePowerSafety();
 
@@ -88,6 +89,7 @@ const PowerSafetyScreen = ({ navigation }) => {
           enabled={protectionEnabled}
           onToggle={handleToggleProtection}
           thresholds={thresholds}
+          onSaveThresholds={handleSaveThresholds}
         />
 
         {/* Alert History */}

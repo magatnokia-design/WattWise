@@ -62,6 +62,12 @@ export const notificationService = {
 
   // Real-time listener for notifications
   subscribeToNotifications: (userId, onUpdate, onError) => {
+    if (!userId) {
+      const error = new Error('User not authenticated');
+      if (onError) onError(error);
+      return () => {};
+    }
+
     const notificationsRef = collection(db, 'users', userId, 'notifications');
     const q = query(
       notificationsRef,
@@ -87,6 +93,12 @@ export const notificationService = {
 
   // Real-time listener for unread count
   subscribeToUnreadCount: (userId, onUpdate, onError) => {
+    if (!userId) {
+      const error = new Error('User not authenticated');
+      if (onError) onError(error);
+      return () => {};
+    }
+
     const notificationsRef = collection(db, 'users', userId, 'notifications');
     const q = query(notificationsRef, where('read', '==', false));
 

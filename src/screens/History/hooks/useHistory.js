@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { historyService } from '../../../services/firebase';
 import { auth } from '../../../services/firebase/config';
 import { formatDate, formatTime, getTimestampMs } from '../utils/historyHelpers';
@@ -40,6 +40,7 @@ export const useHistory = () => {
   const [error, setError] = useState(null);
   const [lastDoc, setLastDoc] = useState(null);
   const [hasMore, setHasMore] = useState(true);
+  const lastDocRef = useRef(null);
 
   // Fetch activity logs with pagination
   const fetchActivityLogs = useCallback(async (filters = {}, loadMore = false) => {
@@ -53,7 +54,7 @@ export const useHistory = () => {
       const result = await historyService.getActivityLogs(
         userId,
         filters,
-        loadMore ? lastDoc : null,
+        loadMore ? lastDocRef.current : null,
         20
       );
 
@@ -73,6 +74,7 @@ export const useHistory = () => {
       }
 
       setLastDoc(result.lastDoc);
+      lastDocRef.current = result.lastDoc;
       setHasMore(result.hasMore);
 
     } catch (err) {
@@ -81,7 +83,7 @@ export const useHistory = () => {
     } finally {
       setLoading(false);
     }
-  }, [lastDoc]);
+  }, []);
 
   // Fetch usage history (daily summaries)
   const fetchUsageHistory = useCallback(async (startDate, endDate) => {
@@ -92,7 +94,12 @@ export const useHistory = () => {
       const userId = auth.currentUser?.uid;
       if (!userId) throw new Error('User not authenticated');
 
-      const result = await historyService.getDailyUsage(userId, startDate, endDate);
+      const result = await historyService.getDailyUsage(
+        userId,
+        { startDate, endDate },
+        null,
+        30
+      );
 
       if (!result.success) {
         throw new Error(result.error);

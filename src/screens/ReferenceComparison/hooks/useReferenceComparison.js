@@ -23,6 +23,12 @@ const useReferenceComparison = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
+  const getPreviousMonthKey = useCallback((monthKey) => {
+    const prevDate = new Date(monthKey + '-01');
+    prevDate.setMonth(prevDate.getMonth() - 1);
+    return prevDate.toISOString().slice(0, 7);
+  }, []);
+
   // Calculate comparison data
   const comparisonData = calculateComparison(currentMonthData, previousMonthData);
   const insights = generateInsights(comparisonData, currentMonthData, previousMonthData);
@@ -56,9 +62,7 @@ const useReferenceComparison = () => {
       }
 
       // Calculate previous month
-      const prevDate = new Date(selectedMonth + '-01');
-      prevDate.setMonth(prevDate.getMonth() - 1);
-      const prevMonth = prevDate.toISOString().slice(0, 7);
+      const prevMonth = getPreviousMonthKey(selectedMonth);
 
       // Fetch previous month data
       const prevResult = await comparisonService.getMonthData(userId, prevMonth);
@@ -79,7 +83,7 @@ const useReferenceComparison = () => {
     } finally {
       setLoading(false);
     }
-  }, [selectedMonth]);
+  }, [getPreviousMonthKey, selectedMonth]);
 
   // Handle month change
   const handleMonthChange = useCallback((month) => {
@@ -95,9 +99,7 @@ const useReferenceComparison = () => {
       if (!userId) throw new Error('User not authenticated');
 
       // Calculate previous month
-      const prevDate = new Date(selectedMonth + '-01');
-      prevDate.setMonth(prevDate.getMonth() - 1);
-      const prevMonth = prevDate.toISOString().slice(0, 7);
+      const prevMonth = getPreviousMonthKey(selectedMonth);
 
       const result = await comparisonService.saveMonthData(userId, prevMonth, {
         totalKWh: data.kWh,
@@ -117,7 +119,30 @@ const useReferenceComparison = () => {
       console.error('Error saving previous bill data:', error);
       return { success: false, error: error.message };
     }
-  }, [selectedMonth]);
+  }, [getPreviousMonthKey, selectedMonth]);
+
+  const handleDeletePreviousBill = useCallback(async () => {
+    setError(null);
+
+    try {
+      const userId = auth.currentUser?.uid;
+      if (!userId) throw new Error('User not authenticated');
+
+      const prevMonth = getPreviousMonthKey(selectedMonth);
+      const result = await comparisonService.deleteComparison(userId, prevMonth);
+
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+
+      setPreviousMonthData({ kWh: 0, cost: 0, outlet1: 0, outlet2: 0 });
+      return { success: true };
+    } catch (err) {
+      setError(err.message);
+      console.error('Error deleting previous bill data:', err);
+      return { success: false, error: err.message };
+    }
+  }, [getPreviousMonthKey, selectedMonth]);
 
   // Refresh data
   const handleRefresh = useCallback(async () => {
@@ -134,6 +159,7 @@ const useReferenceComparison = () => {
     error,
     handleMonthChange,
     handleAddPreviousBill,
+    handleDeletePreviousBill,
     handleRefresh,
   };
 };

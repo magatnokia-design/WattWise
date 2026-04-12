@@ -1,5 +1,6 @@
 import { doc, getDoc, onSnapshot, collection, setDoc } from 'firebase/firestore';
-import { db } from './config';
+import { httpsCallable } from 'firebase/functions';
+import { db, functions } from './config';
 
 const normalizeOutletId = (outletIdOrNumber) => {
   if (typeof outletIdOrNumber === 'number') {
@@ -114,6 +115,12 @@ export const outletService = {
 
   // Real-time listener for both outlets
   subscribeToAllOutlets: (userId, onUpdate, onError) => {
+    if (!userId) {
+      const error = new Error('User not authenticated');
+      if (onError) onError(error);
+      return () => {};
+    }
+
     const outletsRef = collection(db, 'users', userId, 'outlets');
     
     return onSnapshot(
@@ -147,37 +154,21 @@ export const outletService = {
   },
 
   // Update outlet status (toggle ON/OFF)
-  // NOTE: In production, this should call a Cloud Function that sends command to ESP32
+  // ✅ NOW USES CLOUD FUNCTION - Server handles outlet update + history log
   updateOutletStatus: async (userId, outletId, status) => {
     try {
       const normalizedOutletId = normalizeOutletId(outletId);
-      const outletRef = doc(db, 'users', userId, 'outlets', normalizedOutletId);
-      const outletDoc = await getDoc(outletRef);
-      const outletNumber = outletNumberFromId(normalizedOutletId);
-      const outletData = outletDoc.exists() ? outletDoc.data() : {};
       
-      const payload = {
-        status: status ? 'on' : 'off',
-        lastUpdated: new Date(),
-      };
-
-      if (!outletDoc.exists()) {
-        payload.outletNumber = outletNumber || 0;
-        payload.applianceName = `Outlet ${outletNumber || ''}`.trim();
-      }
-
-      // Update outlet status
-      await setDoc(outletRef, payload, { merge: true });
-      
-      // Create history log
-      const historyService = require('./historyService').historyService;
-      await historyService.addActivityLog(userId, {
-        outlet: outletNumber,
-        outletName: outletData.applianceName || payload.applianceName || `Outlet ${outletNumber}`,
-        action: status ? 'on' : 'off',
-        source: 'manual',
-        power: outletData.power || 0,
+      // Call Cloud Function to process outlet toggle
+      const processOutletToggle = httpsCallable(functions, 'processOutletToggle');
+      const result = await processOutletToggle({
+        outletId: normalizedOutletId,
+        status: status,  // boolean: true = on, false = off
       });
+
+      if (!result.data.success) {
+        throw new Error(result.data.error || 'Failed to toggle outlet');
+      }
       
       return { success: true };
     } catch (error) {
@@ -192,6 +183,7 @@ export const outletService = {
   },
 
   // Update appliance name
+  // ✅ DIRECT WRITE ALLOWED - Security rules permit user writes to applianceName
   updateApplianceName: async (userId, outletIdOrNumber, name) => {
     try {
       const normalizedOutletId = normalizeOutletId(outletIdOrNumber);
@@ -213,6 +205,7 @@ export const outletService = {
   },
 
   // Initialize outlets (called once after user registration)
+  // ✅ DIRECT WRITE ALLOWED - Initial setup before rules lock down
   initializeOutlets: async (userId) => {
     try {
       const outlet1Ref = doc(db, 'users', userId, 'outlets', 'outlet1');

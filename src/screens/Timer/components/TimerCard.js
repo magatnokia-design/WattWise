@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -8,10 +8,42 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { COLORS } from '../../../constants/colors';
-import { formatDays, formatOutletName } from '../utils/scheduleHelpers';
+import {
+  formatDays,
+  formatDuration,
+  formatOutletName,
+  getLiveCountdownDisplay,
+  getNextScheduledRunSeconds,
+} from '../utils/scheduleHelpers';
 
 const TimerCard = ({ item, onDelete, onToggle }) => {
   const { width } = useWindowDimensions();
+  const [nowMs, setNowMs] = useState(Date.now());
+
+  useEffect(() => {
+    const intervalId = setInterval(() => {
+      setNowMs(Date.now());
+    }, 1000);
+
+    return () => clearInterval(intervalId);
+  }, []);
+
+  const liveCountdownText = useMemo(
+    () => getLiveCountdownDisplay(item, nowMs),
+    [item, nowMs]
+  );
+
+  const nextRunSeconds = useMemo(
+    () => getNextScheduledRunSeconds(item?.scheduledTime, item?.days, nowMs),
+    [item?.scheduledTime, item?.days, nowMs]
+  );
+
+  const scheduledLiveText = useMemo(() => {
+    if (item?.type !== 'scheduled') return '';
+    if (!item?.active) return 'Next run paused (timer inactive)';
+    if (!Number.isFinite(nextRunSeconds)) return 'No valid schedule day/time';
+    return `Next run in ${formatDuration(nextRunSeconds)}`;
+  }, [item?.active, item?.type, nextRunSeconds]);
 
   const handleToggle = useCallback((value) => {
     if (onToggle) onToggle(item.id, value);
@@ -45,7 +77,7 @@ const TimerCard = ({ item, onDelete, onToggle }) => {
       <View style={styles.timeRow}>
         <Text style={styles.timeDisplay}>
           {item.type === 'countdown'
-            ? item.countdownTime || '00:00:00'
+            ? liveCountdownText
             : item.scheduledTime || '--:--'}
         </Text>
         {item.type === 'scheduled' && (
@@ -59,6 +91,7 @@ const TimerCard = ({ item, onDelete, onToggle }) => {
       {item.type === 'scheduled' && (
         <View style={styles.daysRow}>
           <Text style={styles.daysText}>{formatDays(item.days)}</Text>
+          <Text style={styles.nextRunText}>{scheduledLiveText}</Text>
         </View>
       )}
 
@@ -137,6 +170,12 @@ const styles = StyleSheet.create({
   daysText: {
     fontSize: 12,
     color: COLORS.textLight,
+  },
+  nextRunText: {
+    marginTop: 4,
+    fontSize: 12,
+    color: COLORS.primary,
+    fontWeight: '600',
   },
   bottomRow: {
     flexDirection: 'row',

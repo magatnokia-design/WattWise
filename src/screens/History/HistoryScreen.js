@@ -12,6 +12,7 @@ import { COLORS } from '../../constants/colors';
 import ActivityLog from './components/ActivityLog';
 import UsageHistory from './components/UsageHistory';
 import { useHistory } from './hooks/useHistory';
+import { useAuth } from '../../hooks/useAuth';
 
 const TABS = ['Activity', 'Usage'];
 
@@ -29,6 +30,7 @@ const FilterChip = ({ label, active, onPress }) => (
 
 const HistoryScreen = () => {
   const { width } = useWindowDimensions();
+    const { user, loading: authLoading } = useAuth();
   const [activeTab, setActiveTab] = useState(0);
   const [activeFilter, setActiveFilter] = useState('All');
 
@@ -42,13 +44,15 @@ const HistoryScreen = () => {
 
 // Fetch activity logs on filter change
 useEffect(() => {
+  if (authLoading || !user || activeTab !== 0) return;
   fetchActivityLogs({ outlet: filterToOutletValue[activeFilter] || 'all' });
-}, [activeFilter, fetchActivityLogs, filterToOutletValue]);
+}, [activeFilter, activeTab, authLoading, user, fetchActivityLogs, filterToOutletValue]);
 
 // Fetch usage history once on mount
 useEffect(() => {
+  if (authLoading || !user || activeTab !== 1) return;
   fetchUsageHistory();
-}, [fetchUsageHistory]);
+}, [activeTab, authLoading, user, fetchUsageHistory]);
 
   const filters = useMemo(() => ['All', 'Outlet 1', 'Outlet 2'], []);
 

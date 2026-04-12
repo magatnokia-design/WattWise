@@ -13,6 +13,17 @@ import {
 } from 'firebase/firestore';
 import { db } from './config';
 
+const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const DAY_LABEL_TO_INDEX = {
+  Sun: 0,
+  Mon: 1,
+  Tue: 2,
+  Wed: 3,
+  Thu: 4,
+  Fri: 5,
+  Sat: 6,
+};
+
 const secondsToClock = (totalSeconds) => {
   const safeSeconds = Number.isFinite(totalSeconds) ? Math.max(0, totalSeconds) : 0;
   const hours = Math.floor(safeSeconds / 3600);
@@ -27,8 +38,42 @@ const clockToSeconds = (clockValue) => {
   return (hours * 3600) + (minutes * 60) + seconds;
 };
 
+const normalizeScheduleDays = (rawDays = []) => {
+  if (!Array.isArray(rawDays)) return [];
+
+  return rawDays
+    .map((day) => {
+      if (typeof day === 'number' && day >= 0 && day <= 6) return day;
+      if (typeof day === 'string') {
+        const label = day.slice(0, 3);
+        const normalizedLabel = label.charAt(0).toUpperCase() + label.slice(1).toLowerCase();
+        return Object.prototype.hasOwnProperty.call(DAY_LABEL_TO_INDEX, normalizedLabel)
+          ? DAY_LABEL_TO_INDEX[normalizedLabel]
+          : null;
+      }
+      return null;
+    })
+    .filter((day) => Number.isInteger(day));
+};
+
+const normalizeDaysForUi = (rawDays = []) => {
+  if (!Array.isArray(rawDays)) return [];
+
+  return rawDays
+    .map((day) => {
+      if (typeof day === 'number' && day >= 0 && day <= 6) return DAY_LABELS[day];
+      if (typeof day === 'string') {
+        const label = day.slice(0, 3);
+        return label.charAt(0).toUpperCase() + label.slice(1).toLowerCase();
+      }
+      return null;
+    })
+    .filter(Boolean);
+};
+
 const normalizeScheduleData = (scheduleId, scheduleData = {}) => {
   const isCountdown = scheduleData.type === 'countdown';
+  const rawDays = scheduleData.days || scheduleData.scheduledDays || [];
 
   return {
     id: scheduleId,
@@ -37,9 +82,9 @@ const normalizeScheduleData = (scheduleId, scheduleData = {}) => {
     outlet: String(scheduleData.outlet ?? '1'),
     action: scheduleData.action || 'ON',
     active: scheduleData.active ?? true,
-    days: scheduleData.days || scheduleData.scheduledDays || [],
+    days: normalizeDaysForUi(rawDays),
     countdownTime: isCountdown
-      ? (scheduleData.countdownTime || secondsToClock(scheduleData.countdownDuration))
+      ? (scheduleData.countdownTime || secondsToClock(scheduleData.countdownRemaining ?? scheduleData.countdownDuration))
       : scheduleData.countdownTime,
     scheduledTime: !isCountdown
       ? (scheduleData.scheduledTime || scheduleData.time || null)
@@ -147,12 +192,14 @@ export const scheduleService = {
   addScheduledTimer: async (userId, timerData) => {
     try {
       const schedulesRef = collection(db, 'users', userId, 'schedules');
+      const scheduleDays = normalizeScheduleDays(timerData.days || timerData.scheduledDays || []);
       const docRef = await addDoc(schedulesRef, {
         outlet: timerData.outlet,
         type: 'scheduled',
         active: true,
         scheduledTime: timerData.time,
-        scheduledDays: timerData.days,
+        days: scheduleDays,
+        scheduledDays: scheduleDays,
         action: timerData.action,
         createdAt: new Date(),
         lastTriggered: null,
@@ -169,14 +216,15 @@ export const scheduleService = {
     try {
       const isCountdown = scheduleData?.type === 'countdown';
       const countdownTime = scheduleData?.countdownTime || '00:00:00';
+      const scheduleDays = normalizeScheduleDays(scheduleData?.days || []);
 
       const payload = {
         outlet: String(scheduleData?.outlet ?? '1'),
         type: isCountdown ? 'countdown' : 'scheduled',
         action: scheduleData?.action || 'ON',
         active: scheduleData?.active ?? true,
-        days: Array.isArray(scheduleData?.days) ? scheduleData.days : [],
-        scheduledDays: Array.isArray(scheduleData?.days) ? scheduleData.days : [],
+        days: scheduleDays,
+        scheduledDays: scheduleDays,
         countdownTime: isCountdown ? countdownTime : null,
         countdownDuration: isCountdown ? clockToSeconds(countdownTime) : null,
         countdownRemaining: isCountdown ? clockToSeconds(countdownTime) : null,

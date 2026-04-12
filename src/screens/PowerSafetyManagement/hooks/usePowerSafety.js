@@ -114,6 +114,27 @@ const usePowerSafety = () => {
     }
   }, []);
 
+  const handleSaveThresholds = useCallback(async (nextThresholds) => {
+    try {
+      const userId = auth.currentUser?.uid;
+      if (!userId) throw new Error('User not authenticated');
+
+      const result = await safetyService.updateThresholds(userId, {
+        thresholds: nextThresholds,
+      });
+
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+
+      setThresholds(nextThresholds);
+      return { success: true };
+    } catch (error) {
+      console.error('Error saving thresholds:', error);
+      return { success: false, error: error.message };
+    }
+  }, []);
+
   // Refresh data
   const handleRefresh = useCallback(async () => {
     await fetchSafetyData();
@@ -128,6 +149,7 @@ const usePowerSafety = () => {
     alertHistory,
     loading,
     handleToggleProtection,
+    handleSaveThresholds,
     handleRefresh,
   };
 };

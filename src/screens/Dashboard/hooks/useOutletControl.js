@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { outletService } from '../../../services/firebase';
 import { auth } from '../../../services/firebase/config';
+import { onAuthStateChanged } from 'firebase/auth';
 
 export const useOutletControl = () => {
   const [outlet1Status, setOutlet1Status] = useState(false);
@@ -11,13 +12,25 @@ export const useOutletControl = () => {
 
   // Load outlet data on mount
   useEffect(() => {
-    const loadOutlets = async () => {
-      const userId = auth.currentUser?.uid;
-      if (!userId) return;
+    let unsubscribeOutlets = null;
 
-      const result = await outletService.getOutlets(userId);
+    const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
+      if (unsubscribeOutlets) {
+        unsubscribeOutlets();
+        unsubscribeOutlets = null;
+      }
+
+      if (!user?.uid) {
+        setOutlet1Status(false);
+        setOutlet2Status(false);
+        setOutlet1Name('Outlet 1');
+        setOutlet2Name('Outlet 2');
+        return;
+      }
+
+      const result = await outletService.getOutlets(user.uid);
       if (result.success && result.data.length > 0) {
-        result.data.forEach(outlet => {
+        result.data.forEach((outlet) => {
           if (outlet.outletNumber === 1) {
             setOutlet1Status(outlet.isOn);
             setOutlet1Name(outlet.applianceName);
@@ -27,31 +40,28 @@ export const useOutletControl = () => {
           }
         });
       }
+
+      unsubscribeOutlets = outletService.subscribeToOutlets(
+        user.uid,
+        (outlets) => {
+          outlets.forEach((outlet) => {
+            if (outlet.outletNumber === 1) {
+              setOutlet1Status(outlet.isOn);
+              setOutlet1Name(outlet.applianceName);
+            } else if (outlet.outletNumber === 2) {
+              setOutlet2Status(outlet.isOn);
+              setOutlet2Name(outlet.applianceName);
+            }
+          });
+        },
+        (error) => console.error('Outlet subscription error:', error)
+      );
+    });
+
+    return () => {
+      if (unsubscribeOutlets) unsubscribeOutlets();
+      unsubscribeAuth();
     };
-
-    loadOutlets();
-
-    // Real-time listener
-    const userId = auth.currentUser?.uid;
-    if (!userId) return;
-
-    const unsubscribe = outletService.subscribeToOutlets(
-      userId,
-      (outlets) => {
-        outlets.forEach(outlet => {
-          if (outlet.outletNumber === 1) {
-            setOutlet1Status(outlet.isOn);
-            setOutlet1Name(outlet.applianceName);
-          } else if (outlet.outletNumber === 2) {
-            setOutlet2Status(outlet.isOn);
-            setOutlet2Name(outlet.applianceName);
-          }
-        });
-      },
-      (error) => console.error('Outlet subscription error:', error)
-    );
-
-    return () => unsubscribe();
   }, []);
 
   // Toggle outlet ON/OFF

@@ -14,7 +14,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../../../constants/colors';
 
-const AddPreviousBillModal = ({ visible, selectedMonth, previousData, onClose, onSave }) => {
+const AddPreviousBillModal = ({ visible, selectedMonth, previousData, onClose, onSave, onDelete }) => {
   const [kWh, setKWh] = useState('');
   const [cost, setCost] = useState('');
   const [outlet1, setOutlet1] = useState('');
@@ -58,6 +58,32 @@ const AddPreviousBillModal = ({ visible, selectedMonth, previousData, onClose, o
       outlet2: outlet2Value,
     });
     onClose();
+  };
+
+  const hasExistingData = previousData.kWh > 0 || previousData.cost > 0;
+
+  const handleDelete = () => {
+    if (!onDelete) return;
+
+    Alert.alert(
+      'Delete previous bill?',
+      `This will remove ${getPreviousMonthLabel()} comparison data.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            const result = await onDelete();
+            if (result?.success) {
+              onClose();
+            } else {
+              Alert.alert('Delete failed', result?.error || 'Please try again.');
+            }
+          },
+        },
+      ]
+    );
   };
 
   return (
@@ -171,6 +197,15 @@ const AddPreviousBillModal = ({ visible, selectedMonth, previousData, onClose, o
           </ScrollView>
 
           <View style={styles.footer}>
+            {hasExistingData && (
+              <TouchableOpacity
+                style={[styles.button, styles.deleteButton]}
+                onPress={handleDelete}
+              >
+                <Text style={styles.deleteText}>Delete</Text>
+              </TouchableOpacity>
+            )}
+
             <TouchableOpacity
               style={[styles.button, styles.cancelButton]}
               onPress={onClose}
@@ -342,6 +377,14 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
     color: COLORS.white,
+  },
+  deleteButton: {
+    backgroundColor: '#FEE2E2',
+  },
+  deleteText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#B91C1C',
   },
 });
 

@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { notificationService } from '../../../services/firebase';
 import { auth } from '../../../services/firebase/config';
+import { onAuthStateChanged } from 'firebase/auth';
 
 export const useNotifications = () => {
   const [notifications, setNotifications] = useState([]);
@@ -10,39 +11,67 @@ export const useNotifications = () => {
 
   // Load notifications on mount with real-time listener
   useEffect(() => {
-    const userId = auth.currentUser?.uid;
-    if (!userId) return;
+    let unsubscribeNotifications = null;
 
-    const unsubscribe = notificationService.subscribeToNotifications(
-      userId,
-      (notificationsData) => {
-        setNotifications(notificationsData);
-      },
-      (err) => {
-        setError(err.message);
-        console.error('Notifications subscription error:', err);
+    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+      if (unsubscribeNotifications) {
+        unsubscribeNotifications();
+        unsubscribeNotifications = null;
       }
-    );
 
-    return () => unsubscribe();
+      if (!user?.uid) {
+        setNotifications([]);
+        return;
+      }
+
+      unsubscribeNotifications = notificationService.subscribeToNotifications(
+        user.uid,
+        (notificationsData) => {
+          setNotifications(notificationsData);
+        },
+        (err) => {
+          setError(err.message);
+          console.error('Notifications subscription error:', err);
+        }
+      );
+    });
+
+    return () => {
+      if (unsubscribeNotifications) unsubscribeNotifications();
+      unsubscribeAuth();
+    };
   }, []);
 
   // Load unread count with real-time listener
   useEffect(() => {
-    const userId = auth.currentUser?.uid;
-    if (!userId) return;
+    let unsubscribeUnread = null;
 
-    const unsubscribe = notificationService.subscribeToUnreadCount(
-      userId,
-      (count) => {
-        setUnreadCount(count);
-      },
-      (err) => {
-        console.error('Unread count subscription error:', err);
+    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+      if (unsubscribeUnread) {
+        unsubscribeUnread();
+        unsubscribeUnread = null;
       }
-    );
 
-    return () => unsubscribe();
+      if (!user?.uid) {
+        setUnreadCount(0);
+        return;
+      }
+
+      unsubscribeUnread = notificationService.subscribeToUnreadCount(
+        user.uid,
+        (count) => {
+          setUnreadCount(count);
+        },
+        (err) => {
+          console.error('Unread count subscription error:', err);
+        }
+      );
+    });
+
+    return () => {
+      if (unsubscribeUnread) unsubscribeUnread();
+      unsubscribeAuth();
+    };
   }, []);
 
   // Fetch notifications

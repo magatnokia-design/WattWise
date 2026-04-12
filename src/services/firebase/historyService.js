@@ -74,11 +74,24 @@ export const historyService = {
     }
   },
 
-  // Get daily usage history
+  // Get daily usage history with optional date range.
   getDailyUsage: async (userId, filters = {}, lastDoc = null, limitCount = 30) => {
     try {
       const dailyRef = collection(db, 'users', userId, 'history_daily');
-      let q = query(dailyRef, orderBy('date', 'desc'), limit(limitCount));
+      const { startDate, endDate } = filters || {};
+      let q;
+
+      if (startDate && endDate) {
+        q = query(
+          dailyRef,
+          where('date', '>=', startDate),
+          where('date', '<=', endDate),
+          orderBy('date', 'desc'),
+          limit(limitCount)
+        );
+      } else {
+        q = query(dailyRef, orderBy('date', 'desc'), limit(limitCount));
+      }
 
       // Pagination
       if (lastDoc) {

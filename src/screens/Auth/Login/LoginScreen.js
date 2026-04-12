@@ -47,7 +47,7 @@ const handleLogin = async () => {
 
   setLoading(true);
   try {
-    const result = await authService.login(email, password);
+    const result = await authService.login(email.trim(), password);
     
     if (!result.success) {
       throw { code: result.code, message: result.error };
@@ -71,6 +71,8 @@ const handleLogin = async () => {
       errorMessage = 'Incorrect password';
     } else if (error.code === 'auth/too-many-requests') {
       errorMessage = 'Too many failed attempts. Try again later';
+    } else if (error.code === 'auth/network-request-failed') {
+      errorMessage = 'Network error. Check internet, VPN/firewall, then try again.';
     } else if (error.message) {
       errorMessage = error.message;
     }

@@ -27,6 +27,7 @@ const ReferenceComparisonScreen = ({ navigation }) => {
     loading,
     handleMonthChange,
     handleAddPreviousBill,
+    handleDeletePreviousBill,
     handleRefresh,
   } = useReferenceComparison();
 
@@ -271,6 +272,7 @@ const ReferenceComparisonScreen = ({ navigation }) => {
         previousData={previousMonthData}
         onClose={() => setShowBillModal(false)}
         onSave={handleAddPreviousBill}
+        onDelete={handleDeletePreviousBill}
       />
     </SafeAreaView>
   );
