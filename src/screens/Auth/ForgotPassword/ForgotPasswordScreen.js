@@ -39,7 +39,8 @@ const handleResetPassword = async () => {
 
   setLoading(true);
   try {
-    const result = await authService.resetPassword(email);
+    const normalizedEmail = email.trim().toLowerCase();
+    const result = await authService.resetPassword(normalizedEmail);
     
     if (!result.success) {
       throw { code: result.code, message: result.error };
@@ -55,8 +56,14 @@ const handleResetPassword = async () => {
     
     if (error.code === 'auth/user-not-found') {
       errorMessage = 'No account found with this email';
+    } else if (error.code === 'not-found') {
+      errorMessage = 'No account found with this email';
     } else if (error.code === 'auth/invalid-email') {
       errorMessage = 'Invalid email address';
+    } else if (error.code === 'invalid-argument') {
+      errorMessage = 'Please enter a valid email address';
+    } else if (error.code === 'auth/too-many-requests') {
+      errorMessage = 'Too many attempts. Please wait and try again.';
     } else if (error.message) {
       errorMessage = error.message;
     }

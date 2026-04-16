@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -11,30 +11,37 @@ import {
   Platform,
 } from 'react-native';
 import { COLORS } from '../../../constants/colors';
-import { validateRate } from '../utils/settingsHelpers';
 
-const ElectricityRateModal = ({ visible, currentRate, onClose, onSave }) => {
+const OutletNameModal = ({ visible, outletNumber, currentName, onClose, onSave }) => {
   const { width } = useWindowDimensions();
-  const [rate, setRate] = useState(currentRate ? String(currentRate) : '');
+  const [name, setName] = useState(currentName || '');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (visible) {
-      setRate(currentRate ? String(currentRate) : '');
+      setName(currentName || '');
       setError('');
       setSaving(false);
     }
-  }, [visible, currentRate]);
+  }, [visible, currentName]);
+
+  const handleClose = useCallback(() => {
+    if (saving) return;
+    setError('');
+    onClose();
+  }, [saving, onClose]);
 
   const handleSave = useCallback(async () => {
-    if (!validateRate(rate)) {
-      setError('Please enter a valid rate (greater than 0)');
+    const trimmedName = String(name || '').trim();
+
+    if (!trimmedName) {
+      setError('Outlet name is required');
       return;
     }
 
-    if (!onSave) {
-      onClose();
+    if (trimmedName.length > 30) {
+      setError('Outlet name must be 30 characters or less');
       return;
     }
 
@@ -42,9 +49,9 @@ const ElectricityRateModal = ({ visible, currentRate, onClose, onSave }) => {
     setError('');
 
     try {
-      const result = await onSave(parseFloat(rate));
+      const result = await onSave(trimmedName);
       if (!result?.success) {
-        setError(result?.error || 'Failed to update electricity rate');
+        setError(result?.error || 'Failed to update outlet name');
         return;
       }
 
@@ -52,19 +59,7 @@ const ElectricityRateModal = ({ visible, currentRate, onClose, onSave }) => {
     } finally {
       setSaving(false);
     }
-  }, [rate, onSave, onClose]);
-
-  const handleClose = useCallback(() => {
-    if (saving) return;
-    setError('');
-    setRate(currentRate ? String(currentRate) : '');
-    onClose();
-  }, [saving, currentRate, onClose]);
-
-  const handleChangeText = useCallback((text) => {
-    setRate(text);
-    setError('');
-  }, []);
+  }, [name, onSave, onClose]);
 
   return (
     <Modal
@@ -78,44 +73,29 @@ const ElectricityRateModal = ({ visible, currentRate, onClose, onSave }) => {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         <View style={[styles.modalContainer, { width: width - 32 }]}>
-          {/* Header */}
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Electricity Rate</Text>
+            <Text style={styles.modalTitle}>Outlet {outletNumber} Name</Text>
             <TouchableOpacity onPress={handleClose} activeOpacity={0.7}>
-              <Text style={styles.closeBtn}>✕</Text>
+              <Text style={styles.closeBtn}>x</Text>
             </TouchableOpacity>
           </View>
 
-          <Text style={styles.modalSub}>
-            Set your electricity rate to calculate accurate costs.
-          </Text>
+          <Text style={styles.modalSub}>Customize the label shown across dashboard and history.</Text>
 
-          {/* Input */}
-          <View style={styles.inputContainer}>
-            <Text style={styles.currencySymbol}>₱</Text>
-            <TextInput
-              style={styles.input}
-              value={rate}
-              onChangeText={handleChangeText}
-              keyboardType="decimal-pad"
-              placeholder="0.00"
-              placeholderTextColor={COLORS.textLight}
-              maxLength={6}
-            />
-            <Text style={styles.inputSuffix}>/kWh</Text>
-          </View>
+          <TextInput
+            style={styles.input}
+            value={name}
+            onChangeText={(text) => {
+              setName(text);
+              setError('');
+            }}
+            placeholder={`Outlet ${outletNumber}`}
+            placeholderTextColor={COLORS.textLight}
+            maxLength={30}
+          />
 
-          {/* Error */}
-          {error ? (
-            <Text style={styles.errorText}>{error}</Text>
-          ) : null}
+          {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
-          {/* Current Rate */}
-          <Text style={styles.currentRate}>
-            Current rate: ₱{currentRate ? parseFloat(currentRate).toFixed(2) : '0.00'}/kWh
-          </Text>
-
-          {/* Buttons */}
           <View style={styles.actionRow}>
             <TouchableOpacity
               style={[styles.cancelBtn, saving && styles.buttonDisabled]}
@@ -172,48 +152,27 @@ const styles = StyleSheet.create({
   modalSub: {
     fontSize: 13,
     color: COLORS.textLight,
-    marginBottom: 20,
-  },
-  inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1.5,
-    borderColor: COLORS.primary,
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    marginBottom: 8,
-  },
-  currencySymbol: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: COLORS.primary,
-    marginRight: 8,
+    marginBottom: 16,
   },
   input: {
-    flex: 1,
-    fontSize: 24,
-    fontWeight: '700',
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 15,
     color: COLORS.text,
-  },
-  inputSuffix: {
-    fontSize: 14,
-    color: COLORS.textLight,
-    fontWeight: '500',
+    marginBottom: 8,
   },
   errorText: {
     fontSize: 12,
     color: '#EF4444',
     marginBottom: 8,
   },
-  currentRate: {
-    fontSize: 12,
-    color: COLORS.textLight,
-    marginBottom: 20,
-  },
   actionRow: {
     flexDirection: 'row',
     gap: 12,
+    marginTop: 8,
   },
   cancelBtn: {
     flex: 1,
@@ -245,4 +204,4 @@ const styles = StyleSheet.create({
   },
 });
 
-export default ElectricityRateModal;
+export default OutletNameModal;

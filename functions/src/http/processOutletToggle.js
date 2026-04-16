@@ -2,6 +2,25 @@ const admin = require('firebase-admin');
 const logger = require('firebase-functions/logger');
 const { HttpsError } = require('firebase-functions/v2/https');
 
+const HTTPS_ERROR_CODES = new Set([
+  'cancelled',
+  'unknown',
+  'invalid-argument',
+  'deadline-exceeded',
+  'not-found',
+  'already-exists',
+  'permission-denied',
+  'resource-exhausted',
+  'failed-precondition',
+  'aborted',
+  'out-of-range',
+  'unimplemented',
+  'internal',
+  'unavailable',
+  'data-loss',
+  'unauthenticated',
+]);
+
 /**
  * HTTPS Callable function for app to toggle outlets
  * Called from: Dashboard screen
@@ -36,29 +55,42 @@ async function processOutletToggle(request) {
 
     // Get current outlet data
     const outletDoc = await outletRef.get();
-    if (!outletDoc.exists) {
-      throw new HttpsError('not-found', 'Outlet not found');
-    }
 
-    const outletData = outletDoc.data();
+    const outletData = outletDoc.exists ? outletDoc.data() : {};
     const outletNumber = parseInt(outletId.replace('outlet', ''));
 
-    // Update outlet status
+    // Upsert to support older users missing initialized outlet docs.
     await outletRef.set({
+      outletNumber,
+      applianceName: outletData.applianceName || `Outlet ${outletNumber}`,
+      voltage: outletData.voltage || 0,
+      current: outletData.current || 0,
+      power: outletData.power || 0,
+      energy: outletData.energy || 0,
+      totalEnergy: outletData.totalEnergy || 0,
+      autoDetectedAppliance: outletData.autoDetectedAppliance || '',
       status: status ? 'on' : 'off',
       lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
     }, { merge: true });
 
-    // Create activity log
-    const logsRef = db.collection(`users/${userId}/history_logs`);
-    await logsRef.add({
-      timestamp: admin.firestore.FieldValue.serverTimestamp(),
-      outlet: outletNumber,
-      outletName: outletData.applianceName || `Outlet ${outletNumber}`,
-      action: status ? 'on' : 'off',
-      source: 'manual',
-      power: outletData.power || 0,
-    });
+    // Keep status update resilient even if activity log creation fails.
+    try {
+      const logsRef = db.collection(`users/${userId}/history_logs`);
+      await logsRef.add({
+        timestamp: admin.firestore.FieldValue.serverTimestamp(),
+        outlet: outletNumber,
+        outletName: outletData.applianceName || `Outlet ${outletNumber}`,
+        action: status ? 'on' : 'off',
+        source: 'manual',
+        power: outletData.power || 0,
+      });
+    } catch (historyError) {
+      logger.warn('Outlet toggled but history log failed', {
+        userId,
+        outletId,
+        message: historyError?.message,
+      });
+    }
 
     // TODO: Send command to ESP32 via Realtime Database
     // const rtdb = admin.database();
@@ -85,6 +117,10 @@ async function processOutletToggle(request) {
 
     if (error instanceof HttpsError) {
       throw error;
+    }
+
+    if (HTTPS_ERROR_CODES.has(error?.code)) {
+      throw new HttpsError(error.code, error?.message || 'Request failed');
     }
 
     throw new HttpsError('internal', error?.message || 'Failed to toggle outlet');

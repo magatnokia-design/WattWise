@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -6,14 +6,14 @@ import {
   ScrollView,
   TouchableOpacity,
   Alert,
-  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { COLORS } from '../../constants/colors';
 import SettingsRow from './components/SettingsRow';
 import ElectricityRateModal from './components/ElectricityRateModal';
+import OutletNameModal from './components/OutletNameModal';
 import { useSettings } from './hooks/useSettings';
-import { formatRate, formatVersion } from './utils/settingsHelpers';
+import { formatRate, formatVersion, formatCurrency } from './utils/settingsHelpers';
 import { authService } from '../../services/firebase/authService';
 
 const SectionHeader = ({ title }) => (
@@ -26,14 +26,21 @@ const SectionCard = ({ children }) => (
 
 const Separator = () => <View style={styles.separator} />;
 
-const SettingsScreen = () => {
-  const { width } = useWindowDimensions();
+const SettingsScreen = ({ navigation }) => {
   const [rateModalVisible, setRateModalVisible] = useState(false);
+  const [outletModalState, setOutletModalState] = useState({
+    visible: false,
+    outletNumber: 1,
+    currentName: 'Outlet 1',
+  });
 
   const {
     settings,
+    loading,
+    error,
     updateElectricityRate,
     updateNotifications,
+    updateOutletName,
   } = useSettings();
 
   const handleRatePress = useCallback(() => {
@@ -44,15 +51,48 @@ const SettingsScreen = () => {
     setRateModalVisible(false);
   }, []);
 
-  const handleRateSave = useCallback((rate) => {
-    updateElectricityRate(rate);
-    // TODO: Save to Firebase when backend is ready
+  const handleRateSave = useCallback(async (rate) => {
+    const result = await updateElectricityRate(rate);
+
+    if (!result.success) {
+      Alert.alert('Unable to save rate', result.error || 'Please try again.');
+      return result;
+    }
+
+    return { success: true };
   }, [updateElectricityRate]);
 
-  const handleNotificationsToggle = useCallback((value) => {
-    updateNotifications(value);
-    // TODO: Save to Firebase when backend is ready
+  const handleNotificationsToggle = useCallback(async (value) => {
+    const result = await updateNotifications(value);
+
+    if (!result.success) {
+      Alert.alert('Unable to update notifications', result.error || 'Please try again.');
+    }
   }, [updateNotifications]);
+
+  const handleOutletNamePress = useCallback((outletNumber) => {
+    const currentName = outletNumber === 1 ? settings.outlet1Name : settings.outlet2Name;
+    setOutletModalState({
+      visible: true,
+      outletNumber,
+      currentName,
+    });
+  }, [settings.outlet1Name, settings.outlet2Name]);
+
+  const handleOutletModalClose = useCallback(() => {
+    setOutletModalState((prev) => ({ ...prev, visible: false }));
+  }, []);
+
+  const handleOutletNameSave = useCallback(async (newName) => {
+    const result = await updateOutletName(outletModalState.outletNumber, newName);
+
+    if (!result.success) {
+      Alert.alert('Unable to update outlet name', result.error || 'Please try again.');
+      return result;
+    }
+
+    return { success: true };
+  }, [outletModalState.outletNumber, updateOutletName]);
 
   const handleLogout = useCallback(() => {
   Alert.alert(
@@ -74,6 +114,34 @@ const SettingsScreen = () => {
     ]
   );
 }, []);
+
+  const handleChangePassword = useCallback(async () => {
+    const email = settings.email;
+    if (!email) {
+      Alert.alert('No account email', 'Please sign in again and try resetting your password.');
+      return;
+    }
+
+    Alert.alert(
+      'Reset Password',
+      `Send a password reset link to ${email}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Send Link',
+          onPress: async () => {
+            const result = await authService.resetPassword(email);
+            if (!result.success) {
+              Alert.alert('Unable to send reset email', result.error || 'Please try again.');
+              return;
+            }
+
+            Alert.alert('Reset Email Sent', 'Check your inbox for the password reset link.');
+          },
+        },
+      ]
+    );
+  }, [settings.email]);
 
   const handleAbout = useCallback(() => {
     Alert.alert(
@@ -117,23 +185,20 @@ const SettingsScreen = () => {
           <SettingsRow
             icon="👤"
             label="Profile"
-            showArrow
-            onPress={() => Alert.alert('Profile', 'Profile settings coming soon.')}
+            value={settings.profileName || 'User'}
           />
           <Separator />
           <SettingsRow
             icon="🔒"
             label="Change Password"
             showArrow
-            onPress={() => Alert.alert('Password', 'Change password coming soon.')}
+            onPress={handleChangePassword}
           />
           <Separator />
           <SettingsRow
             icon="📧"
             label="Email"
-            value="--"
-            showArrow
-            onPress={() => Alert.alert('Email', 'Email settings coming soon.')}
+            value={settings.email || '--'}
           />
         </SectionCard>
 
@@ -152,9 +217,9 @@ const SettingsScreen = () => {
           <SettingsRow
             icon="💰"
             label="Monthly Budget"
-            value="₱0.00"
+            value={formatCurrency(settings.monthlyBudget, settings.currency)}
             showArrow
-            onPress={() => Alert.alert('Budget', 'Budget settings coming soon.')}
+            onPress={() => navigation.navigate('BudgetTracking')}
           />
         </SectionCard>
 
@@ -165,7 +230,7 @@ const SettingsScreen = () => {
           <SettingsRow
             icon="📡"
             label="ESP32 Device"
-            value="Not connected"
+            value="Integration in progress"
             showArrow
             onPress={handleESP32Settings}
           />
@@ -173,17 +238,17 @@ const SettingsScreen = () => {
           <SettingsRow
             icon="🔌"
             label="Outlet 1 Name"
-            value="Outlet 1"
+            value={settings.outlet1Name}
             showArrow
-            onPress={() => Alert.alert('Outlet 1', 'Outlet name settings coming soon.')}
+            onPress={() => handleOutletNamePress(1)}
           />
           <Separator />
           <SettingsRow
             icon="🔌"
             label="Outlet 2 Name"
-            value="Outlet 2"
+            value={settings.outlet2Name}
             showArrow
-            onPress={() => Alert.alert('Outlet 2', 'Outlet name settings coming soon.')}
+            onPress={() => handleOutletNamePress(2)}
           />
         </SectionCard>
 
@@ -249,6 +314,8 @@ const SettingsScreen = () => {
         </SectionCard>
 
         <View style={styles.footer}>
+          {loading ? <Text style={styles.footerSub}>Syncing settings...</Text> : null}
+          {!loading && error ? <Text style={styles.errorText}>{error}</Text> : null}
           <Text style={styles.footerText}>WattWise {formatVersion()}</Text>
           <Text style={styles.footerSub}>Smart Energy Monitoring</Text>
         </View>
@@ -260,6 +327,14 @@ const SettingsScreen = () => {
         currentRate={settings.electricityRate}
         onClose={handleRateClose}
         onSave={handleRateSave}
+      />
+
+      <OutletNameModal
+        visible={outletModalState.visible}
+        outletNumber={outletModalState.outletNumber}
+        currentName={outletModalState.currentName}
+        onClose={handleOutletModalClose}
+        onSave={handleOutletNameSave}
       />
     </SafeAreaView>
   );
@@ -327,6 +402,11 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: COLORS.textLight,
     marginTop: 4,
+  },
+  errorText: {
+    fontSize: 12,
+    color: '#EF4444',
+    marginBottom: 4,
   },
 });
 

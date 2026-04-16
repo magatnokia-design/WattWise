@@ -19,6 +19,7 @@ setGlobalOptions({
 // Import function modules
 const { updateOutletMetrics } = require('./src/http/updateOutletMetrics');
 const { processOutletToggle } = require('./src/http/processOutletToggle');
+const { checkUserExistsByEmail } = require('./src/http/checkUserExistsByEmail');
 const { processDailyRollup } = require('./src/scheduled/processDailyRollup');
 const { checkScheduledTimers } = require('./src/scheduled/checkScheduledTimers');
 const { handleBudgetAlerts } = require('./src/triggers/handleBudgetAlerts');
@@ -53,6 +54,17 @@ exports.processOutletToggle = onCall(
     maxInstances: 10,
   },
   processOutletToggle
+);
+
+/**
+ * Callable function to verify whether an email exists in Firebase Auth
+ * Called from: Forgot password flow before sending reset email
+ */
+exports.checkUserExistsByEmail = onCall(
+  {
+    maxInstances: 10,
+  },
+  checkUserExistsByEmail
 );
 
 // ===========================

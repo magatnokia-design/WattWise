@@ -158,12 +158,13 @@ export const outletService = {
   updateOutletStatus: async (userId, outletId, status) => {
     try {
       const normalizedOutletId = normalizeOutletId(outletId);
+      const normalizedStatus = !!status;
       
       // Call Cloud Function to process outlet toggle
       const processOutletToggle = httpsCallable(functions, 'processOutletToggle');
       const result = await processOutletToggle({
         outletId: normalizedOutletId,
-        status: status,  // boolean: true = on, false = off
+        status: normalizedStatus,  // boolean: true = on, false = off
       });
 
       if (!result.data.success) {
@@ -172,8 +173,17 @@ export const outletService = {
       
       return { success: true };
     } catch (error) {
-      console.error('Error updating outlet status:', error);
-      return { success: false, error: error.message };
+      const code = typeof error?.code === 'string'
+        ? error.code.replace('functions/', '')
+        : error?.code;
+      const message = error?.details || error?.message || 'Failed to toggle outlet';
+
+      console.error('Error updating outlet status:', {
+        code,
+        message,
+      });
+
+      return { success: false, error: message, code };
     }
   },
 

@@ -9,6 +9,11 @@ export const formatVersion = () => {
   return 'v1.0.0';
 };
 
+export const formatCurrency = (value, currency = '₱') => {
+  const numericValue = Number(value || 0);
+  return `${currency}${numericValue.toFixed(2)}`;
+};
+
 export const validateRate = (rate) => {
   const parsed = parseFloat(rate);
   if (isNaN(parsed)) return false;

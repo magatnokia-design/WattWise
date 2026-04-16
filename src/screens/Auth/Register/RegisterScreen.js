@@ -89,12 +89,14 @@ const handleRegister = async () => {
 
   setLoading(true);
   try {
+    const normalizedEmail = formData.email.trim().toLowerCase();
+
     // Clear onboarding flag
     await AsyncStorage.removeItem('onboarding_complete');
     
     // Register user with Firebase Auth
     const result = await authService.register(
-      formData.email, 
+      normalizedEmail,
       formData.password, 
       formData.name
     );
@@ -107,7 +109,7 @@ const handleRegister = async () => {
     const initResult = await initializationService.initializeNewUser(
       result.user.uid,
       {
-        email: formData.email,
+        email: normalizedEmail,
         name: formData.name,
       }
     );

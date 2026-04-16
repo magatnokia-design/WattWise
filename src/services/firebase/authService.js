@@ -6,17 +6,34 @@ import {
   sendPasswordResetEmail,
   updateProfile
 } from "firebase/auth";
-import { auth } from "./config";
+import { httpsCallable } from 'firebase/functions';
+import { auth, functions } from "./config";
+
+const normalizeEmail = (email = '') => String(email).trim().toLowerCase();
+
+const isExpectedAuthError = (code) => [
+  'auth/invalid-credential',
+  'auth/user-not-found',
+  'auth/wrong-password',
+  'auth/too-many-requests',
+  'auth/network-request-failed',
+  'auth/email-already-in-use',
+  'auth/invalid-email',
+  'auth/weak-password',
+].includes(code);
 
 export const authService = {
   // Register new user
   register: async (email, password, displayName) => {
     try {
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      const normalizedEmail = normalizeEmail(email);
+      const userCredential = await createUserWithEmailAndPassword(auth, normalizedEmail, password);
       await updateProfile(userCredential.user, { displayName });
       return { success: true, user: userCredential.user };
     } catch (error) {
-      console.error('Registration error:', error);
+      if (!isExpectedAuthError(error?.code)) {
+        console.error('Registration error:', error);
+      }
       return { success: false, error: error.message, code: error.code };
     }
   },
@@ -24,10 +41,13 @@ export const authService = {
   // Login user
   login: async (email, password) => {
     try {
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const normalizedEmail = normalizeEmail(email);
+      const userCredential = await signInWithEmailAndPassword(auth, normalizedEmail, password);
       return { success: true, user: userCredential.user };
     } catch (error) {
-      console.error('Login error:', error);
+      if (!isExpectedAuthError(error?.code)) {
+        console.error('Login error:', error);
+      }
       return { success: false, error: error.message, code: error.code };
     }
   },
@@ -46,11 +66,44 @@ export const authService = {
   // Forgot password
   resetPassword: async (email) => {
     try {
-      await sendPasswordResetEmail(auth, email);
+      const normalizedEmail = normalizeEmail(email);
+
+      if (!normalizedEmail) {
+        return {
+          success: false,
+          code: 'auth/invalid-email',
+          error: 'Invalid email address',
+        };
+      }
+
+      // Enforce reset only for existing Auth users.
+      const checkUserExistsByEmail = httpsCallable(functions, 'checkUserExistsByEmail');
+      const checkResult = await checkUserExistsByEmail({ email: normalizedEmail });
+
+      if (!checkResult?.data?.exists) {
+        return {
+          success: false,
+          code: 'auth/user-not-found',
+          error: 'No account found with this email',
+        };
+      }
+
+      await sendPasswordResetEmail(auth, normalizedEmail);
       return { success: true };
     } catch (error) {
-      console.error('Password reset error:', error);
-      return { success: false, error: error.message, code: error.code };
+      const code = typeof error?.code === 'string'
+        ? error.code.replace('functions/', '')
+        : error?.code;
+
+      if (!isExpectedAuthError(code)) {
+        console.error('Password reset error:', error);
+      }
+
+      return {
+        success: false,
+        error: error?.details || error?.message || 'Failed to send reset email',
+        code,
+      };
     }
   },
 

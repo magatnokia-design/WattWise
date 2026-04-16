@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
-import { userService } from '../../../services/firebase';
+import { onAuthStateChanged } from 'firebase/auth';
+import { userService, budgetService, outletService } from '../../../services/firebase';
 import { auth } from '../../../services/firebase/config';
 
 const DEFAULT_SETTINGS = {
@@ -7,6 +8,11 @@ const DEFAULT_SETTINGS = {
   currency: '₱',
   notifications: true,
   darkMode: false,
+  monthlyBudget: 0,
+  profileName: 'User',
+  email: '',
+  outlet1Name: 'Outlet 1',
+  outlet2Name: 'Outlet 2',
 };
 
 export const useSettings = () => {
@@ -14,31 +20,44 @@ export const useSettings = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  // Load settings on mount
-  useEffect(() => {
-    fetchSettings();
-  }, []);
+  const fetchSettings = useCallback(async (currentUserId) => {
+    if (!currentUserId) {
+      setSettings(DEFAULT_SETTINGS);
+      setLoading(false);
+      return;
+    }
 
-  // Fetch settings
-  const fetchSettings = useCallback(async () => {
     setLoading(true);
     setError(null);
-    
+
     try {
-      const userId = auth.currentUser?.uid;
-      if (!userId) throw new Error('User not authenticated');
+      const [preferencesResult, profileResult, budgetResult, outletsResult] = await Promise.all([
+        userService.getUserPreferences(currentUserId),
+        userService.getUserProfile(currentUserId),
+        budgetService.getCurrentMonthBudget(currentUserId),
+        outletService.getAllOutlets(currentUserId),
+      ]);
 
-      const result = await userService.getUserPreferences(userId);
-
-      if (!result.success) {
-        throw new Error(result.error);
+      if (!preferencesResult.success) {
+        throw new Error(preferencesResult.error);
       }
 
+      const profileData = profileResult.success ? (profileResult.data || {}) : {};
+      const budgetData = budgetResult.success ? (budgetResult.data || {}) : {};
+      const outletsData = outletsResult.success ? (outletsResult.data || {}) : {};
+
+      const authUser = auth.currentUser;
+
       setSettings({
-        electricityRate: result.data.electricityRate || 0,
-        currency: result.data.currency || '₱',
-        notifications: result.data.notificationsEnabled ?? true,
-        darkMode: result.data.darkMode || false,
+        electricityRate: preferencesResult.data.electricityRate || 0,
+        currency: preferencesResult.data.currency || '₱',
+        notifications: preferencesResult.data.notificationsEnabled ?? true,
+        darkMode: preferencesResult.data.darkMode || false,
+        monthlyBudget: Number(budgetData.monthlyBudget || profileData.monthlyBudget || 0),
+        profileName: profileData.name || authUser?.displayName || 'User',
+        email: profileData.email || authUser?.email || '',
+        outlet1Name: outletsData.outlet1?.applianceName || 'Outlet 1',
+        outlet2Name: outletsData.outlet2?.applianceName || 'Outlet 2',
       });
     } catch (err) {
       setError(err.message);
@@ -48,6 +67,15 @@ export const useSettings = () => {
       setLoading(false);
     }
   }, []);
+
+  // Load settings once auth is available and refresh on auth changes.
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      fetchSettings(user?.uid || null);
+    });
+
+    return unsubscribe;
+  }, [fetchSettings]);
 
   // Update electricity rate
   const updateElectricityRate = useCallback(async (rate) => {
@@ -117,6 +145,38 @@ export const useSettings = () => {
     }
   }, []);
 
+  const updateOutletName = useCallback(async (outletNumber, newName) => {
+    setError(null);
+
+    try {
+      const userId = auth.currentUser?.uid;
+      if (!userId) throw new Error('User not authenticated');
+
+      const sanitizedName = String(newName || '').trim();
+      if (!sanitizedName) {
+        throw new Error('Outlet name is required');
+      }
+
+      const result = await outletService.updateApplianceName(userId, outletNumber, sanitizedName);
+
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+
+      setSettings((prev) => ({
+        ...prev,
+        outlet1Name: outletNumber === 1 ? sanitizedName : prev.outlet1Name,
+        outlet2Name: outletNumber === 2 ? sanitizedName : prev.outlet2Name,
+      }));
+
+      return { success: true };
+    } catch (err) {
+      setError(err.message);
+      console.error('Error updating outlet name:', err);
+      return { success: false, error: err.message };
+    }
+  }, []);
+
   return {
     settings,
     loading,
@@ -125,5 +185,6 @@ export const useSettings = () => {
     updateElectricityRate,
     updateNotifications,
     updateDeviceSettings,
+    updateOutletName,
   };
 };

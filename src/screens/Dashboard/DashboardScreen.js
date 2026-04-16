@@ -88,7 +88,10 @@ export const DashboardScreen = ({ navigation }) => {
 
     if (result.success) {
       setControlModal({ visible: false, outlet: null });
+      return;
     }
+
+    Alert.alert('Toggle Failed', result.error || 'Unable to update outlet status right now.');
   };
 
   // Handle edit name
