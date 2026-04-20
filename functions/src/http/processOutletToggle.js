@@ -1,6 +1,7 @@
 const admin = require('firebase-admin');
 const logger = require('firebase-functions/logger');
 const { HttpsError } = require('firebase-functions/v2/https');
+const { dispatchDeviceCommand } = require('../lib/deviceCommandDispatcher');
 
 const HTTPS_ERROR_CODES = new Set([
   'cancelled',
@@ -92,19 +93,31 @@ async function processOutletToggle(request) {
       });
     }
 
-    // TODO: Send command to ESP32 via Realtime Database
-    // const rtdb = admin.database();
-    // await rtdb.ref(`devices/${userId}/commands/${outletId}`).set({
-    //   action: status ? 'on' : 'off',
-    //   timestamp: Date.now(),
-    // });
+    const commandResult = await dispatchDeviceCommand({
+      userId,
+      outletId,
+      action: status ? 'on' : 'off',
+      reason: 'manual_toggle',
+      source: 'app',
+      metadata: {
+        outletNumber,
+      },
+    });
 
-    logger.info('Outlet toggled', { userId, outletId, status });
+    logger.info('Outlet toggled', {
+      userId,
+      outletId,
+      status,
+      commandId: commandResult.commandId,
+      commandChannel: commandResult.channel,
+    });
 
     return { 
       success: true,
       outletId,
       status: status ? 'on' : 'off',
+      commandId: commandResult.commandId,
+      commandChannel: commandResult.channel,
       message: 'Outlet toggled successfully',
     };
 

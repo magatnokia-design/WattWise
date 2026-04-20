@@ -33,6 +33,13 @@ const mapActivityLog = (log) => {
   };
 };
 
+const normalizeActivityLogs = (logs = []) => {
+  return logs
+    .map(mapActivityLog)
+    .sort((a, b) => b._sortTime - a._sortTime)
+    .map(({ _sortTime, ...rest }) => rest);
+};
+
 export const useHistory = () => {
   const [activityLogs, setActivityLogs] = useState([]);
   const [usageHistory, setUsageHistory] = useState([]);
@@ -62,10 +69,7 @@ export const useHistory = () => {
         throw new Error(result.error);
       }
 
-      const normalizedLogs = result.data
-        .map(mapActivityLog)
-        .sort((a, b) => b._sortTime - a._sortTime)
-        .map(({ _sortTime, ...rest }) => rest);
+      const normalizedLogs = normalizeActivityLogs(result.data);
 
       if (loadMore) {
         setActivityLogs((prev) => [...prev, ...normalizedLogs]);
@@ -83,6 +87,35 @@ export const useHistory = () => {
     } finally {
       setLoading(false);
     }
+  }, []);
+
+  // Subscribe to activity logs in real time (latest page only).
+  const subscribeActivityLogs = useCallback((filters = {}, limitCount = 20) => {
+    const userId = auth.currentUser?.uid;
+    if (!userId) {
+      return () => {};
+    }
+
+    setLoading(true);
+    setError(null);
+
+    return historyService.subscribeToActivityLogs(
+      userId,
+      filters,
+      (logs) => {
+        const normalizedLogs = normalizeActivityLogs(logs);
+        setActivityLogs(normalizedLogs);
+        setHasMore(normalizedLogs.length >= limitCount);
+        lastDocRef.current = null;
+        setLastDoc(null);
+        setLoading(false);
+      },
+      (subscriptionError) => {
+        setError(subscriptionError?.message || 'Failed to subscribe to activity logs');
+        setLoading(false);
+      },
+      limitCount
+    );
   }, []);
 
   // Fetch usage history (daily summaries)
@@ -121,6 +154,7 @@ export const useHistory = () => {
     error,
     hasMore,
     fetchActivityLogs,
+    subscribeActivityLogs,
     fetchUsageHistory,
   };
 };

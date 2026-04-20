@@ -1,4 +1,4 @@
-// Dashboard Screen - Design Only (No ESP32 data yet)
+// Dashboard Screen
 import React, { useState } from 'react';
 import {
   View,
@@ -19,43 +19,25 @@ import EditApplianceNameModal from './components/EditApplianceNameModal';
 import { useOutletControl } from './hooks/useOutletControl';
 import { auth, notificationService } from '../../services/firebase';
 
-const OutletCard = ({ outletNumber, applianceName, status }) => (
-  <View style={styles.outletCard}>
-    <View style={styles.outletHeader}>
-      <View>
-        <Text style={styles.outletTitle}>Outlet {outletNumber}</Text>
-        <Text style={styles.applianceName}>{applianceName}</Text>
-      </View>
-      <View style={[styles.statusBadge, status ? styles.statusOn : styles.statusOff]}>
-        <Text style={styles.statusText}>{status ? 'ON' : 'OFF'}</Text>
-      </View>
-    </View>
+const formatSuggestionLabel = (suggestion) => {
+  if (!suggestion?.name) return '';
 
-    <View style={styles.metricsGrid}>
-      <View style={styles.metricItem}>
-        <Text style={styles.metricValue}>0 W</Text>
-        <Text style={styles.metricLabel}>Power</Text>
-      </View>
-      <View style={styles.metricItem}>
-        <Text style={styles.metricValue}>0.00 kWh</Text>
-        <Text style={styles.metricLabel}>Energy</Text>
-      </View>
-      <View style={styles.metricItem}>
-        <Text style={styles.metricValue}>0 V</Text>
-        <Text style={styles.metricLabel}>Voltage</Text>
-      </View>
-      <View style={styles.metricItem}>
-        <Text style={styles.metricValue}>0 A</Text>
-        <Text style={styles.metricLabel}>Current</Text>
-      </View>
-    </View>
+  if (typeof suggestion.confidencePercent === 'number') {
+    return `Suggested: ${suggestion.name} (${suggestion.confidencePercent}%)`;
+  }
 
-    <View style={styles.outletFooter}>
-      <Text style={styles.costText}>₱0.00</Text>
-      <Text style={styles.costLabel}>Estimated Cost</Text>
-    </View>
-  </View>
-);
+  return `Suggested: ${suggestion.name}`;
+};
+
+const toMetricNumber = (value) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const formatMetric = (value, unit, decimals = 1) => {
+  const formatted = toMetricNumber(value).toFixed(decimals);
+  return `${formatted} ${unit}`;
+};
 
 export const DashboardScreen = ({ navigation }) => {
   const [notificationVisible, setNotificationVisible] = useState(false);
@@ -66,10 +48,17 @@ export const DashboardScreen = ({ navigation }) => {
     outlet2Status,
     outlet1Name,
     outlet2Name,
+    outlet1Metrics,
+    outlet2Metrics,
+    outlet1Suggestion,
+    outlet2Suggestion,
     isToggling,
     toggleOutlet,
     updateApplianceName,
   } = useOutletControl();
+
+  const totalEnergyKwh = toMetricNumber(outlet1Metrics.energy) + toMetricNumber(outlet2Metrics.energy);
+  const activeOutletsCount = (outlet1Status === true ? 1 : 0) + (outlet2Status === true ? 1 : 0);
 
   // Modal states
   const [controlModal, setControlModal] = useState({ visible: false, outlet: null });
@@ -104,6 +93,22 @@ export const DashboardScreen = ({ navigation }) => {
     const { outlet } = editModal;
     await updateApplianceName(outlet, newName);
     setEditModal({ visible: false, outlet: null });
+  };
+
+  const handleAcceptSuggestion = async (outletNumber) => {
+    const suggestion = outletNumber === 1 ? outlet1Suggestion : outlet2Suggestion;
+    if (!suggestion?.canAccept || !suggestion?.name) {
+      return;
+    }
+
+    const result = await updateApplianceName(outletNumber, suggestion.name, {
+      source: 'auto_suggestion',
+      confidencePercent: suggestion.confidencePercent,
+      modelVersion: suggestion.modelVersion,
+    });
+    if (!result.success) {
+      Alert.alert('Update Failed', result.error || 'Unable to apply suggested appliance name.');
+    }
   };
 
   const createTestNotification = async () => {
@@ -153,7 +158,7 @@ export const DashboardScreen = ({ navigation }) => {
         {/* Total Energy Summary Card */}
         <View style={styles.summaryCard}>
           <Text style={styles.summaryTitle}>Total Energy Usage</Text>
-          <Text style={styles.summaryValue}>0.00 kWh</Text>
+          <Text style={styles.summaryValue}>{formatMetric(totalEnergyKwh, 'kWh', 3)}</Text>
           <View style={styles.summaryDivider} />
           <View style={styles.summaryRow}>
             <View style={styles.summaryItem}>
@@ -162,7 +167,7 @@ export const DashboardScreen = ({ navigation }) => {
             </View>
             <View style={styles.summaryItemDivider} />
             <View style={styles.summaryItem}>
-              <Text style={styles.summaryItemValue}>0</Text>
+              <Text style={styles.summaryItemValue}>{activeOutletsCount}</Text>
               <Text style={styles.summaryItemLabel}>Active Outlets</Text>
             </View>
           </View>
@@ -212,25 +217,38 @@ export const DashboardScreen = ({ navigation }) => {
             <View style={styles.metricsGrid}>
               <View style={styles.metricItem}>
                 <Ionicons name="flash" size={20} color={COLORS.primary} />
-                <Text style={styles.metricValue}>0 W</Text>
+                <Text style={styles.metricValue}>{formatMetric(outlet1Metrics.power, 'W', 1)}</Text>
                 <Text style={styles.metricLabel}>Power</Text>
               </View>
               <View style={styles.metricItem}>
                 <Ionicons name="speedometer" size={20} color={COLORS.primary} />
-                <Text style={styles.metricValue}>0 V</Text>
+                <Text style={styles.metricValue}>{formatMetric(outlet1Metrics.voltage, 'V', 1)}</Text>
                 <Text style={styles.metricLabel}>Voltage</Text>
               </View>
               <View style={styles.metricItem}>
                 <Ionicons name="pulse" size={20} color={COLORS.primary} />
-                <Text style={styles.metricValue}>0 A</Text>
+                <Text style={styles.metricValue}>{formatMetric(outlet1Metrics.current, 'A', 3)}</Text>
                 <Text style={styles.metricLabel}>Current</Text>
               </View>
               <View style={styles.metricItem}>
                 <Ionicons name="time" size={20} color={COLORS.primary} />
-                <Text style={styles.metricValue}>0 kWh</Text>
+                <Text style={styles.metricValue}>{formatMetric(outlet1Metrics.energy, 'kWh', 3)}</Text>
                 <Text style={styles.metricLabel}>Energy</Text>
               </View>
             </View>
+
+            {outlet1Suggestion.showBadge ? (
+              <View style={styles.suggestionRow}>
+                <Text style={styles.suggestionText}>{formatSuggestionLabel(outlet1Suggestion)}</Text>
+                <TouchableOpacity
+                  style={[styles.suggestionAction, isToggling && styles.suggestionActionDisabled]}
+                  onPress={() => handleAcceptSuggestion(1)}
+                  disabled={isToggling}
+                >
+                  <Text style={styles.suggestionActionText}>Accept</Text>
+                </TouchableOpacity>
+              </View>
+            ) : null}
 
             <TouchableOpacity
               style={[styles.toggleButton, outlet1Status ? styles.toggleButtonOn : styles.toggleButtonOff]}
@@ -271,25 +289,38 @@ export const DashboardScreen = ({ navigation }) => {
             <View style={styles.metricsGrid}>
               <View style={styles.metricItem}>
                 <Ionicons name="flash" size={20} color={COLORS.primary} />
-                <Text style={styles.metricValue}>0 W</Text>
+                <Text style={styles.metricValue}>{formatMetric(outlet2Metrics.power, 'W', 1)}</Text>
                 <Text style={styles.metricLabel}>Power</Text>
               </View>
               <View style={styles.metricItem}>
                 <Ionicons name="speedometer" size={20} color={COLORS.primary} />
-                <Text style={styles.metricValue}>0 V</Text>
+                <Text style={styles.metricValue}>{formatMetric(outlet2Metrics.voltage, 'V', 1)}</Text>
                 <Text style={styles.metricLabel}>Voltage</Text>
               </View>
               <View style={styles.metricItem}>
                 <Ionicons name="pulse" size={20} color={COLORS.primary} />
-                <Text style={styles.metricValue}>0 A</Text>
+                <Text style={styles.metricValue}>{formatMetric(outlet2Metrics.current, 'A', 3)}</Text>
                 <Text style={styles.metricLabel}>Current</Text>
               </View>
               <View style={styles.metricItem}>
                 <Ionicons name="time" size={20} color={COLORS.primary} />
-                <Text style={styles.metricValue}>0 kWh</Text>
+                <Text style={styles.metricValue}>{formatMetric(outlet2Metrics.energy, 'kWh', 3)}</Text>
                 <Text style={styles.metricLabel}>Energy</Text>
               </View>
             </View>
+
+            {outlet2Suggestion.showBadge ? (
+              <View style={styles.suggestionRow}>
+                <Text style={styles.suggestionText}>{formatSuggestionLabel(outlet2Suggestion)}</Text>
+                <TouchableOpacity
+                  style={[styles.suggestionAction, isToggling && styles.suggestionActionDisabled]}
+                  onPress={() => handleAcceptSuggestion(2)}
+                  disabled={isToggling}
+                >
+                  <Text style={styles.suggestionActionText}>Accept</Text>
+                </TouchableOpacity>
+              </View>
+            ) : null}
 
             <TouchableOpacity
               style={[styles.toggleButton, outlet2Status ? styles.toggleButtonOn : styles.toggleButtonOff]}
@@ -591,6 +622,40 @@ const styles = StyleSheet.create({
     color: COLORS.textLight,
     marginTop: 2,
     fontSize: 10,
+  },
+  suggestionRow: {
+    marginTop: -4,
+    marginBottom: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: COLORS.primary + '12',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: COLORS.primary + '40',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    gap: 8,
+  },
+  suggestionText: {
+    flex: 1,
+    ...FONTS.small,
+    color: COLORS.textDark,
+    fontWeight: '600',
+  },
+  suggestionAction: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: COLORS.primary,
+  },
+  suggestionActionDisabled: {
+    opacity: 0.55,
+  },
+  suggestionActionText: {
+    ...FONTS.small,
+    color: COLORS.white,
+    fontWeight: '700',
   },
   toggleButton: {
     flexDirection: 'row',

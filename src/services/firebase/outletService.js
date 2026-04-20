@@ -194,15 +194,33 @@ export const outletService = {
 
   // Update appliance name
   // ✅ DIRECT WRITE ALLOWED - Security rules permit user writes to applianceName
-  updateApplianceName: async (userId, outletIdOrNumber, name) => {
+  updateApplianceName: async (userId, outletIdOrNumber, name, options = {}) => {
     try {
       const normalizedOutletId = normalizeOutletId(outletIdOrNumber);
       const outletNumber = outletNumberFromId(normalizedOutletId);
+      const normalizedSource = String(options.source || 'manual').trim().toLowerCase();
+      const confidence = Number(options.confidencePercent);
+      const selectionPayload = {
+        name,
+        source: normalizedSource,
+        selectedAt: new Date(),
+        acceptedSuggestion: normalizedSource === 'auto_suggestion',
+      };
+
+      if (Number.isFinite(confidence)) {
+        selectionPayload.confidencePercent = confidence;
+      }
+
+      if (options.modelVersion) {
+        selectionPayload.modelVersion = String(options.modelVersion);
+      }
+
       await setDoc(
         doc(db, 'users', userId, 'outlets', normalizedOutletId),
         {
           outletNumber: outletNumber || 0,
           applianceName: name,
+          applianceSelection: selectionPayload,
           lastUpdated: new Date(),
         },
         { merge: true }

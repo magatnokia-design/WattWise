@@ -18,10 +18,13 @@ setGlobalOptions({
 
 // Import function modules
 const { updateOutletMetrics } = require('./src/http/updateOutletMetrics');
+const { ackDeviceCommand } = require('./src/http/ackDeviceCommand');
+const { getDeviceCommand } = require('./src/http/getDeviceCommand');
 const { processOutletToggle } = require('./src/http/processOutletToggle');
 const { checkUserExistsByEmail } = require('./src/http/checkUserExistsByEmail');
 const { processDailyRollup } = require('./src/scheduled/processDailyRollup');
 const { checkScheduledTimers } = require('./src/scheduled/checkScheduledTimers');
+const { markStaleDeviceCommands } = require('./src/scheduled/markStaleDeviceCommands');
 const { handleBudgetAlerts } = require('./src/triggers/handleBudgetAlerts');
 const { handleSafetyAlerts } = require('./src/triggers/handleSafetyAlerts');
 
@@ -39,6 +42,30 @@ exports.updateOutletMetrics = onRequest(
     maxInstances: 10,
   },
   updateOutletMetrics
+);
+
+/**
+ * HTTP endpoint for ESP32 to acknowledge command delivery/execution
+ * POST https://asia-southeast1-wattwise-fe394.cloudfunctions.net/ackDeviceCommand
+ */
+exports.ackDeviceCommand = onRequest(
+  {
+    cors: true,
+    maxInstances: 10,
+  },
+  ackDeviceCommand
+);
+
+/**
+ * HTTP endpoint for ESP32 to fetch latest pending command
+ * POST https://asia-southeast1-wattwise-fe394.cloudfunctions.net/getDeviceCommand
+ */
+exports.getDeviceCommand = onRequest(
+  {
+    cors: true,
+    maxInstances: 10,
+  },
+  getDeviceCommand
 );
 
 // ===========================
@@ -95,6 +122,19 @@ exports.checkScheduledTimers = onSchedule(
     maxInstances: 1,
   },
   checkScheduledTimers
+);
+
+/**
+ * Runs every minute
+ * Marks unacknowledged device commands as timed out
+ */
+exports.markStaleDeviceCommands = onSchedule(
+  {
+    schedule: '* * * * *',
+    timeZone: 'Asia/Manila',
+    maxInstances: 1,
+  },
+  markStaleDeviceCommands
 );
 
 // ===========================

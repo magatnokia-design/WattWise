@@ -461,6 +461,15 @@ Update Firestore documents
 - Create high-priority notification
 - Auto cut-off if enabled and stage = 'cutoff'
 
+### **7. `ackDeviceCommand`**
+**Trigger:** HTTP request from ESP32
+**Purpose:** Acknowledge command delivery/execution status
+**Actions:**
+- Validate deviceId + deviceToken
+- Validate fresh timestamp
+- Update `/users/{userId}/device_commands/{commandId}` ack fields
+- Mark command as executed when status is `executed`
+
 ---
 
 ## Security Rules Template

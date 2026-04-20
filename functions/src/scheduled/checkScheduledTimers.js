@@ -1,5 +1,6 @@
 const admin = require('firebase-admin');
 const logger = require('firebase-functions/logger');
+const { dispatchDeviceCommand } = require('../lib/deviceCommandDispatcher');
 
 const DAY_LABEL_TO_INDEX = {
   sun: 0,
@@ -137,16 +138,23 @@ async function checkScheduledTimers() {
             lastTriggered: admin.firestore.FieldValue.serverTimestamp(),
           }, { merge: true });
 
-          // TODO: Send command to ESP32
-          // const rtdb = admin.database();
-          // await rtdb.ref(`devices/${userId}/commands/${outletId}`).set({
-          //   action: newStatus ? 'on' : 'off',
-          //   timestamp: Date.now(),
-          // });
+          const commandResult = await dispatchDeviceCommand({
+            userId,
+            outletId,
+            action: newStatus ? 'on' : 'off',
+            reason: 'scheduled_timer',
+            source: 'scheduler',
+            metadata: {
+              scheduleId: scheduleDoc.id,
+              scheduleType: 'scheduled',
+            },
+          });
 
           logger.info('Scheduled timer executed', { 
             userId, 
-            scheduleId: scheduleDoc.id 
+            scheduleId: scheduleDoc.id,
+            commandId: commandResult.commandId,
+            commandChannel: commandResult.channel,
           });
         }
 
@@ -219,11 +227,25 @@ async function checkScheduledTimers() {
             lastTriggered: admin.firestore.FieldValue.serverTimestamp(),
           }, { merge: true });
 
+          const commandResult = await dispatchDeviceCommand({
+            userId,
+            outletId,
+            action: newStatus ? 'on' : 'off',
+            reason: 'countdown_timer',
+            source: 'scheduler',
+            metadata: {
+              scheduleId: scheduleDoc.id,
+              scheduleType: 'countdown',
+            },
+          });
+
           logger.info('Countdown timer executed', {
             userId,
             scheduleId: scheduleDoc.id,
             outletId,
             action: newStatus ? 'on' : 'off',
+            commandId: commandResult.commandId,
+            commandChannel: commandResult.channel,
           });
         }
 

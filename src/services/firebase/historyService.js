@@ -5,6 +5,7 @@ import {
   orderBy,
   limit,
   getDocs,
+  onSnapshot,
   startAfter,
   doc,
   getDoc,
@@ -32,22 +33,26 @@ const getTimestampMs = (value) => {
 };
 
 export const historyService = {
+  buildActivityLogsQuery: (logsRef, filters = {}, limitCount = 20) => {
+    // Apply outlet filter
+    if (filters.outlet && filters.outlet !== 'all') {
+      const outletValue = parseInt(filters.outlet, 10);
+      return query(
+        logsRef,
+        where('outlet', 'in', [outletValue, String(outletValue)]),
+        orderBy('timestamp', 'desc'),
+        limit(limitCount)
+      );
+    }
+
+    return query(logsRef, orderBy('timestamp', 'desc'), limit(limitCount));
+  },
+
   // Get activity logs with pagination
   getActivityLogs: async (userId, filters = {}, lastDoc = null, limitCount = 20) => {
     try {
       const logsRef = collection(db, 'users', userId, 'history_logs');
-      let q = query(logsRef, orderBy('timestamp', 'desc'), limit(limitCount));
-
-      // Apply outlet filter
-      if (filters.outlet && filters.outlet !== 'all') {
-        const outletValue = parseInt(filters.outlet, 10);
-        q = query(
-          logsRef,
-          where('outlet', 'in', [outletValue, String(outletValue)]),
-          orderBy('timestamp', 'desc'),
-          limit(limitCount)
-        );
-      }
+      let q = historyService.buildActivityLogsQuery(logsRef, filters, limitCount);
 
       // Pagination
       if (lastDoc) {
@@ -71,6 +76,41 @@ export const historyService = {
     } catch (error) {
       console.error('Error getting activity logs:', error);
       return { success: false, error: error.message };
+    }
+  },
+
+  // Subscribe to activity logs in real time.
+  subscribeToActivityLogs: (
+    userId,
+    filters = {},
+    onUpdate,
+    onError,
+    limitCount = 20
+  ) => {
+    try {
+      const logsRef = collection(db, 'users', userId, 'history_logs');
+      const q = historyService.buildActivityLogsQuery(logsRef, filters, limitCount);
+
+      return onSnapshot(
+        q,
+        (snapshot) => {
+          const logs = [];
+          snapshot.forEach((logDoc) => {
+            logs.push({ id: logDoc.id, ...logDoc.data() });
+          });
+
+          logs.sort((a, b) => getTimestampMs(b.timestamp) - getTimestampMs(a.timestamp));
+          onUpdate(logs);
+        },
+        (error) => {
+          console.error('Error subscribing to activity logs:', error);
+          if (onError) onError(error);
+        }
+      );
+    } catch (error) {
+      console.error('Error preparing activity log subscription:', error);
+      if (onError) onError(error);
+      return () => {};
     }
   },
 

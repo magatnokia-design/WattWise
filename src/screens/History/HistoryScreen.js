@@ -34,7 +34,7 @@ const HistoryScreen = () => {
   const [activeTab, setActiveTab] = useState(0);
   const [activeFilter, setActiveFilter] = useState('All');
 
- const { activityLogs, usageHistory, loading, fetchActivityLogs, fetchUsageHistory } = useHistory();
+ const { activityLogs, usageHistory, loading, subscribeActivityLogs, fetchUsageHistory } = useHistory();
 
  const filterToOutletValue = useMemo(() => ({
    All: 'all',
@@ -42,11 +42,16 @@ const HistoryScreen = () => {
    'Outlet 2': '2',
  }), []);
 
-// Fetch activity logs on filter change
+// Subscribe activity logs in real-time while Activity tab is active.
 useEffect(() => {
   if (authLoading || !user || activeTab !== 0) return;
-  fetchActivityLogs({ outlet: filterToOutletValue[activeFilter] || 'all' });
-}, [activeFilter, activeTab, authLoading, user, fetchActivityLogs, filterToOutletValue]);
+
+  const unsubscribe = subscribeActivityLogs({
+    outlet: filterToOutletValue[activeFilter] || 'all',
+  });
+
+  return unsubscribe;
+}, [activeFilter, activeTab, authLoading, user, subscribeActivityLogs, filterToOutletValue]);
 
 // Fetch usage history once on mount
 useEffect(() => {

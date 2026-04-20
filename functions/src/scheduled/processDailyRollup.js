@@ -1,6 +1,28 @@
 const admin = require('firebase-admin');
 const logger = require('firebase-functions/logger');
 
+const upsertApplianceBreakdown = (items, applianceName, energyKwh, cost, outletNumber) => {
+  const normalizedName = String(applianceName || '').trim();
+  if (!normalizedName || energyKwh <= 0) return;
+
+  const existing = items.find((item) => item.applianceName === normalizedName);
+  if (existing) {
+    existing.energyKwh += energyKwh;
+    existing.cost += cost;
+    if (!existing.outlets.includes(outletNumber)) {
+      existing.outlets.push(outletNumber);
+    }
+    return;
+  }
+
+  items.push({
+    applianceName: normalizedName,
+    energyKwh,
+    cost,
+    outlets: [outletNumber],
+  });
+};
+
 /**
  * Scheduled function: Runs daily at midnight (00:00)
  * Aggregates previous day's energy usage
@@ -45,6 +67,12 @@ async function processDailyRollup() {
         const outlet1Energy = outlet1Doc.exists ? (outlet1Doc.data().energy || 0) : 0;
         const outlet2Energy = outlet2Doc.exists ? (outlet2Doc.data().energy || 0) : 0;
         const totalEnergy = outlet1Energy + outlet2Energy;
+        const outlet1Name = outlet1Doc.exists
+          ? String(outlet1Doc.data().applianceName || 'Outlet 1').trim()
+          : 'Outlet 1';
+        const outlet2Name = outlet2Doc.exists
+          ? String(outlet2Doc.data().applianceName || 'Outlet 2').trim()
+          : 'Outlet 2';
 
         // Calculate peak power from logs
         let peakPower = 0;
@@ -61,6 +89,12 @@ async function processDailyRollup() {
 
         // Calculate cost
         const cost = totalEnergy * electricityRate;
+        const outlet1Cost = outlet1Energy * electricityRate;
+        const outlet2Cost = outlet2Energy * electricityRate;
+
+        const applianceBreakdown = [];
+        upsertApplianceBreakdown(applianceBreakdown, outlet1Name, outlet1Energy, outlet1Cost, 1);
+        upsertApplianceBreakdown(applianceBreakdown, outlet2Name, outlet2Energy, outlet2Cost, 2);
 
         // Create history_daily document
         const dailyRef = db.doc(`users/${userId}/history_daily/${dateString}`);
@@ -68,8 +102,11 @@ async function processDailyRollup() {
           date: dateString,
           outlet1Energy,
           outlet2Energy,
+          outlet1Name,
+          outlet2Name,
           totalEnergy,
           cost,
+          applianceBreakdown,
           peakPower,
           peakHour,
           createdAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -88,9 +125,6 @@ async function processDailyRollup() {
         const outlet2Spending = budgetDoc.exists 
           ? (budgetDoc.data().outlet2Spending || 0) 
           : 0;
-
-        const outlet1Cost = outlet1Energy * electricityRate;
-        const outlet2Cost = outlet2Energy * electricityRate;
 
         await budgetRef.set({
           month: monthString,

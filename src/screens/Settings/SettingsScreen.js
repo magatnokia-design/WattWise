@@ -12,8 +12,15 @@ import { COLORS } from '../../constants/colors';
 import SettingsRow from './components/SettingsRow';
 import ElectricityRateModal from './components/ElectricityRateModal';
 import OutletNameModal from './components/OutletNameModal';
+import ESP32DeviceModal from './components/ESP32DeviceModal';
 import { useSettings } from './hooks/useSettings';
-import { formatRate, formatVersion, formatCurrency } from './utils/settingsHelpers';
+import {
+  formatRate,
+  formatVersion,
+  formatCurrency,
+  formatDeviceHealthValue,
+  formatAckStatusValue,
+} from './utils/settingsHelpers';
 import { authService } from '../../services/firebase/authService';
 
 const SectionHeader = ({ title }) => (
@@ -26,8 +33,22 @@ const SectionCard = ({ children }) => (
 
 const Separator = () => <View style={styles.separator} />;
 
+const normalizeName = (value) => String(value || '').trim().toLowerCase();
+
+const formatSuggestionValue = (name, confidence) => {
+  const normalizedName = String(name || '').trim();
+  if (!normalizedName) return 'No suggestion';
+
+  if (typeof confidence === 'number') {
+    return `${normalizedName} (${confidence}%)`;
+  }
+
+  return normalizedName;
+};
+
 const SettingsScreen = ({ navigation }) => {
   const [rateModalVisible, setRateModalVisible] = useState(false);
+  const [deviceModalVisible, setDeviceModalVisible] = useState(false);
   const [outletModalState, setOutletModalState] = useState({
     visible: false,
     outletNumber: 1,
@@ -40,8 +61,18 @@ const SettingsScreen = ({ navigation }) => {
     error,
     updateElectricityRate,
     updateNotifications,
+    updateDeviceSettings,
+    clearDeviceSettings,
     updateOutletName,
   } = useSettings();
+
+  const outlet1CanAcceptSuggestion =
+    !!settings.outlet1SuggestedName &&
+    normalizeName(settings.outlet1SuggestedName) !== normalizeName(settings.outlet1Name);
+
+  const outlet2CanAcceptSuggestion =
+    !!settings.outlet2SuggestedName &&
+    normalizeName(settings.outlet2SuggestedName) !== normalizeName(settings.outlet2Name);
 
   const handleRatePress = useCallback(() => {
     setRateModalVisible(true);
@@ -93,6 +124,46 @@ const SettingsScreen = ({ navigation }) => {
 
     return { success: true };
   }, [outletModalState.outletNumber, updateOutletName]);
+
+  const handleAcceptOutletSuggestion = useCallback((outletNumber) => {
+    const suggestedName = outletNumber === 1
+      ? String(settings.outlet1SuggestedName || '').trim()
+      : String(settings.outlet2SuggestedName || '').trim();
+
+    if (!suggestedName) {
+      return;
+    }
+
+    Alert.alert(
+      'Accept Suggested Name',
+      `Use "${suggestedName}" for Outlet ${outletNumber}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Accept',
+          onPress: async () => {
+            const confidence = outletNumber === 1
+              ? settings.outlet1SuggestionConfidence
+              : settings.outlet2SuggestionConfidence;
+
+            const result = await updateOutletName(outletNumber, suggestedName, {
+              source: 'auto_suggestion',
+              confidencePercent: confidence,
+            });
+            if (!result.success) {
+              Alert.alert('Unable to apply suggestion', result.error || 'Please try again.');
+            }
+          },
+        },
+      ]
+    );
+  }, [
+    settings.outlet1SuggestedName,
+    settings.outlet2SuggestedName,
+    settings.outlet1SuggestionConfidence,
+    settings.outlet2SuggestionConfidence,
+    updateOutletName,
+  ]);
 
   const handleLogout = useCallback(() => {
   Alert.alert(
@@ -162,9 +233,47 @@ const SettingsScreen = ({ navigation }) => {
   }, []);
 
   const handleESP32Settings = useCallback(() => {
-    // TODO: Navigate to ESP32 device settings when backend is ready
-    Alert.alert('Device Settings', 'ESP32 device configuration coming soon.');
+    setDeviceModalVisible(true);
   }, []);
+
+  const handleDeviceModalClose = useCallback(() => {
+    setDeviceModalVisible(false);
+  }, []);
+
+  const handleDeviceSave = useCallback(async (deviceData) => {
+    const result = await updateDeviceSettings(deviceData);
+    if (!result.success) {
+      Alert.alert('Unable to save device settings', result.error || 'Please try again.');
+      return result;
+    }
+
+    return { success: true };
+  }, [updateDeviceSettings]);
+
+  const handleDeviceUnlink = useCallback(() => {
+    if (!settings.esp32Linked) {
+      Alert.alert('No Linked Device', 'There is no ESP32 device linked to this account.');
+      return;
+    }
+
+    Alert.alert(
+      'Unlink ESP32',
+      `Unlink ${settings.esp32DeviceId}? Incoming hardware updates will be rejected until re-linked.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Unlink',
+          style: 'destructive',
+          onPress: async () => {
+            const result = await clearDeviceSettings();
+            if (!result.success) {
+              Alert.alert('Unable to unlink device', result.error || 'Please try again.');
+            }
+          },
+        },
+      ]
+    );
+  }, [clearDeviceSettings, settings.esp32DeviceId, settings.esp32Linked]);
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
@@ -226,13 +335,41 @@ const SettingsScreen = ({ navigation }) => {
         {/* Device Settings */}
         <SectionHeader title="Device Settings" />
         <SectionCard>
-          {/* TODO: Connect to ESP32 when backend is ready */}
           <SettingsRow
             icon="📡"
             label="ESP32 Device"
-            value="Integration in progress"
+            value={settings.esp32Linked ? settings.esp32DeviceId : 'Not linked'}
             showArrow
             onPress={handleESP32Settings}
+          />
+          <Separator />
+          <SettingsRow
+            icon="🔐"
+            label="Device Token"
+            value={settings.esp32TokenSet ? 'Configured' : 'Not set'}
+            showArrow
+            onPress={handleESP32Settings}
+          />
+          <Separator />
+          <SettingsRow
+            icon="🩺"
+            label="Device Health"
+            value={formatDeviceHealthValue(settings.esp32HealthStatus, settings.esp32LastSeenAtMs)}
+          />
+          <Separator />
+          <SettingsRow
+            icon="✅"
+            label="Last Ack"
+            value={formatAckStatusValue(settings.esp32LastAckStatus)}
+          />
+          <Separator />
+          <SettingsRow
+            icon="🧹"
+            label="Unlink ESP32"
+            isDestructive
+            showArrow
+            onPress={handleDeviceUnlink}
+            disabled={!settings.esp32Linked}
           />
           <Separator />
           <SettingsRow
@@ -244,11 +381,29 @@ const SettingsScreen = ({ navigation }) => {
           />
           <Separator />
           <SettingsRow
+            icon="✨"
+            label="Outlet 1 Suggestion"
+            value={formatSuggestionValue(settings.outlet1SuggestedName, settings.outlet1SuggestionConfidence)}
+            showArrow={outlet1CanAcceptSuggestion}
+            onPress={outlet1CanAcceptSuggestion ? () => handleAcceptOutletSuggestion(1) : undefined}
+            disabled={!outlet1CanAcceptSuggestion}
+          />
+          <Separator />
+          <SettingsRow
             icon="🔌"
             label="Outlet 2 Name"
             value={settings.outlet2Name}
             showArrow
             onPress={() => handleOutletNamePress(2)}
+          />
+          <Separator />
+          <SettingsRow
+            icon="✨"
+            label="Outlet 2 Suggestion"
+            value={formatSuggestionValue(settings.outlet2SuggestedName, settings.outlet2SuggestionConfidence)}
+            showArrow={outlet2CanAcceptSuggestion}
+            onPress={outlet2CanAcceptSuggestion ? () => handleAcceptOutletSuggestion(2) : undefined}
+            disabled={!outlet2CanAcceptSuggestion}
           />
         </SectionCard>
 
@@ -335,6 +490,14 @@ const SettingsScreen = ({ navigation }) => {
         currentName={outletModalState.currentName}
         onClose={handleOutletModalClose}
         onSave={handleOutletNameSave}
+      />
+
+      <ESP32DeviceModal
+        visible={deviceModalVisible}
+        currentDeviceId={settings.esp32DeviceId}
+        currentDeviceToken={settings.esp32DeviceToken}
+        onClose={handleDeviceModalClose}
+        onSave={handleDeviceSave}
       />
     </SafeAreaView>
   );

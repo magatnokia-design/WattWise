@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
+import { onAuthStateChanged } from 'firebase/auth';
 import { comparisonService } from '../../../services/firebase';
 import { auth } from '../../../services/firebase/config';
 import { calculateComparison, generateInsights } from '../utils/comparisonHelpers';
@@ -8,6 +9,7 @@ const useReferenceComparison = () => {
   const currentMonthValue = currentDate.toISOString().slice(0, 7);
 
   const [selectedMonth, setSelectedMonth] = useState(currentMonthValue);
+  const [userId, setUserId] = useState(null);
   const [currentMonthData, setCurrentMonthData] = useState({
     kWh: 0,
     cost: 0,
@@ -33,20 +35,33 @@ const useReferenceComparison = () => {
   const comparisonData = calculateComparison(currentMonthData, previousMonthData);
   const insights = generateInsights(comparisonData, currentMonthData, previousMonthData);
 
-  // Fetch when selected month changes
+  // Track auth state and reset comparison data on sign-out.
   useEffect(() => {
-    fetchComparisonData();
-  }, [selectedMonth]);
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      const nextUserId = user?.uid || null;
+      setUserId(nextUserId);
+
+      if (!nextUserId) {
+        setCurrentMonthData({ kWh: 0, cost: 0, outlet1: 0, outlet2: 0 });
+        setPreviousMonthData({ kWh: 0, cost: 0, outlet1: 0, outlet2: 0 });
+        setLoading(false);
+      }
+    });
+
+    return unsubscribe;
+  }, []);
 
   // Fetch comparison data
   const fetchComparisonData = useCallback(async () => {
+    if (!userId) {
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     setError(null);
 
     try {
-      const userId = auth.currentUser?.uid;
-      if (!userId) throw new Error('User not authenticated');
-
       // Fetch current month data
       const currentResult = await comparisonService.getMonthData(userId, selectedMonth);
       if (currentResult.success && currentResult.data) {
@@ -83,7 +98,13 @@ const useReferenceComparison = () => {
     } finally {
       setLoading(false);
     }
-  }, [getPreviousMonthKey, selectedMonth]);
+  }, [getPreviousMonthKey, selectedMonth, userId]);
+
+  // Fetch when selected month changes and user is authenticated.
+  useEffect(() => {
+    if (!userId) return;
+    fetchComparisonData();
+  }, [selectedMonth, userId, fetchComparisonData]);
 
   // Handle month change
   const handleMonthChange = useCallback((month) => {
@@ -95,7 +116,6 @@ const useReferenceComparison = () => {
     setError(null);
 
     try {
-      const userId = auth.currentUser?.uid;
       if (!userId) throw new Error('User not authenticated');
 
       // Calculate previous month
@@ -119,13 +139,12 @@ const useReferenceComparison = () => {
       console.error('Error saving previous bill data:', error);
       return { success: false, error: error.message };
     }
-  }, [getPreviousMonthKey, selectedMonth]);
+  }, [getPreviousMonthKey, selectedMonth, userId]);
 
   const handleDeletePreviousBill = useCallback(async () => {
     setError(null);
 
     try {
-      const userId = auth.currentUser?.uid;
       if (!userId) throw new Error('User not authenticated');
 
       const prevMonth = getPreviousMonthKey(selectedMonth);
@@ -142,7 +161,7 @@ const useReferenceComparison = () => {
       console.error('Error deleting previous bill data:', err);
       return { success: false, error: err.message };
     }
-  }, [getPreviousMonthKey, selectedMonth]);
+  }, [getPreviousMonthKey, selectedMonth, userId]);
 
   // Refresh data
   const handleRefresh = useCallback(async () => {

@@ -28,6 +28,16 @@ service cloud.firestore {
         'autoDetectedAppliance'
       ]);
     }
+
+    // Device mapping docs used by Cloud Functions to resolve ESP32 ownership.
+    match /devices/{deviceId} {
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow update: if isAuthenticated()
+                    && resource.data.userId == request.auth.uid
+                    && request.resource.data.userId == request.auth.uid;
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
     
     // ===========================
     // USERS COLLECTION
@@ -99,6 +109,15 @@ service cloud.firestore {
         
         // Users can DELETE their own notifications
         allow delete: if isOwner(userId);
+      }
+
+      // ===========================
+      // DEVICE_COMMANDS SUBCOLLECTION
+      // ===========================
+      match /device_commands/{commandId} {
+        // Users can inspect command lifecycle; writes remain server-side only.
+        allow read: if isOwner(userId);
+        allow write: if false;
       }
       
       // ===========================

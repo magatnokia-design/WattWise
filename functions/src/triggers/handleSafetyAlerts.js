@@ -1,5 +1,6 @@
 const admin = require('firebase-admin');
 const logger = require('firebase-functions/logger');
+const { dispatchDeviceCommand } = require('../lib/deviceCommandDispatcher');
 
 /**
  * Firestore trigger: Fires when power_safety document is written
@@ -139,15 +140,32 @@ async function handleSafetyAlerts(change, context) {
 
       await batch.commit();
 
-      // TODO: Send cutoff command to ESP32
-      // const rtdb = admin.database();
-      // await rtdb.ref(`devices/${userId}/commands/cutoff`).set({
-      //   timestamp: Date.now(),
-      //   outlet1: 'off',
-      //   outlet2: 'off',
-      // });
+      const [outlet1Command, outlet2Command] = await Promise.all([
+        dispatchDeviceCommand({
+          userId,
+          outletId: 'outlet1',
+          action: 'off',
+          reason: 'safety_cutoff',
+          source: 'safety_trigger',
+          metadata: { stage: currentStage },
+        }),
+        dispatchDeviceCommand({
+          userId,
+          outletId: 'outlet2',
+          action: 'off',
+          reason: 'safety_cutoff',
+          source: 'safety_trigger',
+          metadata: { stage: currentStage },
+        }),
+      ]);
 
-      logger.info('Auto-cutoff executed', { userId });
+      logger.info('Auto-cutoff executed', {
+        userId,
+        outlet1CommandId: outlet1Command.commandId,
+        outlet1Channel: outlet1Command.channel,
+        outlet2CommandId: outlet2Command.commandId,
+        outlet2Channel: outlet2Command.channel,
+      });
     }
 
     return null;

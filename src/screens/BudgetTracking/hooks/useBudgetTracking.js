@@ -1,8 +1,10 @@
 import { useState, useCallback, useEffect } from 'react';
+import { onAuthStateChanged } from 'firebase/auth';
 import { budgetService } from '../../../services/firebase';
 import { auth } from '../../../services/firebase/config';
 
 const useBudgetTracking = () => {
+  const [userId, setUserId] = useState(null);
   const [monthlyBudget, setMonthlyBudget] = useState(0);
   const [currentSpending, setCurrentSpending] = useState(0);
   const [outlet1Spending, setOutlet1Spending] = useState(0);
@@ -17,19 +19,37 @@ const useBudgetTracking = () => {
   const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
   const currentDay = now.getDate();
 
-  // Load budget data on mount
+  // Track auth state so budget fetch waits for an authenticated user.
   useEffect(() => {
-    fetchBudgetData();
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      const nextUserId = user?.uid || null;
+      setUserId(nextUserId);
+
+      if (!nextUserId) {
+        setMonthlyBudget(0);
+        setCurrentSpending(0);
+        setOutlet1Spending(0);
+        setOutlet2Spending(0);
+        setDailyAverage(0);
+        setProjectedCost(0);
+        setBudgetHistory([]);
+        setLoading(false);
+      }
+    });
+
+    return unsubscribe;
   }, []);
 
   // Fetch budget data
   const fetchBudgetData = useCallback(async () => {
+    if (!userId) {
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     
     try {
-      const userId = auth.currentUser?.uid;
-      if (!userId) throw new Error('User not authenticated');
-
       const result = await budgetService.getCurrentMonthBudget(userId);
 
       if (result.success) {
@@ -55,12 +75,16 @@ const useBudgetTracking = () => {
     } finally {
       setLoading(false);
     }
-  }, [currentDay, daysInMonth]);
+  }, [currentDay, daysInMonth, userId]);
+
+  useEffect(() => {
+    if (!userId) return;
+    fetchBudgetData();
+  }, [userId, fetchBudgetData]);
 
   // Set monthly budget
   const handleSetBudget = useCallback(async (budget) => {
     try {
-      const userId = auth.currentUser?.uid;
       if (!userId) throw new Error('User not authenticated');
 
       const result = await budgetService.setMonthlyBudget(userId, parseFloat(budget));
@@ -75,7 +99,7 @@ const useBudgetTracking = () => {
       console.error('Error setting budget:', error);
       return { success: false, error: error.message };
     }
-  }, []);
+  }, [userId]);
 
   // Refresh data
   const handleRefresh = useCallback(async () => {
