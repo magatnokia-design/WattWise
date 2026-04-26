@@ -156,6 +156,8 @@ async function updateOutletMetrics(req, res) {
       }
 
       const outletUpdate = {
+        outletId: `outlet${number}`,
+        outletNumber: number,
         voltage,
         current,
         power,

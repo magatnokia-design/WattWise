@@ -39,6 +39,10 @@ const formatMetric = (value, unit, decimals = 1) => {
   return `${formatted} ${unit}`;
 };
 
+const outletHardwareMapLabel = (outletNumber) => {
+  return outletNumber === 1 ? 'Relay CH1 / PZEM 2' : 'Relay CH2 / PZEM 1';
+};
+
 export const DashboardScreen = ({ navigation }) => {
   const [notificationVisible, setNotificationVisible] = useState(false);
 
@@ -91,7 +95,11 @@ export const DashboardScreen = ({ navigation }) => {
   // Save appliance name
   const handleSaveName = async (newName) => {
     const { outlet } = editModal;
-    await updateApplianceName(outlet, newName);
+    const result = await updateApplianceName(outlet, newName);
+    if (!result.success) {
+      Alert.alert('Update Failed', result.error || 'Unable to update appliance name right now.');
+      return;
+    }
     setEditModal({ visible: false, outlet: null });
   };
 
@@ -197,14 +205,17 @@ export const DashboardScreen = ({ navigation }) => {
           {/* Outlet 1 */}
           <View style={styles.outletCard}>
             <View style={styles.outletHeader}>
-              <View style={styles.outletTitleRow}>
-                <Text style={styles.outletTitle}>{outlet1Name}</Text>
-                <TouchableOpacity
-                  style={styles.editButton}
-                  onPress={() => handleEditName(1)}
-                >
-                  <Ionicons name="create-outline" size={16} color={COLORS.primary} />
-                </TouchableOpacity>
+              <View>
+                <View style={styles.outletTitleRow}>
+                  <Text style={styles.outletTitle}>{outlet1Name}</Text>
+                  <TouchableOpacity
+                    style={styles.editButton}
+                    onPress={() => handleEditName(1)}
+                  >
+                    <Ionicons name="create-outline" size={16} color={COLORS.primary} />
+                  </TouchableOpacity>
+                </View>
+                <Text style={styles.hardwareLabel}>{outletHardwareMapLabel(1)}</Text>
               </View>
               <View style={[styles.statusBadge, outlet1Status ? styles.statusOn : styles.statusOff]}>
                 <View style={[styles.statusDot, outlet1Status ? styles.dotOn : styles.dotOff]} />
@@ -269,14 +280,17 @@ export const DashboardScreen = ({ navigation }) => {
           {/* Outlet 2 */}
           <View style={styles.outletCard}>
             <View style={styles.outletHeader}>
-              <View style={styles.outletTitleRow}>
-                <Text style={styles.outletTitle}>{outlet2Name}</Text>
-                <TouchableOpacity
-                  style={styles.editButton}
-                  onPress={() => handleEditName(2)}
-                >
-                  <Ionicons name="create-outline" size={16} color={COLORS.primary} />
-                </TouchableOpacity>
+              <View>
+                <View style={styles.outletTitleRow}>
+                  <Text style={styles.outletTitle}>{outlet2Name}</Text>
+                  <TouchableOpacity
+                    style={styles.editButton}
+                    onPress={() => handleEditName(2)}
+                  >
+                    <Ionicons name="create-outline" size={16} color={COLORS.primary} />
+                  </TouchableOpacity>
+                </View>
+                <Text style={styles.hardwareLabel}>{outletHardwareMapLabel(2)}</Text>
               </View>
               <View style={[styles.statusBadge, outlet2Status ? styles.statusOn : styles.statusOff]}>
                 <View style={[styles.statusDot, outlet2Status ? styles.dotOn : styles.dotOff]} />
@@ -558,7 +572,7 @@ const styles = StyleSheet.create({
   editButton: {
     padding: 4,
   },
-  applianceName: {
+  hardwareLabel: {
     ...FONTS.small,
     color: COLORS.textLight,
     marginTop: 2,

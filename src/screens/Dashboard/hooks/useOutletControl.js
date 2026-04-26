@@ -3,7 +3,6 @@ import { outletService } from '../../../services/firebase';
 import { auth } from '../../../services/firebase/config';
 import { onAuthStateChanged } from 'firebase/auth';
 
-const DEFAULT_OUTLET_NAME_PATTERN = /^Outlet\s+\d+$/i;
 const DEFAULT_OUTLET_METRICS = {
   voltage: 0,
   current: 0,
@@ -16,12 +15,30 @@ const toMetricNumber = (value) => {
   return Number.isFinite(parsed) ? parsed : 0;
 };
 
-const buildOutletMetrics = (outlet = {}) => ({
-  voltage: toMetricNumber(outlet.voltage),
-  current: toMetricNumber(outlet.current),
-  power: toMetricNumber(outlet.power),
-  energy: toMetricNumber(outlet.energy),
-});
+const normalizeOutletDisplayName = (value) => {
+  return String(value || '').replace(/\s+/g, ' ').trim();
+};
+
+const buildOutletMetrics = (outlet = {}, isOutletOn = false) => {
+  const voltage = toMetricNumber(outlet.voltage);
+  const current = toMetricNumber(outlet.current);
+  const power = toMetricNumber(outlet.power);
+  const energy = toMetricNumber(outlet.energy);
+
+  // If backend status is briefly stale but live current/power is already present,
+  // keep showing live metrics instead of forcing zeros.
+  const hasLiveLoad = power >= 0.5 || current >= 0.01;
+  if (!isOutletOn && !hasLiveLoad) {
+    return { ...DEFAULT_OUTLET_METRICS };
+  }
+
+  return {
+    voltage,
+    current,
+    power,
+    energy,
+  };
+};
 
 const resolveOutletStatus = (outlet = {}) => {
   if (typeof outlet.isOn === 'boolean') {
@@ -58,6 +75,19 @@ const buildOutletSuggestion = (outlet = {}, outletName = '') => {
   };
 };
 
+const resolveOutletName = (outlet = {}) => {
+  const outletNumber = Number(outlet.outletNumber) || 0;
+  const fallbackName = outletNumber > 0 ? `Outlet ${outletNumber}` : 'Outlet';
+  const candidateName = normalizeOutletDisplayName(
+    outlet.applianceName ||
+    outlet.applianceSelection?.name ||
+    outlet.applianceLabel ||
+    outlet.label ||
+    ''
+  );
+  return candidateName || fallbackName;
+};
+
 export const useOutletControl = () => {
   const [outlet1Status, setOutlet1Status] = useState(false);
   const [outlet2Status, setOutlet2Status] = useState(false);
@@ -82,10 +112,10 @@ export const useOutletControl = () => {
   const applyOutletData = useCallback((outlet) => {
     if (!outlet || !outlet.outletNumber) return;
 
-    const resolvedName = String(outlet.applianceName || `Outlet ${outlet.outletNumber}`);
-    const suggestion = buildOutletSuggestion(outlet, resolvedName);
-    const metrics = buildOutletMetrics(outlet);
     const resolvedStatus = resolveOutletStatus(outlet);
+    const resolvedName = resolveOutletName(outlet);
+    const suggestion = buildOutletSuggestion(outlet, resolvedName);
+    const metrics = buildOutletMetrics(outlet, resolvedStatus);
 
     if (outlet.outletNumber === 1) {
       setOutlet1Status(resolvedStatus);
@@ -171,10 +201,30 @@ export const useOutletControl = () => {
       const userId = auth.currentUser?.uid;
       if (!userId) throw new Error('User not authenticated');
 
-      const result = await outletService.updateApplianceName(userId, outletNumber, newName, options);
+      const fallbackName = outletNumber === 2 ? 'Outlet 2' : 'Outlet 1';
+      const sanitizedName = normalizeOutletDisplayName(newName) || fallbackName;
+
+      const result = await outletService.updateApplianceName(userId, outletNumber, sanitizedName, options);
       
       if (!result.success) {
         throw new Error(result.error);
+      }
+
+      // Apply immediately in UI; snapshot listener will keep it in sync afterward.
+      if (outletNumber === 1) {
+        setOutlet1Name(sanitizedName);
+        setOutlet1Suggestion((previous) => ({
+          ...previous,
+          showBadge: false,
+          canAccept: false,
+        }));
+      } else if (outletNumber === 2) {
+        setOutlet2Name(sanitizedName);
+        setOutlet2Suggestion((previous) => ({
+          ...previous,
+          showBadge: false,
+          canAccept: false,
+        }));
       }
       
       return { success: true };

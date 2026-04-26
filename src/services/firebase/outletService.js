@@ -40,6 +40,49 @@ const outletNumberFromId = (outletId) => {
   return Number.isNaN(outletNumber) ? null : outletNumber;
 };
 
+const isSupportedOutletId = (outletId) => outletId === 'outlet1' || outletId === 'outlet2';
+
+const sortOutletsByNumber = (outlets = []) => {
+  return [...outlets].sort((a, b) => {
+    const left = Number(a?.outletNumber || 0);
+    const right = Number(b?.outletNumber || 0);
+    return left - right;
+  });
+};
+
+const isPermissionDeniedError = (error) => {
+  const code = String(error?.code || '').toLowerCase();
+  const message = String(error?.message || '').toLowerCase();
+  return code.includes('permission-denied') || message.includes('insufficient permissions');
+};
+
+const TRANSIENT_FUNCTION_ERROR_CODES = new Set([
+  'internal',
+  'unavailable',
+  'deadline-exceeded',
+  'unknown',
+]);
+
+const normalizeFunctionErrorCode = (error) => {
+  if (typeof error?.code !== 'string') return null;
+  return error.code.replace('functions/', '').trim().toLowerCase();
+};
+
+const delayMs = (durationMs) => new Promise((resolve) => setTimeout(resolve, durationMs));
+
+const didOutletStatusPersist = async (userId, outletIdOrNumber, expectedStatus) => {
+  try {
+    const normalizedOutletId = normalizeOutletId(outletIdOrNumber);
+    const outletSnapshot = await getDoc(doc(db, 'users', userId, 'outlets', normalizedOutletId));
+    if (!outletSnapshot.exists()) return false;
+
+    const outletData = outletSnapshot.data() || {};
+    return String(outletData.status || '').toLowerCase() === (expectedStatus ? 'on' : 'off');
+  } catch {
+    return false;
+  }
+};
+
 export const outletService = {
   // Get outlet data
   getOutletData: async (userId, outletId) => {
@@ -84,10 +127,10 @@ export const outletService = {
       if (!result.success) return result;
 
       const outlets = Object.entries(result.data || {})
-        .filter(([, outletData]) => !!outletData)
+        .filter(([outletId, outletData]) => isSupportedOutletId(outletId) && !!outletData)
         .map(([outletId, outletData]) => mapOutletDocToUiOutlet(outletId, outletData));
 
-      return { success: true, data: outlets };
+      return { success: true, data: sortOutletsByNumber(outlets) };
     } catch (error) {
       console.error('Error getting outlets:', error);
       return { success: false, error: error.message };
@@ -144,10 +187,10 @@ export const outletService = {
     return outletService.subscribeToAllOutlets(
       userId,
       (outletsMap) => {
-        const outlets = Object.entries(outletsMap || {}).map(([outletId, outletData]) =>
-          mapOutletDocToUiOutlet(outletId, outletData)
-        );
-        onUpdate(outlets);
+        const outlets = Object.entries(outletsMap || {})
+          .filter(([outletId]) => isSupportedOutletId(outletId))
+          .map(([outletId, outletData]) => mapOutletDocToUiOutlet(outletId, outletData));
+        onUpdate(sortOutletsByNumber(outlets));
       },
       onError
     );
@@ -159,23 +202,52 @@ export const outletService = {
     try {
       const normalizedOutletId = normalizeOutletId(outletId);
       const normalizedStatus = !!status;
-      
-      // Call Cloud Function to process outlet toggle
-      const processOutletToggle = httpsCallable(functions, 'processOutletToggle');
-      const result = await processOutletToggle({
-        outletId: normalizedOutletId,
-        status: normalizedStatus,  // boolean: true = on, false = off
-      });
 
-      if (!result.data.success) {
-        throw new Error(result.data.error || 'Failed to toggle outlet');
+      // Retry transient callable failures; mobile networks can drop the response
+      // even when the server-side toggle already completed.
+      const processOutletToggle = httpsCallable(functions, 'processOutletToggle');
+      const maxAttempts = 2;
+      let lastError = null;
+
+      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        try {
+          const result = await processOutletToggle({
+            outletId: normalizedOutletId,
+            status: normalizedStatus,
+          });
+
+          if (!result?.data?.success) {
+            throw new Error(result?.data?.error || 'Failed to toggle outlet');
+          }
+
+          return { success: true };
+        } catch (callableError) {
+          lastError = callableError;
+          const normalizedCode = normalizeFunctionErrorCode(callableError);
+
+          // If server likely succeeded but client missed response, reconcile by state.
+          const persisted = await didOutletStatusPersist(userId, normalizedOutletId, normalizedStatus);
+          if (persisted) {
+            console.warn('Toggle callable failed but Firestore status already updated:', {
+              outletId: normalizedOutletId,
+              code: normalizedCode,
+              message: callableError?.message,
+            });
+            return { success: true };
+          }
+
+          const shouldRetry = TRANSIENT_FUNCTION_ERROR_CODES.has(normalizedCode);
+          if (!shouldRetry || attempt >= maxAttempts) {
+            throw callableError;
+          }
+
+          await delayMs(350 * attempt);
+        }
       }
-      
-      return { success: true };
+
+      throw lastError || new Error('Failed to toggle outlet');
     } catch (error) {
-      const code = typeof error?.code === 'string'
-        ? error.code.replace('functions/', '')
-        : error?.code;
+      const code = normalizeFunctionErrorCode(error) || error?.code;
       const message = error?.details || error?.message || 'Failed to toggle outlet';
 
       console.error('Error updating outlet status:', {
@@ -192,12 +264,13 @@ export const outletService = {
     return outletService.updateOutletStatus(userId, outletIdOrNumber, status);
   },
 
-  // Update appliance name
-  // ✅ DIRECT WRITE ALLOWED - Security rules permit user writes to applianceName
+  // Update appliance name.
+  // If stricter rules reject metadata fields, retry with a minimal payload.
   updateApplianceName: async (userId, outletIdOrNumber, name, options = {}) => {
     try {
       const normalizedOutletId = normalizeOutletId(outletIdOrNumber);
       const outletNumber = outletNumberFromId(normalizedOutletId);
+      const resolvedOutletNumber = outletNumber || 0;
       const normalizedSource = String(options.source || 'manual').trim().toLowerCase();
       const confidence = Number(options.confidencePercent);
       const selectionPayload = {
@@ -215,16 +288,53 @@ export const outletService = {
         selectionPayload.modelVersion = String(options.modelVersion);
       }
 
-      await setDoc(
-        doc(db, 'users', userId, 'outlets', normalizedOutletId),
-        {
-          outletNumber: outletNumber || 0,
+      const outletRef = doc(db, 'users', userId, 'outlets', normalizedOutletId);
+      const outletSnapshot = await getDoc(outletRef);
+
+      if (!outletSnapshot.exists()) {
+        await setDoc(outletRef, {
+          outletNumber: resolvedOutletNumber,
+          status: 'off',
           applianceName: name,
-          applianceSelection: selectionPayload,
+          voltage: 0,
+          current: 0,
+          power: 0,
+          energy: 0,
+          totalEnergy: 0,
           lastUpdated: new Date(),
-        },
-        { merge: true }
-      );
+          autoDetectedAppliance: '',
+        });
+
+        return { success: true };
+      }
+
+      try {
+        await setDoc(
+          outletRef,
+          {
+            outletNumber: resolvedOutletNumber,
+            applianceName: name,
+            applianceSelection: selectionPayload,
+            lastUpdated: new Date(),
+          },
+          { merge: true }
+        );
+      } catch (writeError) {
+        if (!isPermissionDeniedError(writeError)) {
+          throw writeError;
+        }
+
+        await setDoc(
+          outletRef,
+          {
+            outletNumber: resolvedOutletNumber,
+            applianceName: name,
+            lastUpdated: new Date(),
+          },
+          { merge: true }
+        );
+      }
+
       return { success: true };
     } catch (error) {
       console.error('Error updating appliance name:', error);
