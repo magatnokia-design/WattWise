@@ -75,6 +75,10 @@ static const uint8_t TIME_SYNC_RECOVERY_ATTEMPTS = 2;
 static const unsigned long COMMAND_BACKOFF_AFTER_ERROR_MS = 2000;
 static const unsigned long METRICS_BACKOFF_AFTER_ERROR_MS = 3000;
 static const uint16_t METRICS_SUCCESS_LOG_EVERY = 20;
+static const float MAX_OUTLET_POWER_W = 500.0f;
+static const unsigned long OVERPOWER_GRACE_MS = 3000;
+static const float MAX_TOTAL_POWER_W = 1000.0f;
+static const unsigned long TOTAL_OVERPOWER_GRACE_MS = 3000;
 
 const IPAddress WIFI_DNS_PRIMARY(1, 1, 1, 1);
 const IPAddress WIFI_DNS_SECONDARY(8, 8, 8, 8);
@@ -110,6 +114,9 @@ uint8_t pendingAckRetryCount = 0;
 unsigned long commandBackoffUntilMs = 0;
 unsigned long metricsBackoffUntilMs = 0;
 uint16_t metricsSuccessCount = 0;
+unsigned long outlet1OverPowerSinceMs = 0;
+unsigned long outlet2OverPowerSinceMs = 0;
+unsigned long totalOverPowerSinceMs = 0;
 
 HardwareSerial pzemSerial1(2);
 HardwareSerial pzemSerial2(1);
@@ -130,6 +137,8 @@ void handleSerialCommand(const String& rawCommand);
 void printControllerStatus();
 void updateSimulatedEnergy();
 OutletTelemetry readOrSimulateOutletTelemetry(uint8_t outletNumber);
+void enforceOutletPowerLimit(uint8_t outletNumber, const OutletTelemetry& telemetry, unsigned long nowMs);
+void enforceTotalPowerLimit(const OutletTelemetry& outlet1Telemetry, const OutletTelemetry& outlet2Telemetry, unsigned long nowMs);
 bool syncTimeFromHttpsFallback();
 bool syncTimeFromHttpDate(const char* url, const char* sourceLabel, const char* hostForDns = nullptr);
 bool syncTimeFromPlainHttpDate(const char* url, const char* sourceLabel);
@@ -389,6 +398,89 @@ OutletTelemetry readOrSimulateOutletTelemetry(uint8_t outletNumber) {
   telemetry.energy = (outletNumber == 1) ? simulatedEnergyKwh1 : simulatedEnergyKwh2;
   telemetry.meterReachable = true;
   return telemetry;
+}
+
+void enforceOutletPowerLimit(uint8_t outletNumber, const OutletTelemetry& telemetry, unsigned long nowMs) {
+  unsigned long* overPowerSince = (outletNumber == 1) ? &outlet1OverPowerSinceMs : &outlet2OverPowerSinceMs;
+  bool relayOn = (outletNumber == 1) ? relay1On : relay2On;
+
+  if (!relayOn || !telemetry.meterReachable) {
+    *overPowerSince = 0;
+    return;
+  }
+
+  if (telemetry.power <= MAX_OUTLET_POWER_W) {
+    *overPowerSince = 0;
+    return;
+  }
+
+  if (*overPowerSince == 0) {
+    *overPowerSince = nowMs;
+    return;
+  }
+
+  if (nowMs - *overPowerSince < OVERPOWER_GRACE_MS) {
+    return;
+  }
+
+  Serial.print("[SAFE] Outlet");
+  Serial.print(outletNumber);
+  Serial.print(" power ");
+  Serial.print(telemetry.power, 1);
+  Serial.print("W > ");
+  Serial.print(MAX_OUTLET_POWER_W, 1);
+  Serial.println("W. Shutting off.");
+
+  *overPowerSince = 0;
+  applyRelayState(outletNumber, false);
+}
+
+void enforceTotalPowerLimit(const OutletTelemetry& outlet1Telemetry, const OutletTelemetry& outlet2Telemetry, unsigned long nowMs) {
+  if (!relay1On && !relay2On) {
+    totalOverPowerSinceMs = 0;
+    return;
+  }
+
+  float totalPower = 0.0f;
+  const float outlet1Power = (relay1On && outlet1Telemetry.meterReachable) ? outlet1Telemetry.power : 0.0f;
+  const float outlet2Power = (relay2On && outlet2Telemetry.meterReachable) ? outlet2Telemetry.power : 0.0f;
+  totalPower = outlet1Power + outlet2Power;
+
+  if (totalPower <= MAX_TOTAL_POWER_W) {
+    totalOverPowerSinceMs = 0;
+    return;
+  }
+
+  if (totalOverPowerSinceMs == 0) {
+    totalOverPowerSinceMs = nowMs;
+    return;
+  }
+
+  if (nowMs - totalOverPowerSinceMs < TOTAL_OVERPOWER_GRACE_MS) {
+    return;
+  }
+
+  uint8_t outletToCut = 0;
+  if (outlet1Power >= outlet2Power && relay1On) {
+    outletToCut = 1;
+  } else if (relay2On) {
+    outletToCut = 2;
+  }
+
+  if (outletToCut == 0) {
+    totalOverPowerSinceMs = 0;
+    return;
+  }
+
+  Serial.print("[SAFE] Total power ");
+  Serial.print(totalPower, 1);
+  Serial.print("W > ");
+  Serial.print(MAX_TOTAL_POWER_W, 1);
+  Serial.print("W. Shutting off outlet ");
+  Serial.println(outletToCut);
+
+  totalOverPowerSinceMs = 0;
+  applyRelayState(outletToCut, false);
 }
 
 void printControllerStatus() {
@@ -1166,6 +1258,11 @@ void sendTelemetry() {
   OutletTelemetry outlet2Telemetry = readOrSimulateOutletTelemetry(2);
   uint8_t outlet1MeterChannel = meterChannelForOutlet(1);
   uint8_t outlet2MeterChannel = meterChannelForOutlet(2);
+  unsigned long nowMs = millis();
+
+  enforceOutletPowerLimit(1, outlet1Telemetry, nowMs);
+  enforceOutletPowerLimit(2, outlet2Telemetry, nowMs);
+  enforceTotalPowerLimit(outlet1Telemetry, outlet2Telemetry, nowMs);
 
   if (!simulatedTelemetryEnabled && !outlet1Telemetry.meterReachable) {
     unsigned long nowMs = millis();

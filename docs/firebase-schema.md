@@ -272,7 +272,7 @@ Stores power safety management settings and current status.
     voltageMin: number,           // Minimum safe voltage (V)
     voltageMax: number,           // Maximum safe voltage (V)
     currentMax: number,           // Maximum safe current (A)
-    powerMax: number,             // Maximum safe power (W)
+    powerMax: number,             // Maximum safe power (W, capped at 500)
   },
   
   // Current readings (for comparison)

@@ -14,8 +14,13 @@ const {
   shouldEvaluateLive,
   detectApplianceFromRunState,
 } = require('../lib/applianceDetector');
+const { dispatchDeviceCommand } = require('../lib/deviceCommandDispatcher');
 
 const VALID_STATUSES = new Set(['on', 'off']);
+const MAX_OUTLET_POWER_W = 500;
+const MAX_TOTAL_POWER_W = 1000;
+const OVERPOWER_COMMAND_COOLDOWN_MS = 15000;
+const TOTAL_OVERPOWER_COMMAND_COOLDOWN_MS = 15000;
 
 /**
  * HTTP endpoint for ESP32 to send sensor data
@@ -106,6 +111,7 @@ async function updateOutletMetrics(req, res) {
         power,
         energy,
         status: VALID_STATUSES.has(status) ? status : 'off',
+        isOverPower: power > MAX_OUTLET_POWER_W,
       });
     }
 
@@ -115,6 +121,9 @@ async function updateOutletMetrics(req, res) {
         error: 'No valid outlet payloads were provided',
       });
     }
+
+    const totalPowerW = validOutlets.reduce((sum, outlet) => sum + outlet.power, 0);
+    const isTotalOverPower = totalPowerW > MAX_TOTAL_POWER_W;
 
     const outletRefs = new Map();
     const outletSnapshots = new Map();
@@ -127,21 +136,53 @@ async function updateOutletMetrics(req, res) {
       outletSnapshots.set(outlet.number, outletSnapshot.exists ? outletSnapshot.data() : {});
     }));
 
+    const previousTotalSafety =
+      (outletSnapshots.get(1) || outletSnapshots.get(2) || {}).safety || {};
+    const lastTotalOverPowerAtMs = Number(previousTotalSafety.totalOverPowerAtMs || 0);
+    const shouldDispatchTotalOverPower =
+      isTotalOverPower &&
+      (now - lastTotalOverPowerAtMs >= TOTAL_OVERPOWER_COMMAND_COOLDOWN_MS);
+
+    const createSafetyNotification = async ({
+      title,
+      message,
+      outlet,
+      metadata,
+    }) => db.collection(`users/${userId}/notifications`).add({
+      type: 'cutoff',
+      title,
+      message,
+      outlet: outlet ?? null,
+      read: false,
+      timestamp: admin.firestore.FieldValue.serverTimestamp(),
+      metadata: metadata || {},
+    });
+
     // Update each outlet in a batch.
     const batch = db.batch();
 
+    const dispatchedOutletIds = new Set();
+
     for (const outlet of validOutlets) {
-      const { number, voltage, current, power, status, energy } = outlet;
+      const { number, voltage, current, power, status, energy, isOverPower } = outlet;
       const outletRef = outletRefs.get(number);
       const previousOutletData = outletSnapshots.get(number) || {};
+      const previousSafety = previousOutletData.safety || {};
+      const lastOverPowerAtMs = Number(previousSafety.overPowerAtMs || 0);
+      const shouldDispatchOverPower =
+        isOverPower &&
+        status === 'on' &&
+        (now - lastOverPowerAtMs >= OVERPOWER_COMMAND_COOLDOWN_MS);
       const previousStatus = String(previousOutletData.status || 'off').trim().toLowerCase();
       const normalizedPreviousState = normalizeDetectionState(
         previousOutletData.detectionState,
         previousStatus === 'on' ? 'on' : 'off'
       );
+      const isRunStarting = status === 'on' && normalizedPreviousState.sampleCount === 0;
+      const isRunEnding = status === 'off' && normalizedPreviousState.sampleCount > 0;
 
       let detectionResult = null;
-      if (status === 'off' && normalizedPreviousState.lastStatus === 'on') {
+      if (isRunEnding) {
         detectionResult = detectApplianceFromRunState(normalizedPreviousState);
       }
 
@@ -155,6 +196,17 @@ async function updateOutletMetrics(req, res) {
         detectionResult = detectApplianceFromRunState(nextDetectionState);
       }
 
+      const outletSafety = {
+        overPower: isOverPower,
+        overPowerAtMs: isOverPower ? now : Number(previousSafety.overPowerAtMs || 0),
+        overPowerW: isOverPower ? power : Number(previousSafety.overPowerW || 0),
+        limitW: MAX_OUTLET_POWER_W,
+        totalOverPower: isTotalOverPower,
+        totalOverPowerAtMs: isTotalOverPower ? now : Number(previousTotalSafety.totalOverPowerAtMs || 0),
+        totalOverPowerW: isTotalOverPower ? totalPowerW : Number(previousTotalSafety.totalOverPowerW || 0),
+        totalLimitW: MAX_TOTAL_POWER_W,
+      };
+
       const outletUpdate = {
         outletId: `outlet${number}`,
         outletNumber: number,
@@ -165,8 +217,16 @@ async function updateOutletMetrics(req, res) {
         energy,
         deviceId: normalizedDeviceId,
         detectionState: nextDetectionState,
+        metricsUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        metricsUpdatedAtMs: now,
         lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
+        safety: outletSafety,
       };
+
+      if (isRunStarting) {
+        outletUpdate.autoDetectedAppliance = '';
+        outletUpdate.applianceDetection = admin.firestore.FieldValue.delete();
+      }
 
       if (detectionResult) {
         outletUpdate.autoDetectedAppliance = detectionResult.appliance;
@@ -177,9 +237,92 @@ async function updateOutletMetrics(req, res) {
           features: detectionResult.features,
           updatedAtMs: now,
         };
+      } else if (isRunEnding) {
+        outletUpdate.autoDetectedAppliance = '';
+        outletUpdate.applianceDetection = admin.firestore.FieldValue.delete();
+      }
+
+      if (shouldDispatchOverPower) {
+        await dispatchDeviceCommand({
+          userId,
+          deviceId: normalizedDeviceId,
+          outletId: `outlet${number}`,
+          action: 'off',
+          reason: 'safety_overpower',
+          source: 'system',
+          metadata: {
+            powerW: power,
+            limitW: MAX_OUTLET_POWER_W,
+          },
+        });
+
+        dispatchedOutletIds.add(number);
+
+        await createSafetyNotification({
+          title: '⚠️ Outlet Over-Power Cutoff',
+          message: `Outlet ${number} exceeded ${MAX_OUTLET_POWER_W}W and was turned off.`,
+          outlet: number,
+          metadata: {
+            powerW: power,
+            limitW: MAX_OUTLET_POWER_W,
+            type: 'outlet_overpower',
+          },
+        });
+
+        logger.warn('Overpower detected; cutoff command dispatched', {
+          userId,
+          deviceId: normalizedDeviceId,
+          outletNumber: number,
+          powerW: power,
+          limitW: MAX_OUTLET_POWER_W,
+        });
       }
 
       batch.set(outletRef, outletUpdate, { merge: true });
+    }
+
+    if (shouldDispatchTotalOverPower) {
+      const candidates = validOutlets
+        .filter((entry) => entry.status === 'on')
+        .sort((a, b) => b.power - a.power);
+
+      const outletToCut = candidates.find((entry) => !dispatchedOutletIds.has(entry.number)) || null;
+
+      if (outletToCut) {
+        await dispatchDeviceCommand({
+          userId,
+          deviceId: normalizedDeviceId,
+          outletId: `outlet${outletToCut.number}`,
+          action: 'off',
+          reason: 'safety_total_overpower',
+          source: 'system',
+          metadata: {
+            totalPowerW,
+            limitW: MAX_TOTAL_POWER_W,
+            outletPowerW: outletToCut.power,
+          },
+        });
+
+        await createSafetyNotification({
+          title: '🚨 Total Power Limit',
+          message: `Total load exceeded ${MAX_TOTAL_POWER_W}W. Outlet ${outletToCut.number} was turned off.`,
+          outlet: outletToCut.number,
+          metadata: {
+            totalPowerW,
+            limitW: MAX_TOTAL_POWER_W,
+            outletPowerW: outletToCut.power,
+            type: 'total_overpower',
+          },
+        });
+
+        logger.warn('Total overpower detected; cutoff command dispatched', {
+          userId,
+          deviceId: normalizedDeviceId,
+          totalPowerW,
+          limitW: MAX_TOTAL_POWER_W,
+          outletNumber: outletToCut.number,
+        });
+      }
     }
 
     // Keep mapping heartbeat fresh.

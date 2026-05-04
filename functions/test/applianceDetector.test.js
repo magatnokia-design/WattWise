@@ -73,6 +73,13 @@ test('detectApplianceFromRunState skips low-sample runs', () => {
   assert.equal(result, null);
 });
 
+test('detectApplianceFromRunState skips near-zero load runs', () => {
+  const state = buildRunState({ powerStart: 0.8, jitter: 0.2, sampleCount: 40 });
+  const result = detectApplianceFromRunState(state);
+
+  assert.equal(result, null);
+});
+
 test('updateDetectionState resets counters when outlet turns off', () => {
   let state = buildRunState({ powerStart: 130, jitter: 12, sampleCount: 30 });
   state = updateDetectionState(state, {

@@ -1,6 +1,10 @@
 const MODEL_VERSION = 'rule-v1';
-const MIN_SAMPLE_COUNT = 20;
-const MIN_RUNTIME_MS = 45000;
+const MIN_SAMPLE_COUNT = 5;
+const MIN_RUNTIME_MS = 5000;
+const LIVE_EVALUATION_SAMPLE_INTERVAL = 3;
+
+const MIN_DETECTABLE_MEAN_POWER_W = 4;
+const MIN_DETECTABLE_PEAK_POWER_W = 6;
 
 const ACTIVE_POWER_THRESHOLD_W = 15;
 const HIGH_POWER_THRESHOLD_W = 700;
@@ -62,82 +66,6 @@ const APPLIANCE_PROFILES = [
       activeRatio: 0.05,
       highRatio: 0.03,
       lowRatio: 0.02,
-    },
-  },
-  {
-    label: 'Refrigerator',
-    meanPower: [70, 260],
-    peakPower: [120, 650],
-    stdDevPower: [20, 180],
-    runtimeSec: [600, 86400],
-    activeRatio: [0.2, 0.82],
-    highRatio: [0, 0.2],
-    lowRatio: [0.1, 0.7],
-    weights: {
-      meanPower: 0.35,
-      peakPower: 0.18,
-      stdDevPower: 0.2,
-      runtimeSec: 0.08,
-      activeRatio: 0.07,
-      highRatio: 0.05,
-      lowRatio: 0.07,
-    },
-  },
-  {
-    label: 'Rice Cooker',
-    meanPower: [220, 950],
-    peakPower: [350, 1450],
-    stdDevPower: [40, 280],
-    runtimeSec: [300, 14400],
-    activeRatio: [0.45, 1],
-    highRatio: [0.1, 0.75],
-    lowRatio: [0, 0.35],
-    weights: {
-      meanPower: 0.4,
-      peakPower: 0.2,
-      stdDevPower: 0.17,
-      runtimeSec: 0.08,
-      activeRatio: 0.05,
-      highRatio: 0.07,
-      lowRatio: 0.03,
-    },
-  },
-  {
-    label: 'Electric Iron',
-    meanPower: [650, 1800],
-    peakPower: [850, 2600],
-    stdDevPower: [120, 520],
-    runtimeSec: [120, 5400],
-    activeRatio: [0.4, 0.95],
-    highRatio: [0.2, 0.95],
-    lowRatio: [0, 0.35],
-    weights: {
-      meanPower: 0.37,
-      peakPower: 0.2,
-      stdDevPower: 0.19,
-      runtimeSec: 0.08,
-      activeRatio: 0.04,
-      highRatio: 0.09,
-      lowRatio: 0.03,
-    },
-  },
-  {
-    label: 'Electric Kettle',
-    meanPower: [900, 2600],
-    peakPower: [1200, 3200],
-    stdDevPower: [20, 280],
-    runtimeSec: [30, 1500],
-    activeRatio: [0.9, 1],
-    highRatio: [0.7, 1],
-    lowRatio: [0, 0.1],
-    weights: {
-      meanPower: 0.42,
-      peakPower: 0.22,
-      stdDevPower: 0.14,
-      runtimeSec: 0.12,
-      activeRatio: 0.04,
-      highRatio: 0.05,
-      lowRatio: 0.01,
     },
   },
 ];
@@ -278,7 +206,11 @@ const shouldEvaluateLive = (state) => {
   }
 
   const runtimeMs = getRuntimeMs(state);
-  return state.sampleCount >= MIN_SAMPLE_COUNT && runtimeMs >= MIN_RUNTIME_MS && state.sampleCount % 10 === 0;
+  return (
+    state.sampleCount >= MIN_SAMPLE_COUNT &&
+    runtimeMs >= MIN_RUNTIME_MS &&
+    state.sampleCount % LIVE_EVALUATION_SAMPLE_INTERVAL === 0
+  );
 };
 
 const extractRunFeatures = (state) => {
@@ -332,7 +264,15 @@ const detectApplianceFromRunState = (runState) => {
     return null;
   }
 
-  if (features.sampleCount < MIN_SAMPLE_COUNT && features.runtimeSec < (MIN_RUNTIME_MS / 1000)) {
+  if (features.sampleCount < MIN_SAMPLE_COUNT || features.runtimeSec < (MIN_RUNTIME_MS / 1000)) {
+    return null;
+  }
+
+  // Prevent no-load noise from being labeled as a real appliance.
+  if (
+    features.meanPower < MIN_DETECTABLE_MEAN_POWER_W &&
+    features.peakPower < MIN_DETECTABLE_PEAK_POWER_W
+  ) {
     return null;
   }
 

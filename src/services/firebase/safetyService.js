@@ -2,6 +2,7 @@ import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
 import { db } from './config';
 
 const getSafetyRef = (userId) => doc(db, 'users', userId, 'power_safety', 'settings');
+const MAX_POWER_W = 500;
 
 const getDefaultSafetyData = () => ({
   currentStage: 'normal',
@@ -10,7 +11,7 @@ const getDefaultSafetyData = () => ({
   thresholds: {
     voltage: { min: 200, max: 250 },
     current: { max: 10 },
-    power: { max: 2000 },
+    power: { max: MAX_POWER_W },
   },
   outlet1: {
     voltage: 0,
@@ -28,6 +29,12 @@ const getDefaultSafetyData = () => ({
 });
 
 const normalizeThresholds = (rawThresholds = {}) => {
+  const clampPowerMax = (value) => {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) return MAX_POWER_W;
+    return Math.min(parsed, MAX_POWER_W);
+  };
+
   if (rawThresholds?.voltage || rawThresholds?.current || rawThresholds?.power) {
     return {
       voltage: {
@@ -38,7 +45,7 @@ const normalizeThresholds = (rawThresholds = {}) => {
         max: Number(rawThresholds?.current?.max ?? 10),
       },
       power: {
-        max: Number(rawThresholds?.power?.max ?? 2000),
+        max: clampPowerMax(rawThresholds?.power?.max ?? MAX_POWER_W),
       },
     };
   }
@@ -52,9 +59,19 @@ const normalizeThresholds = (rawThresholds = {}) => {
       max: Number(rawThresholds?.currentMax ?? 10),
     },
     power: {
-      max: Number(rawThresholds?.powerMax ?? 2000),
+      max: clampPowerMax(rawThresholds?.powerMax ?? MAX_POWER_W),
     },
   };
+};
+
+const getRawPowerMax = (rawData = {}) => {
+  if (rawData?.thresholds?.power?.max != null) {
+    return Number(rawData.thresholds.power.max);
+  }
+  if (rawData?.powerMax != null) {
+    return Number(rawData.powerMax);
+  }
+  return NaN;
 };
 
 const normalizeSafetyData = (rawData = {}) => {
@@ -99,7 +116,18 @@ export const safetyService = {
       const safetyDoc = await getDoc(safetyRef);
       
       if (safetyDoc.exists()) {
-        return { success: true, data: normalizeSafetyData(safetyDoc.data()) };
+        const rawData = safetyDoc.data() || {};
+        const normalized = normalizeSafetyData(rawData);
+        const rawPowerMax = getRawPowerMax(rawData);
+
+        if (Number.isFinite(rawPowerMax) && rawPowerMax > MAX_POWER_W) {
+          await setDoc(safetyRef, {
+            'thresholds.power.max': MAX_POWER_W,
+            lastUpdated: new Date(),
+          }, { merge: true });
+        }
+
+        return { success: true, data: normalized };
       }
 
       const defaultData = getDefaultSafetyData();

@@ -3,21 +3,28 @@ import { View, Text, StyleSheet, Switch, TouchableOpacity, TextInput, Alert } fr
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../../../constants/colors';
 
+const MAX_POWER_W = 500;
+
 const ProtectionSettings = ({ enabled, onToggle, thresholds, onSaveThresholds }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [voltageMin, setVoltageMin] = useState(String(thresholds?.voltage?.min ?? 200));
   const [voltageMax, setVoltageMax] = useState(String(thresholds?.voltage?.max ?? 250));
   const [currentMax, setCurrentMax] = useState(String(thresholds?.current?.max ?? 10));
-  const [powerMax, setPowerMax] = useState(String(thresholds?.power?.max ?? 2000));
+  const [powerMax, setPowerMax] = useState(String(thresholds?.power?.max ?? 500));
 
   useEffect(() => {
     setVoltageMin(String(thresholds?.voltage?.min ?? 200));
     setVoltageMax(String(thresholds?.voltage?.max ?? 250));
     setCurrentMax(String(thresholds?.current?.max ?? 10));
-    setPowerMax(String(thresholds?.power?.max ?? 2000));
+    setPowerMax(String(thresholds?.power?.max ?? 500));
   }, [thresholds]);
 
   const handleSaveThresholds = async () => {
+    const rawPowerMax = Number(powerMax);
+    const cappedPowerMax = Number.isFinite(rawPowerMax)
+      ? Math.min(rawPowerMax, MAX_POWER_W)
+      : NaN;
+
     const nextThresholds = {
       voltage: {
         min: Number(voltageMin),
@@ -27,7 +34,7 @@ const ProtectionSettings = ({ enabled, onToggle, thresholds, onSaveThresholds })
         max: Number(currentMax),
       },
       power: {
-        max: Number(powerMax),
+        max: cappedPowerMax,
       },
     };
 
@@ -39,6 +46,11 @@ const ProtectionSettings = ({ enabled, onToggle, thresholds, onSaveThresholds })
     ) {
       Alert.alert('Invalid values', 'Please enter valid numeric thresholds.');
       return;
+    }
+
+    if (rawPowerMax > MAX_POWER_W) {
+      Alert.alert('Power limit capped', `Max power is capped at ${MAX_POWER_W}W.`);
+      setPowerMax(String(MAX_POWER_W));
     }
 
     if (nextThresholds.voltage.min >= nextThresholds.voltage.max) {
@@ -129,7 +141,7 @@ const ProtectionSettings = ({ enabled, onToggle, thresholds, onSaveThresholds })
                 />
               </View>
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Power Max (W)</Text>
+                <Text style={styles.inputLabel}>Power Max (W, cap 500)</Text>
                 <TextInput
                   style={styles.input}
                   value={powerMax}

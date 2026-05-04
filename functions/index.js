@@ -25,6 +25,7 @@ const { checkUserExistsByEmail } = require('./src/http/checkUserExistsByEmail');
 const { processDailyRollup } = require('./src/scheduled/processDailyRollup');
 const { checkScheduledTimers } = require('./src/scheduled/checkScheduledTimers');
 const { markStaleDeviceCommands } = require('./src/scheduled/markStaleDeviceCommands');
+const { normalizePowerSafetyThresholds } = require('./src/scheduled/normalizePowerSafetyThresholds');
 const { handleBudgetAlerts } = require('./src/triggers/handleBudgetAlerts');
 const { handleSafetyAlerts } = require('./src/triggers/handleSafetyAlerts');
 
@@ -135,6 +136,18 @@ exports.markStaleDeviceCommands = onSchedule(
     maxInstances: 1,
   },
   markStaleDeviceCommands
+);
+
+/**
+ * Runs daily to enforce the 500W power cap in user safety settings
+ */
+exports.normalizePowerSafetyThresholds = onSchedule(
+  {
+    schedule: '0 2 * * *',
+    timeZone: 'Asia/Manila',
+    maxInstances: 1,
+  },
+  normalizePowerSafetyThresholds
 );
 
 // ===========================

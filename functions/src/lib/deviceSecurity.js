@@ -1,4 +1,4 @@
-const MAX_TIMESTAMP_SKEW_MS = 15000;
+const MAX_TIMESTAMP_SKEW_MS = 60000;
 
 class DeviceRequestError extends Error {
   constructor(statusCode, message) {

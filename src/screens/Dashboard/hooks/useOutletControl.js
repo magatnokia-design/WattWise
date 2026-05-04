@@ -10,24 +10,108 @@ const DEFAULT_OUTLET_METRICS = {
   energy: 0,
 };
 
+const EMPTY_OUTLET_SUGGESTION = {
+  name: '',
+  confidencePercent: null,
+  modelVersion: '',
+  meanPowerW: null,
+  runtimeSeconds: null,
+  sampleCount: null,
+  showBadge: false,
+  canAccept: false,
+};
+
+const LIVE_CURRENT_THRESHOLD_A = 0.01;
+const LIVE_POWER_THRESHOLD_W = 0.5;
+const HARDWARE_STALE_THRESHOLD_MS = 12000;
+
 const toMetricNumber = (value) => {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const toOptionalNumber = (value) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
 };
 
 const normalizeOutletDisplayName = (value) => {
   return String(value || '').replace(/\s+/g, ' ').trim();
 };
 
-const buildOutletMetrics = (outlet = {}, isOutletOn = false) => {
+const toEpochMs = (value) => {
+  if (!value) return 0;
+
+  if (typeof value?.toDate === 'function') {
+    return value.toDate().getTime();
+  }
+
+  const numeric = Number(value);
+  if (Number.isFinite(numeric)) return numeric;
+
+  const parsed = new Date(value).getTime();
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const getTelemetryUpdatedAtMs = (outlet = {}) => {
+  const explicitTelemetryMs = toEpochMs(
+    outlet.metricsUpdatedAtMs ||
+    outlet.lastMetricsAtMs ||
+    outlet.lastTelemetryAtMs
+  );
+
+  if (explicitTelemetryMs > 0) {
+    return explicitTelemetryMs;
+  }
+
+  return toEpochMs(
+    outlet.metricsUpdatedAt ||
+    outlet.lastMetricsAt ||
+    outlet.lastTelemetryAt ||
+    outlet.lastUpdated
+  );
+};
+
+const hasLiveLoadFromMetrics = (metrics = {}) => {
+  return (
+    toMetricNumber(metrics.power) >= LIVE_POWER_THRESHOLD_W ||
+    toMetricNumber(metrics.current) >= LIVE_CURRENT_THRESHOLD_A
+  );
+};
+
+const deriveOutletRuntimeState = (outlet = {}) => {
+  const current = toMetricNumber(outlet.current);
+  const power = toMetricNumber(outlet.power);
+  const hasLiveLoad = power >= LIVE_POWER_THRESHOLD_W || current >= LIVE_CURRENT_THRESHOLD_A;
+
+  const lastUpdatedMs = getTelemetryUpdatedAtMs(outlet);
+  const hasFreshTelemetry =
+    lastUpdatedMs > 0 && (Date.now() - lastUpdatedMs) <= HARDWARE_STALE_THRESHOLD_MS;
+
+  return {
+    hasLiveLoad,
+    hasFreshTelemetry,
+  };
+};
+
+const buildOutletMetrics = (outlet = {}, isOutletOn = false, runtimeState = {}) => {
   const voltage = toMetricNumber(outlet.voltage);
   const current = toMetricNumber(outlet.current);
   const power = toMetricNumber(outlet.power);
   const energy = toMetricNumber(outlet.energy);
 
+  const hasLiveLoad =
+    runtimeState.hasLiveLoad === true ||
+    power >= LIVE_POWER_THRESHOLD_W ||
+    current >= LIVE_CURRENT_THRESHOLD_A;
+  const hasFreshTelemetry = runtimeState.hasFreshTelemetry === true;
+
+  if (!hasFreshTelemetry) {
+    return { ...DEFAULT_OUTLET_METRICS };
+  }
+
   // If backend status is briefly stale but live current/power is already present,
   // keep showing live metrics instead of forcing zeros.
-  const hasLiveLoad = power >= 0.5 || current >= 0.01;
   if (!isOutletOn && !hasLiveLoad) {
     return { ...DEFAULT_OUTLET_METRICS };
   }
@@ -60,24 +144,53 @@ const toConfidencePercent = (rawConfidence) => {
   return Math.max(0, Math.min(100, Math.round(parsed * 100)));
 };
 
-const buildOutletSuggestion = (outlet = {}, outletName = '') => {
+const buildOutletSuggestion = (outlet = {}, outletName = '', runtimeState = {}) => {
+  if (!runtimeState.hasFreshTelemetry || !runtimeState.hasLiveLoad) {
+    return { ...EMPTY_OUTLET_SUGGESTION };
+  }
+
+  const detectionUpdatedAtMs = toEpochMs(outlet.applianceDetection?.updatedAtMs);
+  const runStartedAtMs = toEpochMs(outlet.detectionState?.runStartedAtMs);
+  const hasCurrentRunDetection =
+    detectionUpdatedAtMs > 0 &&
+    (runStartedAtMs <= 0 || detectionUpdatedAtMs >= runStartedAtMs);
+
+  if (!hasCurrentRunDetection) {
+    return { ...EMPTY_OUTLET_SUGGESTION };
+  }
+
   const suggestedName = String(outlet.autoDetectedAppliance || '').trim();
+  if (!suggestedName) {
+    return { ...EMPTY_OUTLET_SUGGESTION };
+  }
+
   const normalizedCurrent = String(outletName || '').trim().toLowerCase();
   const normalizedSuggested = suggestedName.toLowerCase();
   const isDifferent = !!suggestedName && normalizedCurrent !== normalizedSuggested;
+  const features = outlet.applianceDetection?.features || {};
 
   return {
+    ...EMPTY_OUTLET_SUGGESTION,
     name: suggestedName,
     confidencePercent: toConfidencePercent(outlet.applianceDetection?.confidence),
     modelVersion: String(outlet.applianceDetection?.modelVersion || '').trim(),
+    meanPowerW: toOptionalNumber(features.meanPower),
+    runtimeSeconds: toOptionalNumber(features.runtimeSec),
+    sampleCount: toOptionalNumber(features.sampleCount),
     showBadge: isDifferent,
     canAccept: isDifferent,
   };
 };
 
-const resolveOutletName = (outlet = {}) => {
+const resolveOutletName = (outlet = {}, runtimeState = {}) => {
   const outletNumber = Number(outlet.outletNumber) || 0;
   const fallbackName = outletNumber > 0 ? `Outlet ${outletNumber}` : 'Outlet';
+
+  // While no appliance load is present (or telemetry is stale), keep neutral labels.
+  if (!runtimeState.hasFreshTelemetry || !runtimeState.hasLiveLoad) {
+    return fallbackName;
+  }
+
   const candidateName = normalizeOutletDisplayName(
     outlet.applianceName ||
     outlet.applianceSelection?.name ||
@@ -95,27 +208,18 @@ export const useOutletControl = () => {
   const [outlet2Name, setOutlet2Name] = useState('Outlet 2');
   const [outlet1Metrics, setOutlet1Metrics] = useState(DEFAULT_OUTLET_METRICS);
   const [outlet2Metrics, setOutlet2Metrics] = useState(DEFAULT_OUTLET_METRICS);
-  const [outlet1Suggestion, setOutlet1Suggestion] = useState({
-    name: '',
-    confidencePercent: null,
-    showBadge: false,
-    canAccept: false,
-  });
-  const [outlet2Suggestion, setOutlet2Suggestion] = useState({
-    name: '',
-    confidencePercent: null,
-    showBadge: false,
-    canAccept: false,
-  });
+  const [outlet1Suggestion, setOutlet1Suggestion] = useState({ ...EMPTY_OUTLET_SUGGESTION });
+  const [outlet2Suggestion, setOutlet2Suggestion] = useState({ ...EMPTY_OUTLET_SUGGESTION });
   const [isToggling, setIsToggling] = useState(false);
 
   const applyOutletData = useCallback((outlet) => {
     if (!outlet || !outlet.outletNumber) return;
 
-    const resolvedStatus = resolveOutletStatus(outlet);
-    const resolvedName = resolveOutletName(outlet);
-    const suggestion = buildOutletSuggestion(outlet, resolvedName);
-    const metrics = buildOutletMetrics(outlet, resolvedStatus);
+    const runtimeState = deriveOutletRuntimeState(outlet);
+    const resolvedStatus = runtimeState.hasFreshTelemetry ? resolveOutletStatus(outlet) : false;
+    const resolvedName = resolveOutletName(outlet, runtimeState);
+    const suggestion = buildOutletSuggestion(outlet, resolvedName, runtimeState);
+    const metrics = buildOutletMetrics(outlet, resolvedStatus, runtimeState);
 
     if (outlet.outletNumber === 1) {
       setOutlet1Status(resolvedStatus);
@@ -147,8 +251,8 @@ export const useOutletControl = () => {
         setOutlet2Name('Outlet 2');
         setOutlet1Metrics(DEFAULT_OUTLET_METRICS);
         setOutlet2Metrics(DEFAULT_OUTLET_METRICS);
-        setOutlet1Suggestion({ name: '', confidencePercent: null, showBadge: false, canAccept: false });
-        setOutlet2Suggestion({ name: '', confidencePercent: null, showBadge: false, canAccept: false });
+        setOutlet1Suggestion({ ...EMPTY_OUTLET_SUGGESTION });
+        setOutlet2Suggestion({ ...EMPTY_OUTLET_SUGGESTION });
         return;
       }
 
@@ -210,16 +314,21 @@ export const useOutletControl = () => {
         throw new Error(result.error);
       }
 
+      const hasLiveLoadNow = outletNumber === 1
+        ? hasLiveLoadFromMetrics(outlet1Metrics)
+        : hasLiveLoadFromMetrics(outlet2Metrics);
+      const visibleName = hasLiveLoadNow ? sanitizedName : fallbackName;
+
       // Apply immediately in UI; snapshot listener will keep it in sync afterward.
       if (outletNumber === 1) {
-        setOutlet1Name(sanitizedName);
+        setOutlet1Name(visibleName);
         setOutlet1Suggestion((previous) => ({
           ...previous,
           showBadge: false,
           canAccept: false,
         }));
       } else if (outletNumber === 2) {
-        setOutlet2Name(sanitizedName);
+        setOutlet2Name(visibleName);
         setOutlet2Suggestion((previous) => ({
           ...previous,
           showBadge: false,
@@ -232,7 +341,7 @@ export const useOutletControl = () => {
       console.error('Error updating appliance name:', error);
       return { success: false, error: error.message };
     }
-  }, []);
+  }, [outlet1Metrics, outlet2Metrics]);
 
   return {
     outlet1Status,
