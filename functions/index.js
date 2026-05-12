@@ -26,8 +26,11 @@ const { processDailyRollup } = require('./src/scheduled/processDailyRollup');
 const { checkScheduledTimers } = require('./src/scheduled/checkScheduledTimers');
 const { markStaleDeviceCommands } = require('./src/scheduled/markStaleDeviceCommands');
 const { normalizePowerSafetyThresholds } = require('./src/scheduled/normalizePowerSafetyThresholds');
+const { BREVO_API_KEY } = require('./src/lib/brevoEmail');
 const { handleBudgetAlerts } = require('./src/triggers/handleBudgetAlerts');
 const { handleSafetyAlerts } = require('./src/triggers/handleSafetyAlerts');
+const { handleDeviceCommandEmails } = require('./src/triggers/handleDeviceCommandEmails');
+const { handleDailyReceiptEmails } = require('./src/triggers/handleDailyReceiptEmails');
 
 // ===========================
 // HTTP ENDPOINTS
@@ -162,6 +165,7 @@ exports.handleBudgetAlerts = onDocumentWritten(
   {
     document: 'users/{userId}/budget/{month}',
     maxInstances: 5,
+    secrets: [BREVO_API_KEY],
   },
   handleBudgetAlerts
 );
@@ -174,6 +178,33 @@ exports.handleSafetyAlerts = onDocumentWritten(
   {
     document: 'users/{userId}/power_safety/{document}',
     maxInstances: 5,
+    secrets: [BREVO_API_KEY],
   },
   handleSafetyAlerts
+);
+
+/**
+ * Triggers when device command status updates
+ * Sends device command failure emails
+ */
+exports.handleDeviceCommandEmails = onDocumentWritten(
+  {
+    document: 'users/{userId}/device_commands/{commandId}',
+    maxInstances: 5,
+    secrets: [BREVO_API_KEY],
+  },
+  handleDeviceCommandEmails
+);
+
+/**
+ * Triggers when daily history summary is created
+ * Sends daily receipt emails
+ */
+exports.handleDailyReceiptEmails = onDocumentWritten(
+  {
+    document: 'users/{userId}/history_daily/{date}',
+    maxInstances: 5,
+    secrets: [BREVO_API_KEY],
+  },
+  handleDailyReceiptEmails
 );

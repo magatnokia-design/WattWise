@@ -1,5 +1,6 @@
 const admin = require('firebase-admin');
 const logger = require('firebase-functions/logger');
+const { getTemplateId, resolveUserContact, sendBrevoTemplateEmail } = require('../lib/brevoEmail');
 
 /**
  * Firestore trigger: Fires when budget document is written
@@ -31,6 +32,16 @@ async function handleBudgetAlerts(change, context) {
 
     const db = admin.firestore();
     const budgetRef = change.after.ref;
+    const emailTasks = [];
+    let recipient = null;
+    let recipientLoaded = false;
+
+    const loadRecipient = async () => {
+      if (recipientLoaded) return recipient;
+      recipient = await resolveUserContact(userId);
+      recipientLoaded = true;
+      return recipient;
+    };
 
     // Define threshold levels
     const levels = [
@@ -76,6 +87,30 @@ async function handleBudgetAlerts(change, context) {
           },
         });
 
+        const contact = await loadRecipient();
+        if (contact?.email) {
+          const formattedCurrent = Number(currentSpending || 0).toFixed(2);
+          const formattedBudget = Number(monthlyBudget || 0).toFixed(2);
+          const emailMessage = `You have used ${percentage.toFixed(1)}% of your monthly budget (PHP ${formattedCurrent} / PHP ${formattedBudget}).`;
+
+          emailTasks.push(sendBrevoTemplateEmail({
+            toEmail: contact.email,
+            toName: contact.name,
+            templateId: getTemplateId('budget'),
+            params: {
+              title,
+              message: emailMessage,
+              month,
+              percentage: Number(percentage.toFixed(1)),
+              threshold,
+              currentSpending: Number(formattedCurrent),
+              monthlyBudget: Number(formattedBudget),
+              currency: 'PHP',
+            },
+            tags: ['budget'],
+          }));
+        }
+
         // Update threshold flag
         await budgetRef.set({
           [`thresholds.${key}`]: true,
@@ -83,6 +118,10 @@ async function handleBudgetAlerts(change, context) {
 
         logger.info('Budget alert created', { userId, threshold });
       }
+    }
+
+    if (emailTasks.length > 0) {
+      await Promise.all(emailTasks);
     }
 
     return null;
