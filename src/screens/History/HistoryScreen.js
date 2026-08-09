@@ -11,8 +11,15 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { COLORS } from '../../constants/colors';
 import ActivityLog from './components/ActivityLog';
 import UsageHistory from './components/UsageHistory';
+import DateRangeModal from './components/DateRangeModal';
 import { useHistory } from './hooks/useHistory';
 import { useAuth } from '../../hooks/useAuth';
+import {
+  DATE_RANGE_PRESETS,
+  resolveDateRange,
+  filterByDateRange,
+  formatCost,
+} from './utils/historyHelpers';
 
 const TABS = ['Activity', 'Usage'];
 
@@ -33,6 +40,8 @@ const HistoryScreen = () => {
     const { user, loading: authLoading } = useAuth();
   const [activeTab, setActiveTab] = useState(0);
   const [activeFilter, setActiveFilter] = useState('All');
+  const [activeRangeId, setActiveRangeId] = useState('all');
+  const [dateModalVisible, setDateModalVisible] = useState(false);
 
  const { activityLogs, usageHistory, loading, subscribeActivityLogs, fetchUsageHistory } = useHistory();
 
@@ -53,11 +62,17 @@ useEffect(() => {
   return unsubscribe;
 }, [activeFilter, activeTab, authLoading, user, subscribeActivityLogs, filterToOutletValue]);
 
-// Fetch usage history once on mount
+const { startDate, endDate } = useMemo(
+  () => resolveDateRange(activeRangeId),
+  [activeRangeId]
+);
+
+// Usage history backs the summary cards on both tabs, so it loads regardless of
+// which tab is showing (a single capped query, unlike the activity listener).
 useEffect(() => {
-  if (authLoading || !user || activeTab !== 1) return;
-  fetchUsageHistory();
-}, [activeTab, authLoading, user, fetchUsageHistory]);
+  if (authLoading || !user) return;
+  fetchUsageHistory(startDate, endDate);
+}, [authLoading, user, fetchUsageHistory, startDate, endDate]);
 
   const filters = useMemo(() => ['All', 'Outlet 1', 'Outlet 2'], []);
 
@@ -69,11 +84,36 @@ useEffect(() => {
     setActiveFilter(filter);
   }, []);
 
-  const summaryData = useMemo(() => ({
-    totalRecords: 0,
-    totalKwh: '0.00',
-    totalCost: '₱0.00',
-  }), []);
+  const handleDateFilterPress = useCallback(() => {
+    setDateModalVisible(true);
+  }, []);
+
+  const handleDateModalClose = useCallback(() => {
+    setDateModalVisible(false);
+  }, []);
+
+  // Activity logs stream in unfiltered by date (the listener is capped by count,
+  // not range), so the selected range is applied client-side here.
+  const visibleActivityLogs = useMemo(
+    () => filterByDateRange(activityLogs, startDate, endDate),
+    [activityLogs, startDate, endDate]
+  );
+
+  const activeRangeLabel = useMemo(() => {
+    const preset = DATE_RANGE_PRESETS.find((item) => item.id === activeRangeId);
+    return preset?.shortLabel || 'Date';
+  }, [activeRangeId]);
+
+  const summaryData = useMemo(() => {
+    const totalKwh = usageHistory.reduce((sum, item) => sum + (item.totalKwh || 0), 0);
+    const totalCost = usageHistory.reduce((sum, item) => sum + (item.totalCost || 0), 0);
+
+    return {
+      totalRecords: activeTab === 0 ? visibleActivityLogs.length : usageHistory.length,
+      totalKwh: totalKwh.toFixed(2),
+      totalCost: formatCost(totalCost),
+    };
+  }, [usageHistory, visibleActivityLogs.length, activeTab]);
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
@@ -125,9 +165,19 @@ useEffect(() => {
             onPress={() => handleFilterPress(filter)}
           />
         ))}
-        {/* TODO: Add date range picker when backend is ready */}
-        <TouchableOpacity style={styles.dateFilterBtn} activeOpacity={0.7}>
-          <Text style={styles.dateFilterText}>📅 Date</Text>
+        <TouchableOpacity
+          style={[styles.dateFilterBtn, activeRangeId !== 'all' && styles.dateFilterBtnActive]}
+          onPress={handleDateFilterPress}
+          activeOpacity={0.7}
+        >
+          <Text
+            style={[
+              styles.dateFilterText,
+              activeRangeId !== 'all' && styles.dateFilterTextActive,
+            ]}
+          >
+            📅 {activeRangeLabel}
+          </Text>
         </TouchableOpacity>
       </View>
 
@@ -138,11 +188,18 @@ useEffect(() => {
         showsVerticalScrollIndicator={false}
       >
         {activeTab === 0 ? (
-          <ActivityLog logs={activityLogs} />
+          <ActivityLog logs={visibleActivityLogs} />
         ) : (
           <UsageHistory usage={usageHistory} />
         )}
       </ScrollView>
+
+      <DateRangeModal
+        visible={dateModalVisible}
+        activeRangeId={activeRangeId}
+        onSelect={setActiveRangeId}
+        onClose={handleDateModalClose}
+      />
     </SafeAreaView>
   );
 };
@@ -256,10 +313,18 @@ const styles = StyleSheet.create({
     borderColor: COLORS.border,
     marginLeft: 'auto',
   },
+  dateFilterBtnActive: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
   dateFilterText: {
     fontSize: 12,
     color: COLORS.textLight,
     fontWeight: '500',
+  },
+  dateFilterTextActive: {
+    color: COLORS.white,
+    fontWeight: '600',
   },
   scrollView: {
     flex: 1,

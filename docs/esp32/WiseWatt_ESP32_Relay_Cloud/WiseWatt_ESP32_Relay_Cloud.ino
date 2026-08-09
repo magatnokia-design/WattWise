@@ -1,3 +1,5 @@
+#include <Arduino_BuiltIn.h>
+
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
@@ -11,11 +13,9 @@
 // ---------------------------
 // USER CONFIGURATION
 // ---------------------------
-static const char* WIFI_SSID = "KIANO2.4G";
-static const char* WIFI_PASSWORD = "Nokiamagat@22";
-
-static const char* DEVICE_ID = "ESP32_ROOM_A";
-static const char* DEVICE_TOKEN = "N8m3X2pQ7vL4kR1sT9yW6aB3cD5eF0gH";
+// WIFI_SSID, WIFI_PASSWORD, DEVICE_ID and DEVICE_TOKEN live in secrets.h,
+// which is gitignored. Copy secrets.example.h to secrets.h and fill it in.
+#include "secrets.h"
 
 static const char* ENDPOINT_UPDATE_METRICS = "https://asia-southeast1-wattwise-fe394.cloudfunctions.net/updateOutletMetrics";
 static const char* ENDPOINT_GET_COMMAND = "https://asia-southeast1-wattwise-fe394.cloudfunctions.net/getDeviceCommand";

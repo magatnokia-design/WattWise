@@ -29,7 +29,8 @@ test('assertFreshTimestamp accepts current timestamp', () => {
 
 test('assertFreshTimestamp rejects stale timestamp', () => {
   const now = Date.now();
-  const stale = now - 60000;
+  // The skew window is inclusive at 60s, so go clearly past it.
+  const stale = now - 120000;
 
   assert.throws(
     () => assertFreshTimestamp(stale, now),

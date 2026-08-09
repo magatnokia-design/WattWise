@@ -11,9 +11,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { COLORS } from '../../constants/colors';
 import SettingsRow from './components/SettingsRow';
 import ElectricityRateModal from './components/ElectricityRateModal';
+import RatePlanModal from './components/RatePlanModal';
 import OutletNameModal from './components/OutletNameModal';
 import ESP32DeviceModal from './components/ESP32DeviceModal';
 import { useSettings } from './hooks/useSettings';
+import { RATE_PROFILES } from '../../utils/billing';
 import {
   formatRate,
   formatVersion,
@@ -48,6 +50,7 @@ const formatSuggestionValue = (name, confidence) => {
 
 const SettingsScreen = ({ navigation }) => {
   const [rateModalVisible, setRateModalVisible] = useState(false);
+  const [ratePlanModalVisible, setRatePlanModalVisible] = useState(false);
   const [deviceModalVisible, setDeviceModalVisible] = useState(false);
   const [outletModalState, setOutletModalState] = useState({
     visible: false,
@@ -60,11 +63,21 @@ const SettingsScreen = ({ navigation }) => {
     loading,
     error,
     updateElectricityRate,
+    updateRateProfile,
     updateNotifications,
     updateDeviceSettings,
     clearDeviceSettings,
     updateOutletName,
+    clearOutletDetection,
   } = useSettings();
+
+  const rateProfileOptions = Array.isArray(RATE_PROFILES) ? RATE_PROFILES : [];
+  const currentRateProfile = rateProfileOptions.find(
+    (profile) => profile.id === settings.rateProfileId
+  );
+  const ratePlanLabel = settings.rateProfileId
+    ? (currentRateProfile?.name || 'Custom rate plan')
+    : 'Auto (by date)';
 
   const outlet1CanAcceptSuggestion =
     !!settings.outlet1SuggestedName &&
@@ -82,6 +95,14 @@ const SettingsScreen = ({ navigation }) => {
     setRateModalVisible(false);
   }, []);
 
+  const handleRatePlanPress = useCallback(() => {
+    setRatePlanModalVisible(true);
+  }, []);
+
+  const handleRatePlanClose = useCallback(() => {
+    setRatePlanModalVisible(false);
+  }, []);
+
   const handleRateSave = useCallback(async (rate) => {
     const result = await updateElectricityRate(rate);
 
@@ -92,6 +113,17 @@ const SettingsScreen = ({ navigation }) => {
 
     return { success: true };
   }, [updateElectricityRate]);
+
+  const handleRatePlanSave = useCallback(async (profileId) => {
+    const result = await updateRateProfile(profileId);
+
+    if (!result.success) {
+      Alert.alert('Unable to save rate plan', result.error || 'Please try again.');
+      return result;
+    }
+
+    return { success: true };
+  }, [updateRateProfile]);
 
   const handleNotificationsToggle = useCallback(async (value) => {
     const result = await updateNotifications(value);
@@ -164,6 +196,30 @@ const SettingsScreen = ({ navigation }) => {
     settings.outlet2SuggestionConfidence,
     updateOutletName,
   ]);
+
+  const handleClearOutletDetection = useCallback((outletNumber) => {
+    const targetLabel = outletNumber === 1 || outletNumber === 2
+      ? `Outlet ${outletNumber}`
+      : 'all outlets';
+
+    Alert.alert(
+      'Reset Auto-Detection',
+      `Clear detected appliance data for ${targetLabel}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Reset',
+          style: 'destructive',
+          onPress: async () => {
+            const result = await clearOutletDetection(outletNumber);
+            if (!result.success) {
+              Alert.alert('Unable to reset detection', result.error || 'Please try again.');
+            }
+          },
+        },
+      ]
+    );
+  }, [clearOutletDetection]);
 
   const handleLogout = useCallback(() => {
   Alert.alert(
@@ -322,6 +378,14 @@ const SettingsScreen = ({ navigation }) => {
             onPress={handleRatePress}
           />
           <Separator />
+          <SettingsRow
+            icon="🧾"
+            label="Rate Plan"
+            value={ratePlanLabel}
+            showArrow
+            onPress={handleRatePlanPress}
+          />
+          <Separator />
           {/* TODO: Budget settings will connect to BudgetTracking screen */}
           <SettingsRow
             icon="💰"
@@ -390,6 +454,14 @@ const SettingsScreen = ({ navigation }) => {
           />
           <Separator />
           <SettingsRow
+            icon="🗑️"
+            label="Clear Outlet 1 Detection"
+            isDestructive
+            showArrow
+            onPress={() => handleClearOutletDetection(1)}
+          />
+          <Separator />
+          <SettingsRow
             icon="🔌"
             label="Outlet 2 Name"
             value={settings.outlet2Name}
@@ -404,6 +476,14 @@ const SettingsScreen = ({ navigation }) => {
             showArrow={outlet2CanAcceptSuggestion}
             onPress={outlet2CanAcceptSuggestion ? () => handleAcceptOutletSuggestion(2) : undefined}
             disabled={!outlet2CanAcceptSuggestion}
+          />
+          <Separator />
+          <SettingsRow
+            icon="🗑️"
+            label="Clear Outlet 2 Detection"
+            isDestructive
+            showArrow
+            onPress={() => handleClearOutletDetection(2)}
           />
         </SectionCard>
 
@@ -482,6 +562,14 @@ const SettingsScreen = ({ navigation }) => {
         currentRate={settings.electricityRate}
         onClose={handleRateClose}
         onSave={handleRateSave}
+      />
+
+      <RatePlanModal
+        visible={ratePlanModalVisible}
+        currentProfileId={settings.rateProfileId}
+        profiles={rateProfileOptions}
+        onClose={handleRatePlanClose}
+        onSave={handleRatePlanSave}
       />
 
       <OutletNameModal

@@ -1,5 +1,4 @@
-// Analytics Screen - Design Only
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -11,10 +10,74 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { COLORS } from '../../constants/colors';
 import { FONTS, SIZES } from '../../constants/theme';
+import { useAuth } from '../../hooks/useAuth';
+import { budgetService, historyService, userService } from '../../services/firebase';
+import { calculatePelcoIIIBill } from '../../utils/billing';
+import { formatCurrency } from '../BudgetTracking/utils/budgetHelpers';
 
 const { width } = Dimensions.get('window');
 
 const TABS = ['Daily', 'Weekly', 'Monthly'];
+
+const DEFAULT_SUMMARY = {
+  totalEnergy: 0,
+  totalCost: 0,
+  averageUsage: 0,
+  peakUsage: 0,
+  peakHour: 'N/A',
+  bestDay: 'N/A',
+  outlet1Total: 0,
+  outlet2Total: 0,
+  effectiveRate: 0,
+};
+
+const toNumber = (value) => {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : 0;
+};
+
+const toDateKey = (date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const addDays = (date, days) => {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+};
+
+const getDaysInMonth = (date) => {
+  return new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+};
+
+const buildDateRange = (startDate, endDate) => {
+  const days = [];
+  const cursor = new Date(startDate);
+  while (cursor <= endDate) {
+    days.push(new Date(cursor));
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return days;
+};
+
+const formatShortDate = (date) => {
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+};
+
+const formatWeekday = (date) => {
+  return date.toLocaleDateString('en-US', { weekday: 'short' });
+};
+
+const formatPeakHour = (hourValue) => {
+  const hour = Number(hourValue);
+  if (!Number.isFinite(hour)) return 'N/A';
+  const period = hour >= 12 ? 'PM' : 'AM';
+  const hour12 = hour % 12 || 12;
+  return `${hour12}:00 ${period}`;
+};
 
 // Custom Simple Bar Chart Component (no library)
 const SimpleBarChart = ({ data, labels }) => {
@@ -24,10 +87,15 @@ const SimpleBarChart = ({ data, labels }) => {
     <View style={styles.customChart}>
       <View style={styles.chartBars}>
         {data.map((value, index) => {
-          const barHeight = maxValue > 0 ? (value / maxValue) * 150 : 0;
+          const numericValue = Number(value);
+          const safeValue = Number.isFinite(numericValue) ? numericValue : 0;
+          const barHeight = maxValue > 0 ? (safeValue / maxValue) * 150 : 0;
+          const displayValue = Number.isFinite(numericValue)
+            ? numericValue.toFixed(2)
+            : '0.00';
           return (
             <View key={index} style={styles.barContainer}>
-              <Text style={styles.barValue}>{value}</Text>
+              <Text style={styles.barValue}>{displayValue}</Text>
               <View style={styles.barWrapper}>
                 <View style={[styles.bar, { height: barHeight || 4 }]} />
               </View>
@@ -54,6 +122,25 @@ const StatCard = ({ label, value, icon, trend }) => (
     )}
   </View>
 );
+
+const BillBreakdownSection = ({ title, items, total }) => {
+  if (!items || items.length === 0) return null;
+
+  return (
+    <View style={styles.breakdownSection}>
+      <View style={styles.breakdownSectionHeader}>
+        <Text style={styles.breakdownSectionTitle}>{title}</Text>
+        <Text style={styles.breakdownSectionTotal}>{formatCurrency(total)}</Text>
+      </View>
+      {items.map((item) => (
+        <View key={item.key} style={styles.breakdownRow}>
+          <Text style={styles.breakdownLabel}>{item.label}</Text>
+          <Text style={styles.breakdownValue}>{formatCurrency(item.amount)}</Text>
+        </View>
+      ))}
+    </View>
+  );
+};
 
 const OutletComparisonCard = ({ outlet1, outlet2 }) => {
   const total = parseFloat(outlet1) + parseFloat(outlet2);
@@ -93,20 +180,228 @@ const OutletComparisonCard = ({ outlet1, outlet2 }) => {
 };
 
 export const AnalyticsScreen = () => {
+  const { user, loading: authLoading } = useAuth();
   const [selectedTab, setSelectedTab] = useState('Daily');
+  const [summary, setSummary] = useState(DEFAULT_SUMMARY);
+  const [chartLabels, setChartLabels] = useState([]);
+  const [chartData, setChartData] = useState([]);
+  const [billDetails, setBillDetails] = useState(null);
+  const [rateProfileId, setRateProfileId] = useState(null);
+  const [budget, setBudget] = useState({ monthlyBudget: 0, currentSpending: 0 });
+  const [loading, setLoading] = useState(false);
 
-  // Dummy chart data - all zeros
-  const chartLabels = selectedTab === 'Daily' 
-    ? ['12AM', '6AM', '12PM', '6PM']
-    : selectedTab === 'Weekly'
-    ? ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-    : ['Week 1', 'Week 2', 'Week 3', 'Week 4'];
-    
-  const chartData = selectedTab === 'Daily' 
-    ? [0, 0, 0, 0]
-    : selectedTab === 'Weekly'
-    ? [0, 0, 0, 0, 0, 0, 0]
-    : [0, 0, 0, 0];
+  useEffect(() => {
+    if (!user?.uid) {
+      setBudget({ monthlyBudget: 0, currentSpending: 0 });
+      setRateProfileId(null);
+      return;
+    }
+
+    let active = true;
+
+    const fetchBudget = async () => {
+      const result = await budgetService.getCurrentMonthBudget(user.uid);
+      if (!active) return;
+
+      if (result.success) {
+        setBudget({
+          monthlyBudget: toNumber(result.data.monthlyBudget),
+          currentSpending: toNumber(result.data.currentSpending),
+        });
+      }
+    };
+
+    fetchBudget();
+
+    const fetchPreferences = async () => {
+      const result = await userService.getUserPreferences(user.uid);
+      if (!active) return;
+
+      if (result.success) {
+        setRateProfileId(result.data.rateProfileId || null);
+      }
+    };
+
+    fetchPreferences();
+
+    return () => {
+      active = false;
+    };
+  }, [user?.uid]);
+
+  useEffect(() => {
+    if (authLoading) return;
+
+    if (!user?.uid) {
+      setSummary(DEFAULT_SUMMARY);
+      setChartLabels([]);
+      setChartData([]);
+      setBillDetails(null);
+      return;
+    }
+
+    let active = true;
+
+    const applySummary = (nextSummary, nextLabels, nextData, nextBill) => {
+      if (!active) return;
+      setSummary(nextSummary);
+      setChartLabels(nextLabels);
+      setChartData(nextData);
+      setBillDetails(nextBill || null);
+    };
+
+    const fetchAnalytics = async () => {
+      setLoading(true);
+
+      try {
+        if (selectedTab === 'Daily') {
+          const dailyResult = await historyService.getDailyUsage(user.uid, {}, null, 1);
+          const dailyEntry = dailyResult.success && dailyResult.data.length
+            ? dailyResult.data[0]
+            : null;
+
+          const totalEnergy = toNumber(dailyEntry?.totalEnergy);
+          const outlet1Total = toNumber(dailyEntry?.outlet1Energy);
+          const outlet2Total = toNumber(dailyEntry?.outlet2Energy);
+          const entryDate = dailyEntry?.date
+            ? new Date(`${dailyEntry.date}T00:00:00`)
+            : new Date();
+          const billingDays = getDaysInMonth(entryDate);
+          const daysInPeriod = dailyEntry ? 1 : 0;
+          const bill = calculatePelcoIIIBill(totalEnergy, {
+            date: entryDate,
+            profileId: rateProfileId || null,
+            daysInPeriod,
+            billingDays,
+          });
+
+          applySummary(
+            {
+              totalEnergy,
+              totalCost: bill.totals.total,
+              averageUsage: totalEnergy,
+              peakUsage: totalEnergy,
+              peakHour: formatPeakHour(dailyEntry?.peakHour),
+              bestDay: dailyEntry?.date ? formatShortDate(entryDate) : 'N/A',
+              outlet1Total,
+              outlet2Total,
+              effectiveRate: bill.effectiveRate,
+            },
+            ['Outlet 1', 'Outlet 2', 'Total'],
+            [outlet1Total, outlet2Total, totalEnergy],
+            bill
+          );
+
+          return;
+        }
+
+        const endDate = new Date();
+        endDate.setHours(0, 0, 0, 0);
+
+        let startDate = endDate;
+        if (selectedTab === 'Weekly') {
+          startDate = addDays(endDate, -6);
+        } else {
+          startDate = new Date(endDate.getFullYear(), endDate.getMonth(), 1);
+        }
+
+        const rangeResult = await historyService.getUsageByDateRange(
+          user.uid,
+          toDateKey(startDate),
+          toDateKey(endDate)
+        );
+
+        const entries = rangeResult.success ? rangeResult.data : [];
+        const entriesByDate = new Map();
+        entries.forEach((entry) => {
+          entriesByDate.set(entry.date, entry);
+        });
+
+        const hasEntries = entries.length > 0;
+
+        const days = buildDateRange(startDate, endDate);
+        const dailyValues = days.map((day) => {
+          const entry = entriesByDate.get(toDateKey(day));
+          return toNumber(entry?.totalEnergy);
+        });
+
+        const totalEnergy = dailyValues.reduce((sum, value) => sum + value, 0);
+        const outlet1Total = days.reduce((sum, day) => {
+          const entry = entriesByDate.get(toDateKey(day));
+          return sum + toNumber(entry?.outlet1Energy);
+        }, 0);
+        const outlet2Total = days.reduce((sum, day) => {
+          const entry = entriesByDate.get(toDateKey(day));
+          return sum + toNumber(entry?.outlet2Energy);
+        }, 0);
+
+        const peakUsage = dailyValues.length ? Math.max(...dailyValues) : 0;
+        const bestDayData = dailyValues
+          .map((value, index) => ({ value, date: days[index] }))
+          .filter((item) => item.value > 0)
+          .sort((a, b) => a.value - b.value)[0];
+        const bestDay = bestDayData ? formatShortDate(bestDayData.date) : 'N/A';
+
+        const bill = calculatePelcoIIIBill(totalEnergy, {
+          date: endDate,
+          profileId: rateProfileId || null,
+          daysInPeriod: hasEntries ? days.length : 0,
+          billingDays: getDaysInMonth(endDate),
+        });
+
+        const nextSummary = {
+          totalEnergy,
+          totalCost: bill.totals.total,
+          averageUsage: days.length ? totalEnergy / days.length : 0,
+          peakUsage,
+          peakHour: 'N/A',
+          bestDay,
+          outlet1Total,
+          outlet2Total,
+          effectiveRate: bill.effectiveRate,
+        };
+
+        if (selectedTab === 'Weekly') {
+          applySummary(nextSummary, days.map(formatWeekday), dailyValues, bill);
+          return;
+        }
+
+        const weeklyBuckets = [0, 0, 0, 0];
+        dailyValues.forEach((value, index) => {
+          const bucket = Math.min(3, Math.floor(index / 7));
+          weeklyBuckets[bucket] += value;
+        });
+
+        applySummary(
+          nextSummary,
+          ['Week 1', 'Week 2', 'Week 3', 'Week 4'],
+          weeklyBuckets,
+          bill
+        );
+      } catch (error) {
+        console.error('Error loading analytics:', error);
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+
+    fetchAnalytics();
+
+    return () => {
+      active = false;
+    };
+  }, [authLoading, rateProfileId, selectedTab, user?.uid]);
+
+  const budgetPercent = budget.monthlyBudget > 0
+    ? (budget.currentSpending / budget.monthlyBudget) * 100
+    : 0;
+  const remainingBudget = Math.max(0, budget.monthlyBudget - budget.currentSpending);
+  const showBreakdown = billDetails && summary.totalEnergy > 0;
+  const insightsText = loading
+    ? 'Loading analytics...'
+    : summary.totalEnergy > 0
+      ? `Estimated bill for the ${selectedTab.toLowerCase()} period is ${formatCurrency(summary.totalCost)}.`
+      : 'No data available yet. Connect your appliances to start tracking energy usage.';
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -128,8 +423,10 @@ export const AnalyticsScreen = () => {
               <Text style={styles.summaryBadgeText}>{selectedTab}</Text>
             </View>
           </View>
-          <Text style={styles.summaryValue}>0.00 kWh</Text>
-          <Text style={styles.summarySubValue}>₱0.00 estimated cost</Text>
+          <Text style={styles.summaryValue}>{summary.totalEnergy.toFixed(2)} kWh</Text>
+          <Text style={styles.summarySubValue}>
+            {formatCurrency(summary.totalCost)} estimated cost
+          </Text>
         </View>
 
         {/* Tabs */}
@@ -153,7 +450,9 @@ export const AnalyticsScreen = () => {
           <View style={styles.chartHeader}>
             <Text style={styles.chartTitle}>Energy Consumption</Text>
             <View style={styles.peakBadge}>
-              <Text style={styles.peakBadgeText}>Peak: 0 kWh</Text>
+              <Text style={styles.peakBadgeText}>
+                Peak: {summary.peakUsage.toFixed(2)} kWh
+              </Text>
             </View>
           </View>
           <SimpleBarChart data={chartData} labels={chartLabels} />
@@ -165,13 +464,13 @@ export const AnalyticsScreen = () => {
           <StatCard
             icon="⚡"
             label="Total Usage"
-            value="0.00 kWh"
+            value={`${summary.totalEnergy.toFixed(2)} kWh`}
             trend={0}
           />
           <StatCard
             icon="📊"
             label="Average"
-            value="0.00 kWh"
+            value={`${summary.averageUsage.toFixed(2)} kWh`}
             trend={0}
           />
         </View>
@@ -180,12 +479,12 @@ export const AnalyticsScreen = () => {
           <StatCard
             icon="📈"
             label="Peak Usage"
-            value="0.00 kWh"
+            value={`${summary.peakUsage.toFixed(2)} kWh`}
           />
           <StatCard
             icon="🕐"
             label="Peak Hour"
-            value="12:00 AM"
+            value={summary.peakHour}
           />
         </View>
 
@@ -193,41 +492,93 @@ export const AnalyticsScreen = () => {
           <StatCard
             icon="💰"
             label="Total Cost"
-            value="₱0.00"
+            value={formatCurrency(summary.totalCost)}
             trend={0}
           />
           <StatCard
             icon="💡"
             label="Best Day"
-            value="N/A"
+            value={summary.bestDay}
           />
         </View>
 
+        {showBreakdown && (
+          <>
+            <Text style={styles.sectionTitle}>Bill Breakdown</Text>
+            <View style={styles.breakdownCard}>
+              <BillBreakdownSection
+                title="Generation & Transmission"
+                items={billDetails.items.generationTransmission}
+                total={billDetails.totals.generationTransmission}
+              />
+              <BillBreakdownSection
+                title="Distribution"
+                items={billDetails.items.distribution}
+                total={billDetails.totals.distribution}
+              />
+              <BillBreakdownSection
+                title="Government Charges"
+                items={billDetails.items.government}
+                total={billDetails.totals.government}
+              />
+              <BillBreakdownSection
+                title="Other Charges"
+                items={billDetails.items.otherCharges}
+                total={billDetails.totals.other}
+              />
+              <View style={styles.breakdownFooter}>
+                <View style={styles.breakdownRow}>
+                  <Text style={styles.breakdownLabel}>Effective Rate</Text>
+                  <Text style={styles.breakdownValue}>
+                    ₱{summary.effectiveRate.toFixed(4)} / kWh
+                  </Text>
+                </View>
+                <View style={styles.breakdownRow}>
+                  <Text style={styles.breakdownFooterLabel}>Total Estimated Bill</Text>
+                  <Text style={styles.breakdownFooterValue}>
+                    {formatCurrency(billDetails.totals.total)}
+                  </Text>
+                </View>
+              </View>
+            </View>
+          </>
+        )}
+
         {/* Outlet Comparison */}
         <Text style={styles.sectionTitle}>Outlet Comparison</Text>
-        <OutletComparisonCard outlet1="0.00" outlet2="0.00" />
+        <OutletComparisonCard
+          outlet1={summary.outlet1Total.toFixed(2)}
+          outlet2={summary.outlet2Total.toFixed(2)}
+        />
 
         {/* Budget Progress */}
         <View style={styles.budgetProgressCard}>
           <View style={styles.budgetProgressHeader}>
             <Text style={styles.budgetProgressTitle}>Budget Progress</Text>
-            <Text style={styles.budgetProgressPercent}>0%</Text>
+            <Text style={styles.budgetProgressPercent}>{budgetPercent.toFixed(0)}%</Text>
           </View>
           <View style={styles.budgetProgressBar}>
-            <View style={[styles.budgetProgressFill, { width: '0%' }]} />
+            <View
+              style={[
+                styles.budgetProgressFill,
+                { width: `${Math.min(100, budgetPercent)}%` },
+              ]}
+            />
           </View>
           <View style={styles.budgetProgressFooter}>
-            <Text style={styles.budgetProgressText}>₱0.00 used</Text>
-            <Text style={styles.budgetProgressText}>₱0.00 remaining</Text>
+            <Text style={styles.budgetProgressText}>
+              {formatCurrency(budget.currentSpending)} used
+            </Text>
+            <Text style={styles.budgetProgressText}>
+              {formatCurrency(remainingBudget)} remaining
+            </Text>
           </View>
         </View>
 
         {/* Insights */}
         <View style={styles.insightsCard}>
           <Text style={styles.insightsTitle}>💡 Insights</Text>
-          <Text style={styles.insightsText}>
-            No data available yet. Connect your appliances to start tracking energy usage.
-          </Text>
+          <Text style={styles.insightsText}>{insightsText}</Text>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -441,6 +792,66 @@ const styles = StyleSheet.create({
   },
   trendDown: {
     color: COLORS.success,
+  },
+  breakdownCard: {
+    backgroundColor: COLORS.white,
+    marginHorizontal: SIZES.padding,
+    padding: SIZES.padding,
+    borderRadius: SIZES.radius,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    marginBottom: 24,
+  },
+  breakdownSection: {
+    marginBottom: 16,
+  },
+  breakdownSectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  breakdownSectionTitle: {
+    ...FONTS.body,
+    color: COLORS.textDark,
+    fontWeight: 'bold',
+  },
+  breakdownSectionTotal: {
+    ...FONTS.body,
+    color: COLORS.primary,
+    fontWeight: '600',
+  },
+  breakdownRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  breakdownLabel: {
+    ...FONTS.small,
+    color: COLORS.textLight,
+    flex: 1,
+    marginRight: 12,
+  },
+  breakdownValue: {
+    ...FONTS.small,
+    color: COLORS.textDark,
+    fontWeight: '600',
+  },
+  breakdownFooter: {
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+    paddingTop: 12,
+  },
+  breakdownFooterLabel: {
+    ...FONTS.body,
+    color: COLORS.textDark,
+    fontWeight: 'bold',
+  },
+  breakdownFooterValue: {
+    ...FONTS.body,
+    color: COLORS.textDark,
+    fontWeight: 'bold',
   },
   comparisonCard: {
     backgroundColor: COLORS.white,

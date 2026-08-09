@@ -69,6 +69,7 @@ async function updateOutletMetrics(req, res) {
     const {
       userId,
       userRef,
+      userData,
       resolvedDevice,
       normalizedDeviceId,
     } = await validateDeviceRequest({
@@ -181,9 +182,13 @@ async function updateOutletMetrics(req, res) {
       const isRunStarting = status === 'on' && normalizedPreviousState.sampleCount === 0;
       const isRunEnding = status === 'off' && normalizedPreviousState.sampleCount > 0;
 
+      // Learned signatures live on the user document, which device validation
+      // already loaded - no extra read on this per-second telemetry path.
+      const detectionOptions = { userProfiles: userData?.applianceProfiles };
+
       let detectionResult = null;
       if (isRunEnding) {
-        detectionResult = detectApplianceFromRunState(normalizedPreviousState);
+        detectionResult = detectApplianceFromRunState(normalizedPreviousState, detectionOptions);
       }
 
       const nextDetectionState = updateDetectionState(normalizedPreviousState, {
@@ -193,7 +198,7 @@ async function updateOutletMetrics(req, res) {
       });
 
       if (!detectionResult && shouldEvaluateLive(nextDetectionState)) {
-        detectionResult = detectApplianceFromRunState(nextDetectionState);
+        detectionResult = detectApplianceFromRunState(nextDetectionState, detectionOptions);
       }
 
       const outletSafety = {
@@ -234,6 +239,7 @@ async function updateOutletMetrics(req, res) {
           modelVersion: detectionResult.modelVersion,
           confidence: detectionResult.confidence,
           candidates: detectionResult.candidates,
+          matchSource: detectionResult.matchSource || 'generic',
           features: detectionResult.features,
           updatedAtMs: now,
         };

@@ -31,7 +31,17 @@ yarn-error.*
 *.pem
 
 # local env files
+.env
+.env.*
+!.env.example
 .env*.local
+
+# device / service credentials - never commit
+secrets.h
+google-services.json
+GoogleService-Info.plist
+*serviceAccount*.json
+*firebase-adminsdk*.json
 
 # typescript
 *.tsbuildinfo

@@ -13,6 +13,7 @@ const toConfidencePercent = (rawConfidence) => {
 const DEFAULT_SETTINGS = {
   electricityRate: 0,
   currency: '₱',
+  rateProfileId: null,
   notifications: true,
   darkMode: false,
   monthlyBudget: 0,
@@ -81,6 +82,7 @@ export const useSettings = () => {
       setSettings({
         electricityRate: preferencesResult.data.electricityRate || 0,
         currency: preferencesResult.data.currency || '₱',
+        rateProfileId: preferencesResult.data.rateProfileId || null,
         notifications: preferencesResult.data.notificationsEnabled ?? true,
         darkMode: preferencesResult.data.darkMode || false,
         monthlyBudget: Number(budgetData.monthlyBudget || profileData.monthlyBudget || 0),
@@ -141,6 +143,34 @@ export const useSettings = () => {
     } catch (err) {
       setError(err.message);
       console.error('Error updating electricity rate:', err);
+      return { success: false, error: err.message };
+    }
+  }, []);
+
+  const updateRateProfile = useCallback(async (rateProfileId) => {
+    setError(null);
+
+    try {
+      const userId = auth.currentUser?.uid;
+      if (!userId) throw new Error('User not authenticated');
+
+      const result = await userService.updateUserPreferences(userId, {
+        rateProfileId: rateProfileId || null,
+      });
+
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+
+      setSettings((prev) => ({
+        ...prev,
+        rateProfileId: rateProfileId || null,
+      }));
+
+      return { success: true };
+    } catch (err) {
+      setError(err.message);
+      console.error('Error updating rate profile:', err);
       return { success: false, error: err.message };
     }
   }, []);
@@ -273,15 +303,51 @@ export const useSettings = () => {
     }
   }, []);
 
+  const clearOutletDetection = useCallback(async (outletNumber) => {
+    setError(null);
+
+    try {
+      const userId = auth.currentUser?.uid;
+      if (!userId) throw new Error('User not authenticated');
+
+      const normalizedOutletNumber = outletNumber === 1 || outletNumber === 2
+        ? outletNumber
+        : null;
+      const result = await outletService.clearAutoDetection(userId, normalizedOutletNumber);
+
+      if (!result.success) {
+        throw new Error(result.error || 'Unable to clear auto detection');
+      }
+
+      const clearAll = !normalizedOutletNumber;
+
+      setSettings((prev) => ({
+        ...prev,
+        outlet1SuggestedName: clearAll || normalizedOutletNumber === 1 ? '' : prev.outlet1SuggestedName,
+        outlet2SuggestedName: clearAll || normalizedOutletNumber === 2 ? '' : prev.outlet2SuggestedName,
+        outlet1SuggestionConfidence: clearAll || normalizedOutletNumber === 1 ? null : prev.outlet1SuggestionConfidence,
+        outlet2SuggestionConfidence: clearAll || normalizedOutletNumber === 2 ? null : prev.outlet2SuggestionConfidence,
+      }));
+
+      return { success: true };
+    } catch (err) {
+      setError(err.message);
+      console.error('Error clearing outlet detection:', err);
+      return { success: false, error: err.message };
+    }
+  }, []);
+
   return {
     settings,
     loading,
     error,
     fetchSettings,
     updateElectricityRate,
+    updateRateProfile,
     updateNotifications,
     updateDeviceSettings,
     clearDeviceSettings,
     updateOutletName,
+    clearOutletDetection,
   };
 };

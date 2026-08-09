@@ -4,7 +4,6 @@ import {
   View,
   Text,
   Alert,
-  Button,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
@@ -17,7 +16,6 @@ import NotificationPanel from '../Notifications/components/NotificationPanel';
 import OutletControlModal from './components/OutletControlModal';
 import EditApplianceNameModal from './components/EditApplianceNameModal';
 import { useOutletControl } from './hooks/useOutletControl';
-import { auth, notificationService } from '../../services/firebase';
 
 const formatSuggestionLabel = (suggestion) => {
   if (!suggestion?.name) return '';
@@ -93,6 +91,11 @@ const formatSuggestionWhy = (suggestion) => {
     : 'Based on recent live power telemetry.';
 };
 
+const formatApplianceName = (name) => {
+  const normalized = String(name || '').trim();
+  return normalized ? normalized : 'Not set';
+};
+
 export const DashboardScreen = ({ navigation }) => {
   const [notificationVisible, setNotificationVisible] = useState(false);
   const [expandedSuggestionOutlet, setExpandedSuggestionOutlet] = useState(null);
@@ -101,8 +104,8 @@ export const DashboardScreen = ({ navigation }) => {
   const {
     outlet1Status,
     outlet2Status,
-    outlet1Name,
-    outlet2Name,
+    outlet1ApplianceName,
+    outlet2ApplianceName,
     outlet1Metrics,
     outlet2Metrics,
     outlet1Suggestion,
@@ -111,6 +114,11 @@ export const DashboardScreen = ({ navigation }) => {
     toggleOutlet,
     updateApplianceName,
   } = useOutletControl();
+
+  const outlet1Label = 'Outlet 1';
+  const outlet2Label = 'Outlet 2';
+  const outlet1ApplianceLabel = formatApplianceName(outlet1ApplianceName);
+  const outlet2ApplianceLabel = formatApplianceName(outlet2ApplianceName);
 
   const totalEnergyKwh = toMetricNumber(outlet1Metrics.energy) + toMetricNumber(outlet2Metrics.energy);
   const activeOutletsCount = (outlet1Status === true ? 1 : 0) + (outlet2Status === true ? 1 : 0);
@@ -177,24 +185,6 @@ export const DashboardScreen = ({ navigation }) => {
     setExpandedSuggestionOutlet((current) => (current === outletNumber ? null : current));
   };
 
-  const createTestNotification = async () => {
-    const user = auth.currentUser;
-    if (!user) return;
-
-    await notificationService.createNotification(user.uid, {
-      type: 'high_usage',
-      title: 'Test Notification',
-      message: 'This is a test notification from the app',
-      outlet: 1,
-      metadata: {
-        source: 'dashboard-test-button',
-        severity: 'info',
-      },
-    });
-
-    Alert.alert('Success', 'Test notification created!');
-  };
-
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScrollView
@@ -215,11 +205,6 @@ export const DashboardScreen = ({ navigation }) => {
             <Text style={styles.notificationIcon}>🔔</Text>
           </TouchableOpacity>
         </View>
-
-        <Button
-          title="Create Test Notification"
-          onPress={createTestNotification}
-        />
 
         {/* Total Energy Summary Card */}
         <View style={styles.summaryCard}>
@@ -273,13 +258,22 @@ export const DashboardScreen = ({ navigation }) => {
           <View style={styles.outletCard}>
             <View style={styles.outletHeader}>
               <View>
-                <View style={styles.outletTitleRow}>
-                  <Text style={styles.outletTitle}>{outlet1Name}</Text>
+                <Text style={styles.outletTitle}>{outlet1Label}</Text>
+                <View style={styles.applianceRow}>
+                  <Text style={styles.applianceLabel}>Appliance:</Text>
+                  <Text
+                    style={[
+                      styles.applianceValue,
+                      !outlet1ApplianceName && styles.applianceValuePlaceholder,
+                    ]}
+                  >
+                    {outlet1ApplianceLabel}
+                  </Text>
                   <TouchableOpacity
-                    style={styles.editButton}
+                    style={styles.applianceEditButton}
                     onPress={() => handleEditName(1)}
                   >
-                    <Ionicons name="create-outline" size={16} color={COLORS.primary} />
+                    <Ionicons name="create-outline" size={14} color={COLORS.primary} />
                   </TouchableOpacity>
                 </View>
               </View>
@@ -368,13 +362,22 @@ export const DashboardScreen = ({ navigation }) => {
           <View style={styles.outletCard}>
             <View style={styles.outletHeader}>
               <View>
-                <View style={styles.outletTitleRow}>
-                  <Text style={styles.outletTitle}>{outlet2Name}</Text>
+                <Text style={styles.outletTitle}>{outlet2Label}</Text>
+                <View style={styles.applianceRow}>
+                  <Text style={styles.applianceLabel}>Appliance:</Text>
+                  <Text
+                    style={[
+                      styles.applianceValue,
+                      !outlet2ApplianceName && styles.applianceValuePlaceholder,
+                    ]}
+                  >
+                    {outlet2ApplianceLabel}
+                  </Text>
                   <TouchableOpacity
-                    style={styles.editButton}
+                    style={styles.applianceEditButton}
                     onPress={() => handleEditName(2)}
                   >
-                    <Ionicons name="create-outline" size={16} color={COLORS.primary} />
+                    <Ionicons name="create-outline" size={14} color={COLORS.primary} />
                   </TouchableOpacity>
                 </View>
               </View>
@@ -465,7 +468,7 @@ export const DashboardScreen = ({ navigation }) => {
           visible={controlModal.visible}
           onClose={() => setControlModal({ visible: false, outlet: null })}
           outletNumber={controlModal.outlet}
-          outletName={controlModal.outlet === 1 ? outlet1Name : outlet2Name}
+          outletName={controlModal.outlet === 1 ? outlet1Label : outlet2Label}
           currentStatus={controlModal.outlet === 1 ? outlet1Status : outlet2Status}
           onConfirm={handleConfirmToggle}
           isLoading={isToggling}
@@ -475,7 +478,7 @@ export const DashboardScreen = ({ navigation }) => {
           visible={editModal.visible}
           onClose={() => setEditModal({ visible: false, outlet: null })}
           outletNumber={editModal.outlet}
-          currentName={editModal.outlet === 1 ? outlet1Name : outlet2Name}
+          currentName={editModal.outlet === 1 ? outlet1ApplianceName : outlet2ApplianceName}
           onSave={handleSaveName}
         />
 
@@ -695,7 +698,7 @@ const styles = StyleSheet.create({
   outletHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     marginBottom: 16,
   },
   outletTitle: {
@@ -703,12 +706,27 @@ const styles = StyleSheet.create({
     color: COLORS.textDark,
     fontWeight: 'bold',
   },
-  outletTitleRow: {
+  applianceRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginTop: 6,
     gap: 6,
   },
-  editButton: {
+  applianceLabel: {
+    ...FONTS.small,
+    color: COLORS.textLight,
+  },
+  applianceValue: {
+    ...FONTS.body,
+    color: COLORS.textDark,
+    fontWeight: '600',
+    fontSize: 13,
+  },
+  applianceValuePlaceholder: {
+    color: COLORS.textLight,
+    fontWeight: '500',
+  },
+  applianceEditButton: {
     padding: 4,
   },
   statusBadge: {

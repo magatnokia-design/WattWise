@@ -20,10 +20,17 @@
         "foregroundImage": "./assets/applogo-circle.png",
         "backgroundColor": "#10B981"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "package": "com.magat_nokia.WiseWatt"
     },
     "web": {
       "favicon": "./assets/applogo-circle.png"
-    }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "8409dcc4-5f34-4a8f-96a0-249184ed3f0a"
+      }
+    },
+    "owner": "magat_nokia"
   }
 }

@@ -1,7 +1,12 @@
 import { useState, useCallback, useRef } from 'react';
 import { historyService } from '../../../services/firebase';
 import { auth } from '../../../services/firebase/config';
-import { formatDate, formatTime, getTimestampMs } from '../utils/historyHelpers';
+import { formatDate, formatTime, getTimestampMs, splitDailyDate } from '../utils/historyHelpers';
+
+const toNumber = (value) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
 
 const normalizeOutletNumber = (outletValue) => {
   if (typeof outletValue === 'number') return outletValue;
@@ -39,6 +44,33 @@ const normalizeActivityLogs = (logs = []) => {
     .sort((a, b) => b._sortTime - a._sortTime)
     .map(({ _sortTime, ...rest }) => rest);
 };
+
+// `history_daily` documents are written by processDailyRollup with energy/cost
+// field names that differ from what the usage list renders, so map them here
+// rather than leaving the UI to read fields that never existed.
+const mapUsageRecord = (record = {}) => {
+  const dateString = record.date || record.id || '';
+  const { day, month } = splitDailyDate(dateString);
+
+  const outlet1Kwh = toNumber(record.outlet1Energy);
+  const outlet2Kwh = toNumber(record.outlet2Energy);
+  const totalKwh = record.totalEnergy !== undefined && record.totalEnergy !== null
+    ? toNumber(record.totalEnergy)
+    : outlet1Kwh + outlet2Kwh;
+
+  return {
+    ...record,
+    date: dateString,
+    day,
+    month,
+    outlet1Kwh,
+    outlet2Kwh,
+    totalKwh,
+    totalCost: toNumber(record.cost),
+  };
+};
+
+const normalizeUsageHistory = (records = []) => records.map(mapUsageRecord);
 
 export const useHistory = () => {
   const [activityLogs, setActivityLogs] = useState([]);
@@ -138,7 +170,7 @@ export const useHistory = () => {
         throw new Error(result.error);
       }
 
-      setUsageHistory(result.data);
+      setUsageHistory(normalizeUsageHistory(result.data));
     } catch (err) {
       setError(err.message);
       console.error('Error fetching usage history:', err);

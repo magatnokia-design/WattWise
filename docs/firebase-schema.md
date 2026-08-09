@@ -99,7 +99,7 @@ Stores activity events (ON/OFF actions).
 }
 ```
 
-**Indexes:**
+**Indexes:** 
 - Composite: `outlet` + `timestamp` (descending)
 - `timestamp` (descending)
 

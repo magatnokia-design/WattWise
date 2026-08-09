@@ -4,6 +4,7 @@ import { db } from './config';
 const DEFAULT_USER_PREFERENCES = {
   electricityRate: 0,
   currency: '₱',
+  rateProfileId: null,
   notificationsEnabled: true,
   darkMode: false,
   language: 'en',
@@ -61,6 +62,7 @@ export const userService = {
         lastLogin: new Date(),
         onboardingComplete: false,
         electricityRate: 0,
+        rateProfileId: null,
         monthlyBudget: 0,
         preferences: {
           notificationsEnabled: true,
@@ -170,6 +172,9 @@ export const userService = {
         data: {
           electricityRate: profile.electricityRate || DEFAULT_USER_PREFERENCES.electricityRate,
           currency: profile.currency || DEFAULT_USER_PREFERENCES.currency,
+          rateProfileId: profile.rateProfileId
+            ?? preferences.rateProfileId
+            ?? DEFAULT_USER_PREFERENCES.rateProfileId,
           notificationsEnabled: typeof profile.notificationsEnabled === 'boolean'
             ? profile.notificationsEnabled
             : (preferences.notificationsEnabled ?? DEFAULT_USER_PREFERENCES.notificationsEnabled),
@@ -196,6 +201,10 @@ export const userService = {
 
       if (Object.prototype.hasOwnProperty.call(updates, 'currency')) {
         updatePayload.currency = updates.currency;
+      }
+
+      if (Object.prototype.hasOwnProperty.call(updates, 'rateProfileId')) {
+        updatePayload.rateProfileId = updates.rateProfileId || null;
       }
 
       if (Object.prototype.hasOwnProperty.call(updates, 'notificationsEnabled')) {

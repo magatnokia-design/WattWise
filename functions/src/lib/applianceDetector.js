@@ -1,10 +1,20 @@
-const MODEL_VERSION = 'rule-v1';
+const MODEL_VERSION = 'rule-v2';
 const MIN_SAMPLE_COUNT = 5;
 const MIN_RUNTIME_MS = 5000;
 const LIVE_EVALUATION_SAMPLE_INTERVAL = 3;
 
 const MIN_DETECTABLE_MEAN_POWER_W = 4;
 const MIN_DETECTABLE_PEAK_POWER_W = 6;
+
+const MIN_CONFIDENCE = 0.7;
+
+// Learned ("confirm to learn") signatures recorded from the user's own runs.
+// A saved signature holds measured values rather than the wide ranges the
+// generic profiles use, so it is scored by relative deviation instead.
+const MAX_USER_PROFILES = 20;
+// Above this score the saved signature is too far off to claim a match, and the
+// generic profiles take over.
+const USER_PROFILE_MAX_SCORE = 0.45;
 
 const ACTIVE_POWER_THRESHOLD_W = 15;
 const HIGH_POWER_THRESHOLD_W = 700;
@@ -258,7 +268,80 @@ const toCandidateConfidence = (score) => {
   return clamp(1 - (score / 2), 0, 0.99);
 };
 
-const detectApplianceFromRunState = (runState) => {
+// Deviation relative to the learned value. The floor keeps tiny reference values
+// (a 3 W charger) from turning a 1 W difference into a huge relative error.
+const relativeDeviation = (value, reference, floor) => {
+  const base = Math.max(Math.abs(toFiniteNumber(reference, 0)), floor);
+  return Math.abs(toFiniteNumber(value, 0) - toFiniteNumber(reference, 0)) / base;
+};
+
+const normalizeUserProfiles = (rawProfiles) => {
+  if (!Array.isArray(rawProfiles)) return [];
+
+  return rawProfiles
+    .map((profile) => {
+      const label = String(profile?.label || profile?.name || '').trim();
+      if (!label) return null;
+
+      const meanPower = Math.max(0, toFiniteNumber(profile.meanPower, 0));
+      const peakPower = Math.max(0, toFiniteNumber(profile.peakPower, 0));
+      if (meanPower <= 0 && peakPower <= 0) return null;
+
+      return {
+        label,
+        meanPower,
+        peakPower,
+        stdDevPower: Math.max(0, toFiniteNumber(profile.stdDevPower, 0)),
+        activeRatio: clamp(toFiniteNumber(profile.activeRatio, 0), 0, 1),
+        lowRatio: clamp(toFiniteNumber(profile.lowRatio, 0), 0, 1),
+        updatedAtMs: Math.max(0, Math.floor(toFiniteNumber(profile.updatedAtMs, 0))),
+      };
+    })
+    .filter(Boolean)
+    .slice(0, MAX_USER_PROFILES);
+};
+
+const scoreUserProfile = (features, profile) => {
+  const score =
+    (0.50 * relativeDeviation(features.meanPower, profile.meanPower, 5)) +
+    (0.25 * relativeDeviation(features.peakPower, profile.peakPower, 8)) +
+    (0.15 * relativeDeviation(features.stdDevPower, profile.stdDevPower, 4)) +
+    (0.10 * Math.abs(features.activeRatio - profile.activeRatio));
+
+  return {
+    label: profile.label,
+    score,
+    source: 'learned',
+  };
+};
+
+// Snapshot of a completed/among-run measurement, stored so a confirmed
+// appliance can be recognised on later runs.
+const buildApplianceSignature = (runState, label) => {
+  const normalizedLabel = String(label || '').trim();
+  if (!normalizedLabel) return null;
+
+  const features = extractRunFeatures(normalizeDetectionState(runState, runState?.lastStatus || 'off'));
+  if (!features) return null;
+  if (features.sampleCount < MIN_SAMPLE_COUNT) return null;
+  if (features.meanPower < MIN_DETECTABLE_MEAN_POWER_W && features.peakPower < MIN_DETECTABLE_PEAK_POWER_W) {
+    return null;
+  }
+
+  return {
+    label: normalizedLabel,
+    meanPower: Number(features.meanPower.toFixed(2)),
+    peakPower: Number(features.peakPower.toFixed(2)),
+    stdDevPower: Number(features.stdDevPower.toFixed(2)),
+    activeRatio: Number(features.activeRatio.toFixed(3)),
+    lowRatio: Number(features.lowRatio.toFixed(3)),
+    sampleCount: features.sampleCount,
+    runtimeSec: features.runtimeSec,
+    modelVersion: MODEL_VERSION,
+  };
+};
+
+const detectApplianceFromRunState = (runState, options = {}) => {
   const features = extractRunFeatures(runState);
   if (!features) {
     return null;
@@ -276,9 +359,23 @@ const detectApplianceFromRunState = (runState) => {
     return null;
   }
 
-  const ranked = APPLIANCE_PROFILES
+  const genericRanked = APPLIANCE_PROFILES
     .map((profile) => scoreProfile(features, profile))
     .sort((a, b) => a.score - b.score);
+
+  // The user's own confirmed signatures are matched first: they describe the
+  // exact appliances on this account, so they beat the generic power ranges
+  // whenever they are close enough.
+  const learnedRanked = normalizeUserProfiles(options.userProfiles)
+    .map((profile) => scoreUserProfile(features, profile))
+    .sort((a, b) => a.score - b.score);
+
+  const bestLearned = learnedRanked[0] || null;
+  const usingLearned = !!bestLearned && bestLearned.score <= USER_PROFILE_MAX_SCORE;
+
+  const ranked = usingLearned
+    ? [bestLearned, ...genericRanked]
+    : genericRanked;
 
   const top = ranked[0];
   const second = ranked[1] || null;
@@ -287,19 +384,21 @@ const detectApplianceFromRunState = (runState) => {
   let confidence = toCandidateConfidence(top.score);
   confidence = clamp(confidence + Math.min(0.15, Math.max(0, margin) * 0.15), 0, 0.99);
 
-  if (top.score > 1.15 || confidence < 0.62) {
+  if (top.score > 1.15 || confidence < MIN_CONFIDENCE) {
     return null;
   }
 
   const candidates = ranked.slice(0, 3).map((entry) => ({
     name: entry.label,
     confidence: Number(toCandidateConfidence(entry.score).toFixed(2)),
+    source: entry.source || 'generic',
   }));
 
   return {
     appliance: top.label,
     confidence: Number(confidence.toFixed(2)),
     candidates,
+    matchSource: top.source || 'generic',
     modelVersion: MODEL_VERSION,
     features: {
       sampleCount: features.sampleCount,
@@ -316,8 +415,11 @@ const detectApplianceFromRunState = (runState) => {
 
 module.exports = {
   MODEL_VERSION,
+  MAX_USER_PROFILES,
   normalizeDetectionState,
   updateDetectionState,
   shouldEvaluateLive,
   detectApplianceFromRunState,
+  normalizeUserProfiles,
+  buildApplianceSignature,
 };

@@ -1,5 +1,6 @@
 const admin = require('firebase-admin');
 const logger = require('firebase-functions/logger');
+const { calculatePelcoIIIBill } = require('../lib/billing');
 
 const upsertApplianceBreakdown = (items, applianceName, energyKwh, cost, outletNumber) => {
   const normalizedName = String(applianceName || '').trim();
@@ -87,10 +88,24 @@ async function processDailyRollup() {
           }
         });
 
-        // Calculate cost
-        const cost = totalEnergy * electricityRate;
-        const outlet1Cost = outlet1Energy * electricityRate;
-        const outlet2Cost = outlet2Energy * electricityRate;
+        const billingDays = new Date(
+          yesterday.getFullYear(),
+          yesterday.getMonth() + 1,
+          0
+        ).getDate();
+        const daysInPeriod = 1;
+        const bill = calculatePelcoIIIBill(totalEnergy, {
+          date: yesterday,
+          profileId: userData.rateProfileId || null,
+          daysInPeriod,
+          billingDays,
+        });
+
+        // Calculate cost (PELCO III bill model)
+        const cost = bill.totals.total;
+        const effectiveRate = bill.effectiveRate || electricityRate || 0;
+        const outlet1Cost = Number((outlet1Energy * effectiveRate).toFixed(2));
+        const outlet2Cost = Number((outlet2Energy * effectiveRate).toFixed(2));
 
         const applianceBreakdown = [];
         upsertApplianceBreakdown(applianceBreakdown, outlet1Name, outlet1Energy, outlet1Cost, 1);
@@ -106,6 +121,7 @@ async function processDailyRollup() {
           outlet2Name,
           totalEnergy,
           cost,
+          bill,
           applianceBreakdown,
           peakPower,
           peakHour,

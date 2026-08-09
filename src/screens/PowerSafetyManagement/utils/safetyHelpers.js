@@ -1,4 +1,5 @@
 import { COLORS } from '../../../constants/colors';
+import { formatRelativeTime } from '../../../utils/datetime';
 
 export const getSafetyStageConfig = (stage) => {
   const configs = {
@@ -108,19 +109,4 @@ export const getAlertIcon = (type) => {
   return icons[type] || icons.power;
 };
 
-export const formatAlertTime = (timestamp) => {
-  if (!timestamp) return 'Just now';
-
-  // TODO: Replace with actual timestamp formatting when Firebase is integrated
-  // const date = new Date(timestamp.toDate());
-  // const now = new Date();
-  // const diffMs = now - date;
-  // const diffMins = Math.floor(diffMs / 60000);
-  
-  // if (diffMins < 1) return 'Just now';
-  // if (diffMins < 60) return `${diffMins}m ago`;
-  // if (diffMins < 1440) return `${Math.floor(diffMins / 60)}h ago`;
-  // return date.toLocaleDateString();
-
-  return 'Just now'; // Placeholder
-};
+export const formatAlertTime = (timestamp) => formatRelativeTime(timestamp);

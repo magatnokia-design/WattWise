@@ -72,13 +72,6 @@ const getTelemetryUpdatedAtMs = (outlet = {}) => {
   );
 };
 
-const hasLiveLoadFromMetrics = (metrics = {}) => {
-  return (
-    toMetricNumber(metrics.power) >= LIVE_POWER_THRESHOLD_W ||
-    toMetricNumber(metrics.current) >= LIVE_CURRENT_THRESHOLD_A
-  );
-};
-
 const deriveOutletRuntimeState = (outlet = {}) => {
   const current = toMetricNumber(outlet.current);
   const power = toMetricNumber(outlet.power);
@@ -144,7 +137,7 @@ const toConfidencePercent = (rawConfidence) => {
   return Math.max(0, Math.min(100, Math.round(parsed * 100)));
 };
 
-const buildOutletSuggestion = (outlet = {}, outletName = '', runtimeState = {}) => {
+const buildOutletSuggestion = (outlet = {}, applianceName = '', runtimeState = {}) => {
   if (!runtimeState.hasFreshTelemetry || !runtimeState.hasLiveLoad) {
     return { ...EMPTY_OUTLET_SUGGESTION };
   }
@@ -164,7 +157,7 @@ const buildOutletSuggestion = (outlet = {}, outletName = '', runtimeState = {}) 
     return { ...EMPTY_OUTLET_SUGGESTION };
   }
 
-  const normalizedCurrent = String(outletName || '').trim().toLowerCase();
+  const normalizedCurrent = String(applianceName || '').trim().toLowerCase();
   const normalizedSuggested = suggestedName.toLowerCase();
   const isDifferent = !!suggestedName && normalizedCurrent !== normalizedSuggested;
   const features = outlet.applianceDetection?.features || {};
@@ -182,15 +175,19 @@ const buildOutletSuggestion = (outlet = {}, outletName = '', runtimeState = {}) 
   };
 };
 
-const resolveOutletName = (outlet = {}, runtimeState = {}) => {
+const buildOutletLabel = (outletNumber) => {
+  return outletNumber > 0 ? `Outlet ${outletNumber}` : 'Outlet';
+};
+
+const isDefaultOutletLabel = (value, outletNumber) => {
+  if (!value) return false;
+  const normalizedValue = String(value).trim().toLowerCase();
+  const normalizedLabel = buildOutletLabel(outletNumber).toLowerCase();
+  return normalizedValue === normalizedLabel;
+};
+
+const resolveApplianceName = (outlet = {}) => {
   const outletNumber = Number(outlet.outletNumber) || 0;
-  const fallbackName = outletNumber > 0 ? `Outlet ${outletNumber}` : 'Outlet';
-
-  // While no appliance load is present (or telemetry is stale), keep neutral labels.
-  if (!runtimeState.hasFreshTelemetry || !runtimeState.hasLiveLoad) {
-    return fallbackName;
-  }
-
   const candidateName = normalizeOutletDisplayName(
     outlet.applianceName ||
     outlet.applianceSelection?.name ||
@@ -198,14 +195,17 @@ const resolveOutletName = (outlet = {}, runtimeState = {}) => {
     outlet.label ||
     ''
   );
-  return candidateName || fallbackName;
+  if (!candidateName || isDefaultOutletLabel(candidateName, outletNumber)) {
+    return '';
+  }
+  return candidateName;
 };
 
 export const useOutletControl = () => {
   const [outlet1Status, setOutlet1Status] = useState(false);
   const [outlet2Status, setOutlet2Status] = useState(false);
-  const [outlet1Name, setOutlet1Name] = useState('Outlet 1');
-  const [outlet2Name, setOutlet2Name] = useState('Outlet 2');
+  const [outlet1ApplianceName, setOutlet1ApplianceName] = useState('');
+  const [outlet2ApplianceName, setOutlet2ApplianceName] = useState('');
   const [outlet1Metrics, setOutlet1Metrics] = useState(DEFAULT_OUTLET_METRICS);
   const [outlet2Metrics, setOutlet2Metrics] = useState(DEFAULT_OUTLET_METRICS);
   const [outlet1Suggestion, setOutlet1Suggestion] = useState({ ...EMPTY_OUTLET_SUGGESTION });
@@ -217,18 +217,18 @@ export const useOutletControl = () => {
 
     const runtimeState = deriveOutletRuntimeState(outlet);
     const resolvedStatus = runtimeState.hasFreshTelemetry ? resolveOutletStatus(outlet) : false;
-    const resolvedName = resolveOutletName(outlet, runtimeState);
-    const suggestion = buildOutletSuggestion(outlet, resolvedName, runtimeState);
+    const resolvedApplianceName = resolveApplianceName(outlet);
+    const suggestion = buildOutletSuggestion(outlet, resolvedApplianceName, runtimeState);
     const metrics = buildOutletMetrics(outlet, resolvedStatus, runtimeState);
 
     if (outlet.outletNumber === 1) {
       setOutlet1Status(resolvedStatus);
-      setOutlet1Name(resolvedName);
+      setOutlet1ApplianceName(resolvedApplianceName);
       setOutlet1Metrics(metrics);
       setOutlet1Suggestion(suggestion);
     } else if (outlet.outletNumber === 2) {
       setOutlet2Status(resolvedStatus);
-      setOutlet2Name(resolvedName);
+      setOutlet2ApplianceName(resolvedApplianceName);
       setOutlet2Metrics(metrics);
       setOutlet2Suggestion(suggestion);
     }
@@ -247,8 +247,8 @@ export const useOutletControl = () => {
       if (!user?.uid) {
         setOutlet1Status(false);
         setOutlet2Status(false);
-        setOutlet1Name('Outlet 1');
-        setOutlet2Name('Outlet 2');
+        setOutlet1ApplianceName('');
+        setOutlet2ApplianceName('');
         setOutlet1Metrics(DEFAULT_OUTLET_METRICS);
         setOutlet2Metrics(DEFAULT_OUTLET_METRICS);
         setOutlet1Suggestion({ ...EMPTY_OUTLET_SUGGESTION });
@@ -314,21 +314,38 @@ export const useOutletControl = () => {
         throw new Error(result.error);
       }
 
-      const hasLiveLoadNow = outletNumber === 1
-        ? hasLiveLoadFromMetrics(outlet1Metrics)
-        : hasLiveLoadFromMetrics(outlet2Metrics);
-      const visibleName = hasLiveLoadNow ? sanitizedName : fallbackName;
+      const visibleName = isDefaultOutletLabel(sanitizedName, outletNumber)
+        ? ''
+        : sanitizedName;
+
+      // Confirming a real appliance name teaches the detector this outlet's
+      // measured signature. Best-effort: the outlet may be idle or have too few
+      // samples to learn from, which must never fail the rename itself.
+      let learnedProfile = null;
+      if (visibleName) {
+        const learnResult = await outletService.registerApplianceProfile(
+          userId,
+          outletNumber,
+          visibleName
+        );
+
+        if (learnResult.success) {
+          learnedProfile = learnResult.data?.profile || null;
+        } else {
+          console.warn('Appliance signature not learned:', learnResult.error);
+        }
+      }
 
       // Apply immediately in UI; snapshot listener will keep it in sync afterward.
       if (outletNumber === 1) {
-        setOutlet1Name(visibleName);
+        setOutlet1ApplianceName(visibleName);
         setOutlet1Suggestion((previous) => ({
           ...previous,
           showBadge: false,
           canAccept: false,
         }));
       } else if (outletNumber === 2) {
-        setOutlet2Name(visibleName);
+        setOutlet2ApplianceName(visibleName);
         setOutlet2Suggestion((previous) => ({
           ...previous,
           showBadge: false,
@@ -336,18 +353,18 @@ export const useOutletControl = () => {
         }));
       }
       
-      return { success: true };
+      return { success: true, learnedProfile };
     } catch (error) {
       console.error('Error updating appliance name:', error);
       return { success: false, error: error.message };
     }
-  }, [outlet1Metrics, outlet2Metrics]);
+  }, []);
 
   return {
     outlet1Status,
     outlet2Status,
-    outlet1Name,
-    outlet2Name,
+    outlet1ApplianceName,
+    outlet2ApplianceName,
     outlet1Metrics,
     outlet2Metrics,
     outlet1Suggestion,

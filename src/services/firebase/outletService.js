@@ -259,6 +259,77 @@ export const outletService = {
     }
   },
 
+  clearAutoDetection: async (userId, outletIdOrNumber) => {
+    try {
+      if (!userId) {
+        throw new Error('User not authenticated');
+      }
+
+      const normalizedOutletId = outletIdOrNumber
+        ? normalizeOutletId(outletIdOrNumber)
+        : null;
+      const clearAutoDetectionCallable = httpsCallable(functions, 'clearAutoDetection');
+      const payload = normalizedOutletId ? { outletId: normalizedOutletId } : {};
+      const result = await clearAutoDetectionCallable(payload);
+
+      if (!result?.data?.success) {
+        throw new Error(result?.data?.error || 'Failed to clear auto detection');
+      }
+
+      return { success: true, data: result.data };
+    } catch (error) {
+      const code = normalizeFunctionErrorCode(error) || error?.code;
+      const message = error?.details || error?.message || 'Failed to clear auto detection';
+
+      console.error('Error clearing auto detection:', {
+        code,
+        message,
+      });
+
+      return { success: false, error: message, code };
+    }
+  },
+
+  // Records the outlet's current run as a learned signature for this appliance
+  // name ("confirm to learn"), so later runs match the user's own hardware
+  // instead of the generic power ranges.
+  registerApplianceProfile: async (userId, outletIdOrNumber, applianceName) => {
+    try {
+      if (!userId) {
+        throw new Error('User not authenticated');
+      }
+
+      const normalizedOutletId = normalizeOutletId(outletIdOrNumber);
+      const normalizedName = String(applianceName || '').trim();
+
+      if (!normalizedName) {
+        throw new Error('applianceName is required');
+      }
+
+      const registerApplianceProfileCallable = httpsCallable(functions, 'registerApplianceProfile');
+      const result = await registerApplianceProfileCallable({
+        outletId: normalizedOutletId,
+        applianceName: normalizedName,
+      });
+
+      if (!result?.data?.success) {
+        throw new Error(result?.data?.error || 'Failed to learn appliance signature');
+      }
+
+      return { success: true, data: result.data };
+    } catch (error) {
+      const code = normalizeFunctionErrorCode(error) || error?.code;
+      const message = error?.details || error?.message || 'Failed to learn appliance signature';
+
+      console.error('Error registering appliance profile:', {
+        code,
+        message,
+      });
+
+      return { success: false, error: message, code };
+    }
+  },
+
   // Backward-compatible alias used by dashboard hooks
   toggleOutlet: async (userId, outletIdOrNumber, status) => {
     return outletService.updateOutletStatus(userId, outletIdOrNumber, status);

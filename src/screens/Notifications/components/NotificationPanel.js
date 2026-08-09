@@ -26,17 +26,14 @@ const NotificationPanel = ({ visible, onClose }) => {
 
   const handleMarkAllRead = useCallback(() => {
     markAllAsRead();
-    // TODO: Update Firebase when backend is ready
   }, [markAllAsRead]);
 
   const handleClearAll = useCallback(() => {
     clearAll();
-    // TODO: Delete from Firebase when backend is ready
   }, [clearAll]);
 
   const handleItemPress = useCallback((id) => {
     markAsRead(id);
-    // TODO: Update Firebase when backend is ready
   }, [markAsRead]);
 
   const renderItem = useCallback(({ item, index }) => (

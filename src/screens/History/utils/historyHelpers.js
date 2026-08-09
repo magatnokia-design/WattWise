@@ -1,36 +1,13 @@
-// TODO: Expand when backend is ready
+import {
+  toDate,
+  getTimestampMs,
+  parseDateString,
+  startOfDayMs,
+  endOfDayMs,
+  toDateString,
+} from '../../../utils/datetime';
 
-const toDate = (value) => {
-  if (!value) return null;
-
-  // Firestore Timestamp object
-  if (typeof value?.toDate === 'function') {
-    const converted = value.toDate();
-    return converted instanceof Date && !Number.isNaN(converted.getTime()) ? converted : null;
-  }
-
-  if (value instanceof Date) {
-    return Number.isNaN(value.getTime()) ? null : value;
-  }
-
-  if (typeof value === 'number') {
-    const date = new Date(value);
-    return Number.isNaN(date.getTime()) ? null : date;
-  }
-
-  if (typeof value === 'string') {
-    const date = new Date(value);
-    return Number.isNaN(date.getTime()) ? null : date;
-  }
-
-  if (typeof value === 'object' && typeof value.seconds === 'number') {
-    const millis = (value.seconds * 1000) + Math.floor((value.nanoseconds || 0) / 1000000);
-    const date = new Date(millis);
-    return Number.isNaN(date.getTime()) ? null : date;
-  }
-
-  return null;
-};
+export { getTimestampMs };
 
 export const formatDate = (date) => {
   const parsedDate = toDate(date);
@@ -53,11 +30,6 @@ export const formatTime = (date) => {
   });
 };
 
-export const getTimestampMs = (value) => {
-  const parsedDate = toDate(value);
-  return parsedDate ? parsedDate.getTime() : 0;
-};
-
 export const formatKwh = (value) => {
   if (!value) return '0.00 kWh';
   return `${value.toFixed(2)} kWh`;
@@ -68,7 +40,61 @@ export const formatCost = (value) => {
   return `₱${value.toFixed(2)}`;
 };
 
-export const filterByDateRange = (data, startDate, endDate) => {
-  // TODO: Implement date range filter when backend is ready
-  return data;
+// Splits a `history_daily` document id (`YYYY-MM-DD`) into the day/month labels
+// the usage list renders.
+export const splitDailyDate = (dateString) => {
+  const parsed = parseDateString(dateString);
+  if (!parsed) return { day: '--', month: '---' };
+
+  return {
+    day: String(parsed.getDate()),
+    month: parsed.toLocaleDateString(undefined, { month: 'short' }),
+  };
+};
+
+export const DATE_RANGE_PRESETS = [
+  { id: 'all', label: 'All time', shortLabel: 'Date' },
+  { id: '7d', label: 'Last 7 days', shortLabel: '7 days' },
+  { id: '30d', label: 'Last 30 days', shortLabel: '30 days' },
+  { id: 'month', label: 'This month', shortLabel: 'This month' },
+];
+
+// Resolves a preset id into inclusive `YYYY-MM-DD` bounds. `all` returns nulls
+// so callers fall back to their unfiltered query.
+export const resolveDateRange = (rangeId) => {
+  const today = new Date();
+  const endDate = toDateString(today);
+
+  if (rangeId === '7d' || rangeId === '30d') {
+    const days = rangeId === '7d' ? 7 : 30;
+    const start = new Date(today);
+    // Inclusive of today, so a 7-day range spans today plus the previous 6.
+    start.setDate(start.getDate() - (days - 1));
+    return { startDate: toDateString(start), endDate };
+  }
+
+  if (rangeId === 'month') {
+    const start = new Date(today.getFullYear(), today.getMonth(), 1);
+    return { startDate: toDateString(start), endDate };
+  }
+
+  return { startDate: null, endDate: null };
+};
+
+// Client-side range filter for records already in memory (activity logs).
+// Daily usage is filtered server-side by `historyService.getDailyUsage` instead.
+export const filterByDateRange = (data = [], startDate, endDate) => {
+  if (!startDate && !endDate) return data;
+
+  const startMs = startDate ? startOfDayMs(startDate) : null;
+  const endMs = endDate ? endOfDayMs(endDate) : null;
+  if (startMs === null && endMs === null) return data;
+
+  return data.filter((item) => {
+    const itemMs = getTimestampMs(item?.timestamp);
+    if (!itemMs) return false;
+    if (startMs !== null && itemMs < startMs) return false;
+    if (endMs !== null && itemMs > endMs) return false;
+    return true;
+  });
 };

@@ -21,6 +21,8 @@ const { updateOutletMetrics } = require('./src/http/updateOutletMetrics');
 const { ackDeviceCommand } = require('./src/http/ackDeviceCommand');
 const { getDeviceCommand } = require('./src/http/getDeviceCommand');
 const { processOutletToggle } = require('./src/http/processOutletToggle');
+const { clearAutoDetection } = require('./src/http/clearAutoDetection');
+const { registerApplianceProfile } = require('./src/http/registerApplianceProfile');
 const { checkUserExistsByEmail } = require('./src/http/checkUserExistsByEmail');
 const { processDailyRollup } = require('./src/scheduled/processDailyRollup');
 const { checkScheduledTimers } = require('./src/scheduled/checkScheduledTimers');
@@ -85,6 +87,29 @@ exports.processOutletToggle = onCall(
     maxInstances: 10,
   },
   processOutletToggle
+);
+
+/**
+ * Callable function to clear auto-detection metadata for outlets
+ * Called from: Settings screen
+ */
+exports.clearAutoDetection = onCall(
+  {
+    maxInstances: 10,
+  },
+  clearAutoDetection
+);
+
+/**
+ * Callable function to learn the running appliance's power signature after the
+ * user confirms its name
+ * Called from: Dashboard screen (accept suggestion / rename appliance)
+ */
+exports.registerApplianceProfile = onCall(
+  {
+    maxInstances: 10,
+  },
+  registerApplianceProfile
 );
 
 /**

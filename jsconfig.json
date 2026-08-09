@@ -1,0 +1,7 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "lib": ["DOM", "DOM.Iterable", "ES2020", "ES2020.SharedMemory", "ScriptHost"]
+  },
+  "exclude": ["node_modules", "functions/node_modules"]
+}
