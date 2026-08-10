@@ -1,99 +1,209 @@
-export const calculateComparison = (current, previous) => {
-  const calculateChange = (currentValue, previousValue) => {
-    if (previousValue === 0) {
-      return {
-        difference: currentValue,
-        percentage: currentValue > 0 ? 100 : 0,
-        type: currentValue > 0 ? 'increase' : 'same',
-      };
+// How many months back the pickers offer. A year covers a full seasonal cycle,
+// which is the comparison that actually explains a bill jump.
+export const MONTH_OPTION_COUNT = 12;
+
+export const emptyMonthTotals = {
+  kWh: 0,
+  cost: 0,
+  outlet1: 0,
+  outlet2: 0,
+  outlet1Name: 'Outlet 1',
+  outlet2Name: 'Outlet 2',
+  daysRecorded: 0,
+};
+
+const toNumber = (value) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const pad = (value) => String(value).padStart(2, '0');
+
+export const previousMonthKey = (monthKey) => {
+  const [year, month] = String(monthKey).split('-').map(Number);
+  if (!year || !month) return monthKey;
+  return month === 1 ? `${year - 1}-12` : `${year}-${pad(month - 1)}`;
+};
+
+export const formatMonthLabel = (monthKey) => {
+  const [year, month] = String(monthKey).split('-').map(Number);
+  if (!year || !month) return monthKey;
+
+  return new Date(Date.UTC(year, month - 1, 1)).toLocaleDateString('en-US', {
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'UTC',
+  });
+};
+
+export const formatMonthShort = (monthKey) => {
+  const [year, month] = String(monthKey).split('-').map(Number);
+  if (!year || !month) return monthKey;
+
+  return new Date(Date.UTC(year, month - 1, 1)).toLocaleDateString('en-US', {
+    month: 'short',
+    year: 'numeric',
+    timeZone: 'UTC',
+  });
+};
+
+/** Most recent month first, so the default selection is the current month. */
+export const buildMonthOptions = (count = MONTH_OPTION_COUNT, from = new Date()) => {
+  const options = [];
+  let year = from.getFullYear();
+  let month = from.getMonth() + 1;
+
+  for (let index = 0; index < count; index += 1) {
+    const value = `${year}-${pad(month)}`;
+    options.push({ value, label: formatMonthLabel(value), short: formatMonthShort(value) });
+
+    month -= 1;
+    if (month === 0) {
+      month = 12;
+      year -= 1;
     }
+  }
 
-    const difference = currentValue - previousValue;
-    const percentage = (Math.abs(difference) / previousValue) * 100;
+  return options;
+};
 
-    return {
-      difference,
-      percentage,
-      type: difference > 0 ? 'increase' : difference < 0 ? 'decrease' : 'same',
-    };
-  };
+/**
+ * Rolls a month of `history_daily` documents into one total.
+ *
+ * Appliance names come from the most recent day that carries them, so an outlet
+ * renamed mid-month shows its current name rather than a stale one.
+ */
+export const summarizeDailyEntries = (entries) => {
+  const rows = Array.isArray(entries) ? entries : [];
+  if (rows.length === 0) return emptyMonthTotals;
+
+  const totals = rows.reduce((accumulator, entry) => ({
+    kWh: accumulator.kWh + toNumber(entry.totalEnergy),
+    cost: accumulator.cost + toNumber(entry.cost),
+    outlet1: accumulator.outlet1 + toNumber(entry.outlet1Energy),
+    outlet2: accumulator.outlet2 + toNumber(entry.outlet2Energy),
+  }), { kWh: 0, cost: 0, outlet1: 0, outlet2: 0 });
+
+  const latest = rows[rows.length - 1] || {};
 
   return {
-    kWhChange: calculateChange(current.kWh, previous.kWh),
-    costChange: calculateChange(current.cost, previous.cost),
-    outlet1Change: calculateChange(current.outlet1, previous.outlet1),
-    outlet2Change: calculateChange(current.outlet2, previous.outlet2),
+    ...totals,
+    outlet1Name: String(latest.outlet1Name || '').trim() || 'Outlet 1',
+    outlet2Name: String(latest.outlet2Name || '').trim() || 'Outlet 2',
+    daysRecorded: rows.length,
   };
 };
 
-export const generateInsights = (comparison, current, previous) => {
-  const insights = [];
+/**
+ * Signed change from `previous` to `current`.
+ *
+ * `direction` is what the UI colours on, and it is deliberately not the same as
+ * the sign: using less energy is 'down' and good, so the caller never has to
+ * work out which way is favourable.
+ */
+export const buildDelta = (current, previous) => {
+  const currentValue = toNumber(current);
+  const previousValue = toNumber(previous);
+  const difference = currentValue - previousValue;
 
-  // Overall usage insight
-  if (comparison.kWhChange.type === 'increase') {
-    insights.push({
-      type: 'warning',
-      message: `Energy usage increased by ${comparison.kWhChange.percentage.toFixed(1)}% compared to last month`,
-      tip: 'Consider identifying high-consumption appliances and reducing usage',
-    });
-  } else if (comparison.kWhChange.type === 'decrease') {
-    insights.push({
-      type: 'success',
-      message: `Great job! Energy usage decreased by ${comparison.kWhChange.percentage.toFixed(1)}% compared to last month`,
-      tip: 'Keep up the good energy-saving habits',
-    });
-  } else {
-    insights.push({
-      type: 'info',
-      message: 'Energy usage is consistent with last month',
-    });
-  }
+  // No baseline means no percentage - showing "+100%" against zero is noise.
+  const percent = previousValue > 0 ? (difference / previousValue) * 100 : null;
 
-  // Cost insight
-  if (comparison.costChange.type === 'increase' && comparison.costChange.percentage > 10) {
-    insights.push({
-      type: 'warning',
-      message: `Electricity cost increased by ₱${comparison.costChange.difference.toFixed(2)} (${comparison.costChange.percentage.toFixed(1)}%)`,
-      tip: 'Review your usage patterns to identify cost-saving opportunities',
-    });
-  }
+  let direction = 'flat';
+  if (Math.abs(difference) > 0.005) direction = difference > 0 ? 'up' : 'down';
 
-  // Outlet comparison insight
-  const outlet1Higher = current.outlet1 > current.outlet2;
-  const higherOutlet = outlet1Higher ? 'Outlet 1' : 'Outlet 2';
-  const higherValue = outlet1Higher ? current.outlet1 : current.outlet2;
-  const lowerValue = outlet1Higher ? current.outlet2 : current.outlet1;
-  
-  if (higherValue > 0 && lowerValue > 0) {
-    const diff = ((higherValue - lowerValue) / lowerValue) * 100;
-    if (diff > 20) {
-      insights.push({
-        type: 'info',
-        message: `${higherOutlet} consumes ${diff.toFixed(0)}% more energy than the other outlet`,
-        tip: 'Consider balancing appliance usage across outlets',
-      });
-    }
-  }
-
-  // No data insight
-  if (current.kWh === 0 && previous.kWh === 0) {
-    return [{
-      type: 'info',
-      message: 'No usage data available for comparison',
-      tip: 'Add previous month bill data to see insights',
-    }];
-  }
-
-  return insights;
+  return {
+    current: currentValue,
+    previous: previousValue,
+    difference,
+    absolute: Math.abs(difference),
+    percent,
+    absolutePercent: percent === null ? null : Math.abs(percent),
+    direction,
+    hasBaseline: previousValue > 0,
+  };
 };
 
-export const formatMonthYear = (monthString) => {
-  const date = new Date(monthString + '-01');
-  return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+export const compareMonths = (totalsA, totalsB) => {
+  const a = totalsA || emptyMonthTotals;
+  const b = totalsB || emptyMonthTotals;
+
+  return {
+    energy: buildDelta(a.kWh, b.kWh),
+    cost: buildDelta(a.cost, b.cost),
+    outlet1: buildDelta(a.outlet1, b.outlet1),
+    outlet2: buildDelta(a.outlet2, b.outlet2),
+    hasData: a.daysRecorded > 0 || b.daysRecorded > 0,
+    bothHaveData: a.daysRecorded > 0 && b.daysRecorded > 0,
+  };
 };
 
-export const getPreviousMonth = (monthString) => {
-  const date = new Date(monthString + '-01');
-  date.setMonth(date.getMonth() - 1);
-  return date.toISOString().slice(0, 7);
+/**
+ * One plain sentence for the top of the screen. This is the whole point of the
+ * comparison, so it says the outcome outright rather than leaving the user to
+ * subtract two numbers.
+ */
+export const buildVerdict = (comparison, monthALabel, monthBLabel) => {
+  if (!comparison.bothHaveData) {
+    return {
+      tone: 'neutral',
+      headline: 'Not enough data yet',
+      detail: `WattWise needs recorded usage in both ${monthALabel} and ${monthBLabel} to compare them.`,
+    };
+  }
+
+  const { energy, cost } = comparison;
+
+  if (energy.direction === 'flat') {
+    return {
+      tone: 'neutral',
+      headline: 'About the same',
+      detail: `${monthALabel} used roughly the same energy as ${monthBLabel}.`,
+    };
+  }
+
+  const usedLess = energy.direction === 'down';
+  const percentText = energy.absolutePercent === null
+    ? ''
+    : ` (${energy.absolutePercent.toFixed(1)}%)`;
+
+  return {
+    tone: usedLess ? 'good' : 'alert',
+    headline: usedLess
+      ? `${energy.absolutePercent === null ? '' : `${energy.absolutePercent.toFixed(1)}% `}less energy`
+      : `${energy.absolutePercent === null ? '' : `${energy.absolutePercent.toFixed(1)}% `}more energy`,
+    detail: `${monthALabel} used ${energy.absolute.toFixed(2)} kWh ${usedLess ? 'less' : 'more'} than ${monthBLabel}${percentText}, a difference of ₱${cost.absolute.toFixed(2)}.`,
+  };
+};
+
+/**
+ * How close WattWise's estimate came to the real PELCO III bill.
+ *
+ * This is the only check in the app that grades the billing model against
+ * reality rather than against another app-computed figure.
+ */
+export const compareToActualBill = (totals, actualBill) => {
+  if (!actualBill) return null;
+
+  const estimatedCost = toNumber(totals?.cost);
+  const actualCost = toNumber(actualBill.totalCost);
+  if (actualCost <= 0) return null;
+
+  const difference = estimatedCost - actualCost;
+  const percent = (difference / actualCost) * 100;
+
+  return {
+    estimatedCost,
+    actualCost,
+    estimatedKWh: toNumber(totals?.kWh),
+    actualKWh: toNumber(actualBill.totalKWh),
+    difference,
+    absolute: Math.abs(difference),
+    percent,
+    absolutePercent: Math.abs(percent),
+    // Under 5% is the band the billing spec expects, given the EVAT supply-side
+    // factor is the model's one approximation.
+    isClose: Math.abs(percent) <= 5,
+    direction: difference >= 0 ? 'over' : 'under',
+  };
 };

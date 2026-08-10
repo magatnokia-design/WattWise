@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -10,55 +10,63 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../../constants/colors';
-import MonthSelector from './components/MonthSelector';
-import ComparisonCard from './components/ComparisonCard';
-import ComparisonChart from './components/ComparisonChart';
-import InsightsCard from './components/InsightsCard';
+import MonthComparePicker from './components/MonthComparePicker';
+import CompareMetric from './components/CompareMetric';
 import AddPreviousBillModal from './components/AddPreviousBillModal';
 import useReferenceComparison from './hooks/useReferenceComparison';
+import { buildVerdict, formatMonthShort } from './utils/comparisonHelpers';
+
+const formatKwh = (value) => `${(Number(value) || 0).toFixed(2)} kWh`;
+const formatPeso = (value) => `₱${(Number(value) || 0).toFixed(2)}`;
 
 const ReferenceComparisonScreen = ({ navigation }) => {
   const {
-    selectedMonth,
-    currentMonthData,
-    previousMonthData,
-    comparisonData,
-    insights,
-    loading,
-    handleMonthChange,
-    handleAddPreviousBill,
-    handleDeletePreviousBill,
-    handleRefresh,
+    monthOptions,
+    monthA,
+    monthB,
+    totalsA,
+    totalsB,
+    comparison,
+    actualBill,
+    accuracy,
+    selectMonthA,
+    selectMonthB,
+    saveActualBill,
+    deleteActualBill,
+    refresh,
   } = useReferenceComparison();
 
   const [refreshing, setRefreshing] = useState(false);
   const [showBillModal, setShowBillModal] = useState(false);
 
+  const labelA = formatMonthShort(monthA);
+  const labelB = formatMonthShort(monthB);
+
+  const verdict = useMemo(
+    () => buildVerdict(comparison, labelA, labelB),
+    [comparison, labelA, labelB]
+  );
+
   const onRefresh = async () => {
     setRefreshing(true);
-    await handleRefresh();
+    await refresh();
     setRefreshing(false);
   };
 
-  const hasPreviousData = previousMonthData.kWh > 0 || previousMonthData.cost > 0;
+  const verdictStyle = {
+    good: styles.verdictGood,
+    alert: styles.verdictAlert,
+    neutral: styles.verdictNeutral,
+  }[verdict.tone];
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-      {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => navigation.goBack()}
-          style={styles.backButton}
-        >
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color={COLORS.text} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Usage Comparison</Text>
-        <TouchableOpacity
-          onPress={() => setShowBillModal(true)}
-          style={styles.addButton}
-        >
-          <Ionicons name="add-circle" size={24} color={COLORS.primary} />
-        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Compare Usage</Text>
+        <View style={styles.backButton} />
       </View>
 
       <ScrollView
@@ -74,206 +82,168 @@ const ReferenceComparisonScreen = ({ navigation }) => {
           />
         }
       >
-        {/* Month Selector */}
-        <MonthSelector
-          selectedMonth={selectedMonth}
-          onMonthChange={handleMonthChange}
+        <Text style={styles.intro}>
+          Pick any two months to see how your energy use changed.
+        </Text>
+
+        <MonthComparePicker
+          monthOptions={monthOptions}
+          monthA={monthA}
+          monthB={monthB}
+          onSelectA={selectMonthA}
+          onSelectB={selectMonthB}
         />
 
-        {!hasPreviousData ? (
-          // No Previous Data - Show Empty State
-          <View style={styles.emptyState}>
-            <Ionicons name="bar-chart-outline" size={80} color={COLORS.border} />
-            <Text style={styles.emptyTitle}>No Previous Data</Text>
-            <Text style={styles.emptyText}>
-              Add your previous electricity bill to compare usage and costs
-            </Text>
-            <TouchableOpacity
-              style={styles.addBillButton}
-              onPress={() => setShowBillModal(true)}
-            >
-              <Ionicons name="add-circle" size={20} color={COLORS.white} />
-              <Text style={styles.addBillText}>Add Previous Bill</Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          <>
-            {/* Comparison Cards */}
-            <View style={styles.cardsContainer}>
-              <ComparisonCard
-                title="Energy Usage"
-                currentValue={currentMonthData.kWh}
-                previousValue={previousMonthData.kWh}
-                unit="kWh"
-                icon="flash"
-                changeData={comparisonData.kWhChange}
-              />
-              <ComparisonCard
-                title="Total Cost"
-                currentValue={currentMonthData.cost}
-                previousValue={previousMonthData.cost}
-                unit="₱"
-                icon="wallet"
-                changeData={comparisonData.costChange}
-              />
-            </View>
+        {/* The answer, stated outright, before any numbers to interpret. */}
+        <View style={[styles.verdict, verdictStyle]}>
+          <Text style={styles.verdictHeadline}>{verdict.headline}</Text>
+          <Text style={styles.verdictDetail}>{verdict.detail}</Text>
+        </View>
 
-            {/* Comparison Chart */}
-            <ComparisonChart
-              currentMonthData={currentMonthData}
-              previousMonthData={previousMonthData}
-              selectedMonth={selectedMonth}
+        {comparison.bothHaveData ? (
+          <View style={styles.body}>
+            <CompareMetric
+              title="Energy used"
+              labelA={labelA}
+              labelB={labelB}
+              valueA={totalsA.kWh}
+              valueB={totalsB.kWh}
+              delta={comparison.energy}
+              format={formatKwh}
             />
 
-            {/* Outlet Breakdown Comparison */}
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Outlet Breakdown</Text>
-              <View style={styles.outletComparison}>
-                {/* Outlet 1 */}
-                <View style={styles.outletCard}>
-                  <View style={styles.outletHeader}>
-                    <Ionicons name="flash" size={20} color={COLORS.primary} />
-                    <Text style={styles.outletName}>Outlet 1</Text>
-                  </View>
-                  <View style={styles.outletValues}>
-                    <View style={styles.outletValueItem}>
-                      <Text style={styles.outletLabel}>Current</Text>
-                      <Text style={styles.outletValue}>
-                        {currentMonthData.outlet1.toFixed(2)} kWh
-                      </Text>
-                    </View>
-                    <View style={styles.outletValueItem}>
-                      <Text style={styles.outletLabel}>Previous</Text>
-                      <Text style={styles.outletValuePrev}>
-                        {previousMonthData.outlet1.toFixed(2)} kWh
-                      </Text>
-                    </View>
-                  </View>
-                  <View style={[styles.changeBadge, { 
-                    backgroundColor: comparisonData.outlet1Change.type === 'increase' 
-                      ? '#FEF2F2' 
-                      : comparisonData.outlet1Change.type === 'decrease' 
-                      ? '#ECFDF5' 
-                      : COLORS.background 
-                  }]}>
-                    <Ionicons
-                      name={
-                        comparisonData.outlet1Change.type === 'increase'
-                          ? 'trending-up'
-                          : comparisonData.outlet1Change.type === 'decrease'
-                          ? 'trending-down'
-                          : 'remove'
-                      }
-                      size={14}
-                      color={
-                        comparisonData.outlet1Change.type === 'increase'
-                          ? COLORS.error
-                          : comparisonData.outlet1Change.type === 'decrease'
-                          ? COLORS.success
-                          : COLORS.textLight
-                      }
-                    />
-                    <Text style={[styles.changeText, {
-                      color: comparisonData.outlet1Change.type === 'increase'
-                        ? COLORS.error
-                        : comparisonData.outlet1Change.type === 'decrease'
-                        ? COLORS.success
-                        : COLORS.textLight
-                    }]}>
-                      {comparisonData.outlet1Change.percentage.toFixed(1)}%
-                    </Text>
-                  </View>
-                </View>
+            <CompareMetric
+              title="Cost"
+              labelA={labelA}
+              labelB={labelB}
+              valueA={totalsA.cost}
+              valueB={totalsB.cost}
+              delta={comparison.cost}
+              format={formatPeso}
+            />
 
-                {/* Outlet 2 */}
-                <View style={styles.outletCard}>
-                  <View style={styles.outletHeader}>
-                    <Ionicons name="flash" size={20} color={COLORS.primaryLight} />
-                    <Text style={styles.outletName}>Outlet 2</Text>
-                  </View>
-                  <View style={styles.outletValues}>
-                    <View style={styles.outletValueItem}>
-                      <Text style={styles.outletLabel}>Current</Text>
-                      <Text style={styles.outletValue}>
-                        {currentMonthData.outlet2.toFixed(2)} kWh
+            <Text style={styles.sectionTitle}>Which outlet changed</Text>
+            <View style={styles.outletCard}>
+              {[
+                { name: totalsA.outlet1Name, a: totalsA.outlet1, b: totalsB.outlet1, delta: comparison.outlet1 },
+                { name: totalsA.outlet2Name, a: totalsA.outlet2, b: totalsB.outlet2, delta: comparison.outlet2 },
+              ].map((outlet, index) => {
+                const improving = outlet.delta.direction === 'down';
+                const color = outlet.delta.direction === 'flat'
+                  ? COLORS.textLight
+                  : (improving ? COLORS.success : COLORS.error);
+
+                return (
+                  <View
+                    key={outlet.name}
+                    style={[styles.outletRow, index === 0 && styles.outletRowDivided]}
+                  >
+                    <View style={styles.outletInfo}>
+                      <Text style={styles.outletName}>{outlet.name}</Text>
+                      <Text style={styles.outletFlow}>
+                        {formatKwh(outlet.b)} → {formatKwh(outlet.a)}
                       </Text>
                     </View>
-                    <View style={styles.outletValueItem}>
-                      <Text style={styles.outletLabel}>Previous</Text>
-                      <Text style={styles.outletValuePrev}>
-                        {previousMonthData.outlet2.toFixed(2)} kWh
-                      </Text>
-                    </View>
-                  </View>
-                  <View style={[styles.changeBadge, { 
-                    backgroundColor: comparisonData.outlet2Change.type === 'increase' 
-                      ? '#FEF2F2' 
-                      : comparisonData.outlet2Change.type === 'decrease' 
-                      ? '#ECFDF5' 
-                      : COLORS.background 
-                  }]}>
-                    <Ionicons
-                      name={
-                        comparisonData.outlet2Change.type === 'increase'
-                          ? 'trending-up'
-                          : comparisonData.outlet2Change.type === 'decrease'
-                          ? 'trending-down'
-                          : 'remove'
-                      }
-                      size={14}
-                      color={
-                        comparisonData.outlet2Change.type === 'increase'
-                          ? COLORS.error
-                          : comparisonData.outlet2Change.type === 'decrease'
-                          ? COLORS.success
-                          : COLORS.textLight
-                      }
-                    />
-                    <Text style={[styles.changeText, {
-                      color: comparisonData.outlet2Change.type === 'increase'
-                        ? COLORS.error
-                        : comparisonData.outlet2Change.type === 'decrease'
-                        ? COLORS.success
-                        : COLORS.textLight
-                    }]}>
-                      {comparisonData.outlet2Change.percentage.toFixed(1)}%
+                    <Text style={[styles.outletDelta, { color }]}>
+                      {outlet.delta.direction === 'flat'
+                        ? '—'
+                        : `${outlet.delta.direction === 'down' ? '↓' : '↑'} ${
+                          outlet.delta.absolutePercent === null
+                            ? formatKwh(outlet.delta.absolute)
+                            : `${outlet.delta.absolutePercent.toFixed(1)}%`
+                        }`}
                     </Text>
                   </View>
-                </View>
-              </View>
+                );
+              })}
             </View>
 
-            {/* Insights */}
-            <InsightsCard insights={insights} />
-
-            {/* Edit Previous Bill Button */}
-            <TouchableOpacity
-              style={styles.editButton}
-              onPress={() => setShowBillModal(true)}
-            >
-              <Ionicons name="create-outline" size={20} color={COLORS.primary} />
-              <Text style={styles.editButtonText}>Edit Previous Bill Data</Text>
-            </TouchableOpacity>
-          </>
+            {/* Accuracy check: the one place the billing model is graded against
+                a real bill rather than another app-computed figure. */}
+            <Text style={styles.sectionTitle}>Check against your real bill</Text>
+            {accuracy ? (
+              <View style={styles.accuracyCard}>
+                <View style={styles.accuracyRow}>
+                  <Text style={styles.accuracyLabel}>PELCO III billed you</Text>
+                  <Text style={styles.accuracyValue}>{formatPeso(accuracy.actualCost)}</Text>
+                </View>
+                <View style={styles.accuracyRow}>
+                  <Text style={styles.accuracyLabel}>WattWise estimated</Text>
+                  <Text style={styles.accuracyValue}>{formatPeso(accuracy.estimatedCost)}</Text>
+                </View>
+                <View style={styles.accuracyDivider} />
+                <View style={styles.accuracyRow}>
+                  <Text style={styles.accuracyLabel}>Difference</Text>
+                  <Text
+                    style={[
+                      styles.accuracyValueStrong,
+                      { color: accuracy.isClose ? COLORS.success : COLORS.warning },
+                    ]}
+                  >
+                    {formatPeso(accuracy.absolute)} {accuracy.direction}
+                    {' '}({accuracy.absolutePercent.toFixed(1)}%)
+                  </Text>
+                </View>
+                <Text style={styles.accuracyNote}>
+                  {accuracy.isClose
+                    ? `WattWise is tracking your ${labelA} bill closely.`
+                    : `WattWise read ${accuracy.absolutePercent.toFixed(1)}% ${accuracy.direction} for ${labelA}. Check that your generation rate in Settings matches that month's bill.`}
+                </Text>
+                <TouchableOpacity
+                  style={styles.secondaryButton}
+                  onPress={() => setShowBillModal(true)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.secondaryButtonText}>Edit actual bill</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <TouchableOpacity
+                style={styles.addBillCard}
+                onPress={() => setShowBillModal(true)}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="receipt-outline" size={22} color={COLORS.primary} />
+                <View style={styles.addBillText}>
+                  <Text style={styles.addBillTitle}>Add your {labelA} bill</Text>
+                  <Text style={styles.addBillSub}>
+                    Enter the total from your paper PELCO III bill to see how close
+                    WattWise&apos;s estimate came.
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={COLORS.textLight} />
+              </TouchableOpacity>
+            )}
+          </View>
+        ) : (
+          <View style={styles.emptyState}>
+            <Ionicons name="calendar-outline" size={64} color={COLORS.border} />
+            <Text style={styles.emptyTitle}>
+              {totalsA.daysRecorded === 0 && totalsB.daysRecorded === 0
+                ? 'No usage recorded yet'
+                : `Nothing recorded for ${totalsA.daysRecorded === 0 ? labelA : labelB}`}
+            </Text>
+            <Text style={styles.emptyText}>
+              WattWise builds a monthly total from daily usage, which is recorded
+              once your outlets have been reporting for a full day. Pick a month
+              with recorded usage, or check back tomorrow.
+            </Text>
+          </View>
         )}
-
-        {/* Info Footer */}
-        <View style={styles.infoFooter}>
-          <Ionicons name="information-circle" size={16} color={COLORS.textLight} />
-          <Text style={styles.infoText}>
-            Compare your current usage with previous months to identify trends and save energy
-          </Text>
-        </View>
       </ScrollView>
 
-      {/* Add Previous Bill Modal */}
       <AddPreviousBillModal
         visible={showBillModal}
-        selectedMonth={selectedMonth}
-        previousData={previousMonthData}
+        selectedMonth={monthA}
+        previousData={{
+          kWh: actualBill?.totalKWh || 0,
+          cost: actualBill?.totalCost || 0,
+          outlet1: actualBill?.outlet1KWh || 0,
+          outlet2: actualBill?.outlet2KWh || 0,
+        }}
         onClose={() => setShowBillModal(false)}
-        onSave={handleAddPreviousBill}
-        onDelete={handleDeletePreviousBill}
+        onSave={saveActualBill}
+        onDelete={deleteActualBill}
       />
     </SafeAreaView>
   );
@@ -296,160 +266,193 @@ const styles = StyleSheet.create({
   },
   backButton: {
     padding: 4,
+    width: 32,
   },
   headerTitle: {
     fontSize: 20,
     fontWeight: '700',
     color: COLORS.text,
   },
-  addButton: {
-    padding: 4,
-  },
   scrollView: {
     flex: 1,
   },
-  // Clears the Android navigation bar so the last card is fully reachable.
   scrollContent: {
     paddingBottom: 32,
   },
-  emptyState: {
-    alignItems: 'center',
-    paddingVertical: 60,
-    paddingHorizontal: 40,
-  },
-  emptyTitle: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: COLORS.text,
-    marginTop: 20,
-    marginBottom: 12,
-  },
-  emptyText: {
-    fontSize: 14,
+  intro: {
+    fontSize: 13,
     color: COLORS.textLight,
-    textAlign: 'center',
-    lineHeight: 20,
-    marginBottom: 24,
+    paddingHorizontal: 20,
+    paddingTop: 16,
   },
-  addBillButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.primary,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
+  verdict: {
+    marginHorizontal: 20,
+    marginTop: 16,
     borderRadius: 12,
-    gap: 8,
+    padding: 16,
+    borderWidth: 1,
   },
-  addBillText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: COLORS.white,
+  verdictGood: {
+    backgroundColor: '#ECFDF5',
+    borderColor: '#A7F3D0',
   },
-  cardsContainer: {
+  verdictAlert: {
+    backgroundColor: '#FEF2F2',
+    borderColor: '#FECACA',
+  },
+  verdictNeutral: {
+    backgroundColor: COLORS.white,
+    borderColor: COLORS.border,
+  },
+  verdictHeadline: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: COLORS.text,
+    marginBottom: 4,
+  },
+  verdictDetail: {
+    fontSize: 13,
+    color: COLORS.textLight,
+    lineHeight: 19,
+  },
+  body: {
     paddingHorizontal: 20,
-    gap: 12,
     marginTop: 20,
-  },
-  section: {
-    marginTop: 20,
-    paddingHorizontal: 20,
   },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
+    fontSize: 16,
+    fontWeight: '700',
     color: COLORS.text,
-    marginBottom: 12,
-  },
-  outletComparison: {
-    gap: 12,
+    marginTop: 8,
+    marginBottom: 10,
   },
   outletCard: {
     backgroundColor: COLORS.white,
     borderRadius: 12,
-    padding: 16,
     borderWidth: 1,
     borderColor: COLORS.border,
+    marginBottom: 12,
   },
-  outletHeader: {
+  outletRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginBottom: 12,
-  },
-  outletName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: COLORS.text,
-  },
-  outletValues: {
-    flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 12,
+    padding: 16,
   },
-  outletValueItem: {
+  outletRowDivided: {
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  outletInfo: {
     flex: 1,
   },
-  outletLabel: {
-    fontSize: 12,
-    color: COLORS.textLight,
-    marginBottom: 4,
-  },
-  outletValue: {
-    fontSize: 16,
+  outletName: {
+    fontSize: 14,
     fontWeight: '600',
     color: COLORS.text,
   },
-  outletValuePrev: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: COLORS.textLight,
-  },
-  changeBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'flex-start',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-    gap: 4,
-  },
-  changeText: {
+  outletFlow: {
     fontSize: 12,
-    fontWeight: '600',
+    color: COLORS.textLight,
+    marginTop: 3,
   },
-  editButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+  outletDelta: {
+    fontSize: 14,
+    fontWeight: '700',
+    marginLeft: 12,
+  },
+  accuracyCard: {
     backgroundColor: COLORS.white,
-    marginHorizontal: 20,
-    marginTop: 20,
-    paddingVertical: 14,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: COLORS.primary,
-    gap: 8,
+    borderColor: COLORS.border,
+    padding: 16,
   },
-  editButtonText: {
+  accuracyRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 5,
+  },
+  accuracyLabel: {
+    fontSize: 13,
+    color: COLORS.textLight,
+  },
+  accuracyValue: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.text,
+  },
+  accuracyValueStrong: {
     fontSize: 15,
+    fontWeight: '700',
+  },
+  accuracyDivider: {
+    height: 1,
+    backgroundColor: COLORS.border,
+    marginVertical: 8,
+  },
+  accuracyNote: {
+    fontSize: 12,
+    color: COLORS.textLight,
+    lineHeight: 17,
+    marginTop: 8,
+  },
+  secondaryButton: {
+    marginTop: 14,
+    paddingVertical: 11,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: COLORS.primary,
+    alignItems: 'center',
+  },
+  secondaryButtonText: {
+    fontSize: 14,
     fontWeight: '600',
     color: COLORS.primary,
   },
-  infoFooter: {
+  addBillCard: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     backgroundColor: COLORS.white,
-    padding: 16,
-    marginHorizontal: 20,
-    marginVertical: 20,
     borderRadius: 12,
-    gap: 8,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    padding: 16,
+    gap: 12,
   },
-  infoText: {
+  addBillText: {
     flex: 1,
+  },
+  addBillTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.text,
+  },
+  addBillSub: {
     fontSize: 12,
     color: COLORS.textLight,
-    lineHeight: 18,
+    lineHeight: 17,
+    marginTop: 3,
+  },
+  emptyState: {
+    alignItems: 'center',
+    paddingVertical: 48,
+    paddingHorizontal: 40,
+  },
+  emptyTitle: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: COLORS.text,
+    marginTop: 16,
+    marginBottom: 10,
+    textAlign: 'center',
+  },
+  emptyText: {
+    fontSize: 13,
+    color: COLORS.textLight,
+    textAlign: 'center',
+    lineHeight: 19,
   },
 });
 

@@ -29,9 +29,11 @@ const AddPreviousBillModal = ({ visible, selectedMonth, previousData, onClose, o
     }
   }, [visible, previousData]);
 
-  const getPreviousMonthLabel = () => {
+  // selectedMonth is the month being billed. It used to be the month *after*,
+  // with this helper subtracting one - that indirection is gone now that the
+  // screen targets a month directly.
+  const getBillMonthLabel = () => {
     const date = new Date(selectedMonth + '-01');
-    date.setMonth(date.getMonth() - 1);
     return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
   };
 
@@ -66,8 +68,8 @@ const AddPreviousBillModal = ({ visible, selectedMonth, previousData, onClose, o
     if (!onDelete) return;
 
     Alert.alert(
-      'Delete previous bill?',
-      `This will remove ${getPreviousMonthLabel()} comparison data.`,
+      'Delete this bill?',
+      `This will remove the actual bill you saved for ${getBillMonthLabel()}.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -105,7 +107,7 @@ const AddPreviousBillModal = ({ visible, selectedMonth, previousData, onClose, o
 
         <View style={styles.modalContainer}>
           <View style={styles.header}>
-            <Text style={styles.title}>Previous Bill Data</Text>
+            <Text style={styles.title}>Actual PELCO III Bill</Text>
             <TouchableOpacity onPress={onClose} style={styles.closeButton}>
               <Ionicons name="close" size={24} color={COLORS.text} />
             </TouchableOpacity>
@@ -114,11 +116,11 @@ const AddPreviousBillModal = ({ visible, selectedMonth, previousData, onClose, o
           <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
             <View style={styles.monthBadge}>
               <Ionicons name="calendar" size={16} color={COLORS.primary} />
-              <Text style={styles.monthText}>{getPreviousMonthLabel()}</Text>
+              <Text style={styles.monthText}>{getBillMonthLabel()}</Text>
             </View>
 
             <Text style={styles.description}>
-              Enter your previous month's electricity bill details for comparison
+              Enter the totals printed on your paper bill for this month, so WattWise can check its estimate against the real thing
             </Text>
 
             {/* Energy Usage Input */}
