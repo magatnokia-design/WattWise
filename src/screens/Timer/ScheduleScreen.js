@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -7,26 +7,67 @@ import {
   ScrollView,
   TouchableOpacity,
   FlatList,
-  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { COLORS } from '../../constants/colors';
 import TimerCard from './components/TimerCard';
 import AddTimerModal from './components/AddTimerModal';
 import { useSchedule } from './hooks/useSchedule';
+import {
+  formatDuration,
+  formatOutletName,
+  getNextScheduledRunSeconds,
+} from './utils/scheduleHelpers';
 
 const FILTERS = ['All', 'Outlet 1', 'Outlet 2'];
 
+/**
+ * Seconds until a timer fires, or null if it never will.
+ *
+ * Both timer types are reduced to the same number so one list can be ordered by
+ * "what happens next" regardless of how each timer was configured.
+ */
+const secondsUntilRun = (item, nowMs) => {
+  if (!item?.active) return null;
+
+  if (item.type === 'countdown') {
+    // Mirrors getLiveCountdownDisplay: a running countdown is duration minus
+    // elapsed since it started; a stored remaining value covers the case where
+    // no start timestamp was recorded.
+    const duration = Number(item.countdownDuration);
+    const startedAt = item.countdownStartedAt?.toDate
+      ? item.countdownStartedAt.toDate().getTime()
+      : Date.parse(item.countdownStartedAt);
+
+    if (Number.isFinite(duration) && duration > 0 && Number.isFinite(startedAt)) {
+      const remaining = duration - Math.floor((nowMs - startedAt) / 1000);
+      return remaining > 0 ? remaining : null;
+    }
+
+    const stored = Number(item.countdownRemaining);
+    return Number.isFinite(stored) && stored > 0 ? stored : null;
+  }
+
+  const seconds = getNextScheduledRunSeconds(item?.scheduledTime, item?.days, nowMs);
+  return Number.isFinite(seconds) ? seconds : null;
+};
+
 const ScheduleScreen = () => {
-  const { width } = useWindowDimensions();
   const [modalVisible, setModalVisible] = useState(false);
   const [activeFilter, setActiveFilter] = useState('All');
 
   const { schedules, loading, addSchedule, deleteSchedule, toggleSchedule } = useSchedule();
 
+  // Ticks once a minute so the "next run" line stays honest without the
+  // per-second re-render each TimerCard already does for its own countdown.
+  const [nowMs, setNowMs] = useState(Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNowMs(Date.now()), 60000);
+    return () => clearInterval(id);
+  }, []);
+
   const handleFilterPress = useCallback((filter) => {
     setActiveFilter(filter);
-    // TODO: Apply filter when backend is ready
   }, []);
 
   const handleAddTimer = useCallback(() => {
@@ -79,24 +120,52 @@ const ScheduleScreen = () => {
     }
   }, [toggleSchedule]);
 
-  const summaryData = useMemo(() => {
-    const filteredSchedules = activeFilter === 'All'
+  // Counts sit on the filter chips themselves rather than in separate stat
+  // cards. The old "O1 / O2" tile restated what the chips already say, in a
+  // form that needed decoding.
+  const filterCounts = useMemo(() => ({
+    All: schedules.length,
+    'Outlet 1': schedules.filter((item) => String(item.outlet) === '1').length,
+    'Outlet 2': schedules.filter((item) => String(item.outlet) === '2').length,
+  }), [schedules]);
+
+  const filteredSchedules = useMemo(() => {
+    const base = activeFilter === 'All'
       ? schedules
       : schedules.filter((item) => String(item.outlet) === activeFilter.replace('Outlet ', ''));
 
-    return {
-      total: filteredSchedules.length,
-      active: filteredSchedules.filter((item) => item.active).length,
-      outlet1: filteredSchedules.filter((item) => String(item.outlet) === '1').length,
-      outlet2: filteredSchedules.filter((item) => String(item.outlet) === '2').length,
-    };
-  }, [activeFilter, schedules]);
+    // Soonest first, paused timers last. A schedule list is read to find out
+    // what happens next, so chronological order is the useful order - the
+    // previous list kept whatever order Firestore returned.
+    return [...base].sort((a, b) => {
+      const aNext = secondsUntilRun(a, nowMs);
+      const bNext = secondsUntilRun(b, nowMs);
 
-  const filteredSchedules = useMemo(() => {
-    if (activeFilter === 'All') return schedules;
-    const outlet = activeFilter.replace('Outlet ', '');
-    return schedules.filter((item) => String(item.outlet) === outlet);
-  }, [activeFilter, schedules]);
+      if (aNext === null && bNext === null) return 0;
+      if (aNext === null) return 1;
+      if (bNext === null) return -1;
+      return aNext - bNext;
+    });
+  }, [activeFilter, schedules, nowMs]);
+
+  // The single thing this screen exists to answer.
+  const nextUp = useMemo(() => {
+    let best = null;
+
+    schedules.forEach((item) => {
+      const seconds = secondsUntilRun(item, nowMs);
+      if (seconds === null) return;
+      if (!best || seconds < best.seconds) best = { item, seconds };
+    });
+
+    if (!best) return null;
+
+    return {
+      seconds: best.seconds,
+      outlet: formatOutletName(best.item.outlet),
+      action: String(best.item.action || '').toLowerCase() === 'off' ? 'off' : 'on',
+    };
+  }, [schedules, nowMs]);
 
   const renderItem = useCallback(({ item }) => (
     <TimerCard
@@ -138,23 +207,30 @@ const ScheduleScreen = () => {
         </TouchableOpacity>
       </View>
 
-      {/* Summary Cards */}
-      <View style={[styles.summaryRow, { paddingHorizontal: 16 }]}>
-        <View style={[styles.summaryCard, { width: (width - 48) / 3 }]}>
-          <Text style={styles.summaryValue}>{summaryData.total}</Text>
-          <Text style={styles.summaryLabel}>Total</Text>
+      {/* What fires next - the question this screen exists to answer. */}
+      {schedules.length > 0 && (
+        <View style={styles.nextUpCard}>
+          {nextUp ? (
+            <>
+              <Text style={styles.nextUpLabel}>NEXT UP</Text>
+              <Text style={styles.nextUpValue}>
+                {nextUp.outlet} turns {nextUp.action}
+              </Text>
+              <Text style={styles.nextUpTime}>in {formatDuration(nextUp.seconds)}</Text>
+            </>
+          ) : (
+            <>
+              <Text style={styles.nextUpLabel}>NEXT UP</Text>
+              <Text style={styles.nextUpValueMuted}>Nothing scheduled</Text>
+              <Text style={styles.nextUpTime}>
+                All timers are paused or have no upcoming run
+              </Text>
+            </>
+          )}
         </View>
-        <View style={[styles.summaryCard, { width: (width - 48) / 3 }]}>
-          <Text style={styles.summaryValue}>{summaryData.active}</Text>
-          <Text style={styles.summaryLabel}>Active</Text>
-        </View>
-        <View style={[styles.summaryCard, { width: (width - 48) / 3 }]}>
-          <Text style={styles.summaryValue}>{summaryData.outlet1} / {summaryData.outlet2}</Text>
-          <Text style={styles.summaryLabel}>O1 / O2</Text>
-        </View>
-      </View>
+      )}
 
-      {/* Filter Chips */}
+      {/* Filter Chips - counts live here rather than in separate stat cards */}
       <View style={styles.filterRow}>
         {FILTERS.map(filter => (
           <TouchableOpacity
@@ -164,7 +240,7 @@ const ScheduleScreen = () => {
             activeOpacity={0.7}
           >
             <Text style={[styles.filterChipText, activeFilter === filter && styles.filterChipTextActive]}>
-              {filter}
+              {filter} ({filterCounts[filter] ?? 0})
             </Text>
           </TouchableOpacity>
         ))}
@@ -225,29 +301,40 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontSize: 14,
   },
-  summaryRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 16,
-    gap: 8,
-  },
-  summaryCard: {
+  nextUpCard: {
     backgroundColor: COLORS.white,
-    borderRadius: 12,
-    padding: 12,
-    alignItems: 'center',
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: COLORS.border,
+    borderLeftWidth: 4,
+    borderLeftColor: COLORS.primary,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    marginHorizontal: 16,
+    marginBottom: 16,
   },
-  summaryValue: {
-    fontSize: 16,
+  nextUpLabel: {
+    fontSize: 10,
     fontWeight: '700',
-    color: COLORS.primary,
-  },
-  summaryLabel: {
-    fontSize: 11,
     color: COLORS.textLight,
-    marginTop: 4,
+    letterSpacing: 1,
+    marginBottom: 5,
+  },
+  nextUpValue: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: COLORS.text,
+  },
+  nextUpValueMuted: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: COLORS.textLight,
+  },
+  nextUpTime: {
+    fontSize: 13,
+    color: COLORS.primary,
+    fontWeight: '600',
+    marginTop: 3,
   },
   filterRow: {
     flexDirection: 'row',
