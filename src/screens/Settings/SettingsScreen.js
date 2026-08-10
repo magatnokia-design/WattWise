@@ -10,14 +10,13 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { COLORS } from '../../constants/colors';
 import SettingsRow from './components/SettingsRow';
-import ElectricityRateModal from './components/ElectricityRateModal';
+import SupplyRateModal from './components/SupplyRateModal';
 import RatePlanModal from './components/RatePlanModal';
 import ESP32DeviceModal from './components/ESP32DeviceModal';
 import DeviceQRScannerModal from './components/DeviceQRScannerModal';
 import { useSettings } from './hooks/useSettings';
 import { RATE_PROFILES } from '../../utils/billing';
 import {
-  formatRate,
   formatVersion,
   formatCurrency,
   formatDeviceHealthValue,
@@ -50,7 +49,7 @@ const SettingsScreen = ({ navigation }) => {
     savedAppliances,
     loading,
     error,
-    updateElectricityRate,
+    updateSupplyRates,
     updateRateProfile,
     updateNotifications,
     updateDeviceSettings,
@@ -86,6 +85,12 @@ const SettingsScreen = ({ navigation }) => {
     ? (currentRateProfile?.name || 'Custom rate plan')
     : 'Auto (by date)';
 
+  // Shows the generation rate specifically, not the Block 1 sum - it is the
+  // number printed on the bill, so the user can eyeball that it matches.
+  const generationRateLabel = settings.supplyRates?.generation
+    ? `₱${Number(settings.supplyRates.generation).toFixed(4)}/kWh`
+    : 'Not set';
+
   const handleRatePress = useCallback(() => {
     setRateModalVisible(true);
   }, []);
@@ -102,16 +107,16 @@ const SettingsScreen = ({ navigation }) => {
     setRatePlanModalVisible(false);
   }, []);
 
-  const handleRateSave = useCallback(async (rate) => {
-    const result = await updateElectricityRate(rate);
+  const handleRateSave = useCallback(async (rates) => {
+    const result = await updateSupplyRates(rates);
 
     if (!result.success) {
-      Alert.alert('Unable to save rate', result.error || 'Please try again.');
+      Alert.alert('Unable to save rates', result.error || 'Please try again.');
       return result;
     }
 
     return { success: true };
-  }, [updateElectricityRate]);
+  }, [updateSupplyRates]);
 
   const handleRatePlanSave = useCallback(async (profileId) => {
     const result = await updateRateProfile(profileId);
@@ -299,10 +304,20 @@ const SettingsScreen = ({ navigation }) => {
         {/* Energy Settings */}
         <SectionHeader title="Energy Settings" />
         <SectionCard>
+          <View style={styles.tariffBanner}>
+            <Text style={styles.tariffBannerTitle}>
+              Billed on the PELCO III residential tariff
+            </Text>
+            <Text style={styles.tariffBannerBody}>
+              Every peso figure in WattWise — dashboard, analytics and your monthly
+              statement — is computed with PELCO III&apos;s published rate structure.
+              Enter the generation rate from your bill so the estimate matches it.
+            </Text>
+          </View>
           <SettingsRow
             icon="⚡"
-            label="Electricity Rate"
-            value={formatRate(settings.electricityRate)}
+            label="Electricity Rates"
+            value={settings.hasSupplyRates ? generationRateLabel : 'Not set'}
             showArrow
             onPress={handleRatePress}
           />
@@ -450,10 +465,10 @@ const SettingsScreen = ({ navigation }) => {
         </View>
       </ScrollView>
 
-      {/* Electricity Rate Modal */}
-      <ElectricityRateModal
+      {/* PELCO III Block 1 rate editor */}
+      <SupplyRateModal
         visible={rateModalVisible}
-        currentRate={settings.electricityRate}
+        currentRates={settings.supplyRates}
         onClose={handleRateClose}
         onSave={handleRateSave}
       />
@@ -484,6 +499,23 @@ const SettingsScreen = ({ navigation }) => {
 };
 
 const styles = StyleSheet.create({
+  tariffBanner: {
+    backgroundColor: COLORS.background,
+    borderRadius: 10,
+    padding: 14,
+    marginBottom: 4,
+  },
+  tariffBannerTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.primary,
+    marginBottom: 4,
+  },
+  tariffBannerBody: {
+    fontSize: 12,
+    color: COLORS.textLight,
+    lineHeight: 17,
+  },
   safeArea: {
     flex: 1,
     backgroundColor: COLORS.background,

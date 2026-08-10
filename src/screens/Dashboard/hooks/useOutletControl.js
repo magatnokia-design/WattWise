@@ -238,6 +238,8 @@ export const useOutletControl = () => {
   // "Not set" before the first Firestore snapshot arrives.
   const [isLoadingOutlets, setIsLoadingOutlets] = useState(true);
   const [rateProfileId, setRateProfileId] = useState(null);
+  const [supplyRates, setSupplyRates] = useState(null);
+  const [hasSupplyRates, setHasSupplyRates] = useState(true);
 
   const applyOutletData = useCallback((outlet) => {
     if (!outlet || !outlet.outletNumber) return;
@@ -296,6 +298,8 @@ export const useOutletControl = () => {
         .then((prefs) => {
           if (prefs?.success) {
             setRateProfileId(prefs.data?.rateProfileId || null);
+            setSupplyRates(prefs.data?.supplyRates || null);
+            setHasSupplyRates(prefs.data?.hasSupplyRates === true);
           }
         })
         .catch((error) => console.warn('Could not load rate profile:', error?.message));
@@ -403,14 +407,14 @@ export const useOutletControl = () => {
   const totalPowerW =
     toMetricNumber(outlet1Metrics.power) + toMetricNumber(outlet2Metrics.power);
 
-  const bill = calculatePelcoIIIBill(totalEnergyKwh, { profileId: rateProfileId });
+  const bill = calculatePelcoIIIBill(totalEnergyKwh, { supplyRates, profileId: rateProfileId });
   const estimatedCost = toMetricNumber(bill?.totals?.total);
   const effectiveRate = toMetricNumber(bill?.effectiveRate);
   // Effective rate is 0 until some energy accumulates, so fall back to a
   // 1 kWh probe to price the current draw on day one.
   const perKwhRate = effectiveRate > 0
     ? effectiveRate
-    : toMetricNumber(calculatePelcoIIIBill(1, { profileId: rateProfileId })?.totals?.total);
+    : toMetricNumber(calculatePelcoIIIBill(1, { supplyRates, profileId: rateProfileId })?.totals?.total);
   const estimatedCostPerHour = (totalPowerW / 1000) * perKwhRate;
 
   return {
@@ -430,6 +434,7 @@ export const useOutletControl = () => {
     estimatedCost,
     estimatedCostPerHour,
     effectiveRate: perKwhRate,
+    hasSupplyRates,
     isToggling,
     toggleOutlet,
     updateApplianceName,

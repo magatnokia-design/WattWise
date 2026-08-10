@@ -1,4 +1,4 @@
-const { calculatePelcoIIIBill, DEFAULT_SUPPLY_RATES } = require('./billing');
+const { calculatePelcoIIIBill, DEFAULT_SUPPLY_RATES, hasSupplyRates } = require('./billing');
 const { getDaysInManilaMonth } = require('./manilaTime');
 
 /**
@@ -52,10 +52,16 @@ const previousMonth = (billingMonth) => {
 
 /**
  * Which rates to price this period with, and whether that makes it an estimate.
- * Falls back to the most recent finalized invoice's rates, then to the seeded
+ *
+ * Order: the official rates entered when finalizing, then the most recent
+ * finalized invoice, then whatever the user saved in Settings, then the seeded
  * defaults - so a first-ever invoice still prices, just as an estimate.
+ *
+ * The Settings rung matters for a new account: without it a user who carefully
+ * entered their generation rate would still get a statement priced at the
+ * seeded defaults until their first finalization.
  */
-const resolveSupplyRates = ({ billingMonth, officialRates, lastFinalized }) => {
+const resolveSupplyRates = ({ billingMonth, officialRates, lastFinalized, userRates }) => {
   if (officialRates) {
     return { rates: officialRates, rateSourceMonth: billingMonth, isEstimate: false };
   }
@@ -66,6 +72,10 @@ const resolveSupplyRates = ({ billingMonth, officialRates, lastFinalized }) => {
       rateSourceMonth: lastFinalized.billingMonth || null,
       isEstimate: true,
     };
+  }
+
+  if (hasSupplyRates(userRates)) {
+    return { rates: userRates, rateSourceMonth: null, isEstimate: true };
   }
 
   return { rates: DEFAULT_SUPPLY_RATES, rateSourceMonth: null, isEstimate: true };
@@ -93,6 +103,8 @@ const elapsedDays = (period, todayKey) => {
  * @param {object} [officialRates] Block 1 rates; presence means FINALIZED.
  * @param {object} [lastFinalized] Previous finalized invoice, for rate fallback.
  * @param {string} todayKey YYYY-MM-DD in Manila terms.
+ * @param {object} [userRates] Block 1 rates saved in Settings, used when no
+ *   finalized invoice exists yet.
  * @param {boolean} [isLifeline]
  */
 const buildInvoice = ({
@@ -101,6 +113,7 @@ const buildInvoice = ({
   liveToday = null,
   officialRates = null,
   lastFinalized = null,
+  userRates = null,
   todayKey,
   isLifeline = false,
 }) => {
@@ -142,6 +155,7 @@ const buildInvoice = ({
     billingMonth,
     officialRates,
     lastFinalized,
+    userRates,
   });
 
   const status = resolveStatus({ period, officialRates, todayKey });

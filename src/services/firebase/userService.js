@@ -9,6 +9,7 @@ import {
 } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from './config';
+import { normalizeSupplyRates, hasSupplyRates } from '../../utils/billing';
 
 const DEFAULT_USER_PREFERENCES = {
   electricityRate: 0,
@@ -191,6 +192,10 @@ export const userService = {
             ? profile.darkMode
             : (preferences.darkMode ?? DEFAULT_USER_PREFERENCES.darkMode),
           language: profile.language || preferences.language || DEFAULT_USER_PREFERENCES.language,
+          // Raw, not normalized: callers need to distinguish "never set" from
+          // "set to the defaults" to decide whether to warn the user.
+          supplyRates: profile.supplyRates || null,
+          hasSupplyRates: hasSupplyRates(profile.supplyRates),
         },
       };
     } catch (error) {
@@ -248,6 +253,37 @@ export const userService = {
       return { success: true };
     } catch (error) {
       console.error('Error updating user preferences:', error);
+      return { success: false, error: error.message };
+    }
+  },
+
+  // Saves the user's PELCO III Block 1 (generation & transmission) rates.
+  //
+  // These drive every peso figure in the app - dashboard, analytics, and the
+  // monthly invoice all price against them - so they are stored whole rather
+  // than merged field by field, and normalized first so a blank advanced field
+  // falls back to its default instead of billing at zero.
+  updateSupplyRates: async (userId, rates) => {
+    if (!userId) {
+      return { success: false, error: 'Missing user' };
+    }
+
+    try {
+      const normalized = normalizeSupplyRates(rates);
+
+      await setDoc(
+        doc(db, 'users', userId),
+        {
+          uid: userId,
+          supplyRates: normalized,
+          supplyRatesUpdatedAt: new Date(),
+        },
+        { merge: true }
+      );
+
+      return { success: true, data: normalized };
+    } catch (error) {
+      console.error('Error saving supply rates:', error);
       return { success: false, error: error.message };
     }
   },

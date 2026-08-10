@@ -37,7 +37,7 @@ const loadMonthDays = async (db, userId, billingMonth) => {
  * Builds and stores an invoice for one user and month. Shared by the monthly
  * close and by the daily refresh of the open period.
  */
-const upsertInvoice = async ({ db, userId, billingMonth, todayKey, isLifeline }) => {
+const upsertInvoice = async ({ db, userId, billingMonth, todayKey, isLifeline, userRates = null }) => {
   const [dailyEntries, lastFinalized] = await Promise.all([
     loadMonthDays(db, userId, billingMonth),
     loadLastFinalized(db, userId),
@@ -47,6 +47,7 @@ const upsertInvoice = async ({ db, userId, billingMonth, todayKey, isLifeline })
     billingMonth,
     dailyEntries,
     lastFinalized,
+    userRates,
     todayKey,
     isLifeline,
   });
@@ -102,6 +103,7 @@ async function processMonthlyInvoice() {
         billingMonth,
         todayKey,
         isLifeline: userDoc.data()?.isLifeline === true,
+        userRates: userDoc.data()?.supplyRates || null,
       });
 
       if (!invoice) return;

@@ -65,6 +65,12 @@ const slides = [
     title: 'Budget Tracking',
     description: 'Set your monthly electricity budget and track your spending. Get alerts when you are approaching your limit.',
   },
+  {
+    id: '9',
+    emoji: '🧾',
+    title: 'Set Your PELCO III Rate',
+    description: 'Every peso figure in WattWise is computed on the PELCO III residential tariff.\n\nOne last step: open Settings → Electricity Rates and enter the generation rate printed on your bill (or from pelco3.org/rates.php).\n\nUntil you do, costs are estimates based on default rates.',
+  },
 ];
 
 export const OnboardingScreen = ({ onFinish }) => {

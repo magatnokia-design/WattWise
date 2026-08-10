@@ -66,7 +66,7 @@ const resolveApplianceName = (outlet = {}, outletNumber) => {
  * Returns null when nothing has been measured yet, so callers can simply skip it
  * rather than charting a zero row.
  */
-export const buildLiveTodayEntry = (outlets, { rateProfileId = null } = {}) => {
+export const buildLiveTodayEntry = (outlets, { rateProfileId = null, supplyRates = null } = {}) => {
   const dateKey = getManilaDateKey();
   const outlet1 = resolveOutlet(outlets, 1);
   const outlet2 = resolveOutlet(outlets, 2);
@@ -79,6 +79,7 @@ export const buildLiveTodayEntry = (outlets, { rateProfileId = null } = {}) => {
 
   const bill = calculatePelcoIIIBill(totalEnergy, {
     date: new Date(),
+    supplyRates,
     profileId: rateProfileId,
     daysInPeriod: 1,
     billingDays: getDaysInManilaMonth(dateKey),
@@ -153,7 +154,7 @@ export const withLiveToday = (entries, liveEntry) => {
  * Per-appliance live state for the "right now" view: what is drawing power at
  * this moment, and what it has used today.
  */
-export const buildLiveAppliances = (outlets, { rateProfileId = null } = {}) => {
+export const buildLiveAppliances = (outlets, { rateProfileId = null, supplyRates = null } = {}) => {
   const dateKey = getManilaDateKey();
 
   return [1, 2].map((outletNumber) => {
@@ -164,7 +165,8 @@ export const buildLiveAppliances = (outlets, { rateProfileId = null } = {}) => {
 
     const bill = calculatePelcoIIIBill(Math.max(energyKwh, 0.0001), {
       date: new Date(),
-      profileId: rateProfileId,
+      supplyRates,
+    profileId: rateProfileId,
       daysInPeriod: 1,
       billingDays: getDaysInManilaMonth(dateKey),
     });

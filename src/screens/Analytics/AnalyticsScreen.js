@@ -22,6 +22,7 @@ import { buildLiveAppliances, buildLiveTodayEntry, withLiveToday } from '../../u
 import { formatCurrency } from '../BudgetTracking/utils/budgetHelpers';
 import LiveUsagePanel from './components/LiveUsagePanel';
 import InsightsCard from './components/InsightsCard';
+import { RateNotice } from '../../components/common/RateNotice';
 
 const { width } = Dimensions.get('window');
 
@@ -382,13 +383,15 @@ const OutletComparisonCard = ({ outlet1Energy, outlet2Energy, effectiveRate, app
   );
 };
 
-export const AnalyticsScreen = () => {
+export const AnalyticsScreen = ({ navigation }) => {
   const { user, loading: authLoading } = useAuth();
   const [selectedTab, setSelectedTab] = useState('Daily');
   const [rangeEntries, setRangeEntries] = useState([]);
   // Last rolled-up day, shown only when today has measured nothing yet.
   const [fallbackDaily, setFallbackDaily] = useState(null);
   const [rateProfileId, setRateProfileId] = useState(null);
+  const [supplyRates, setSupplyRates] = useState(null);
+  const [hasSupplyRates, setHasSupplyRates] = useState(true);
   const [budget, setBudget] = useState({ monthlyBudget: 0, currentSpending: 0 });
   const [loading, setLoading] = useState(false);
   const [outlets, setOutlets] = useState([]);
@@ -399,13 +402,13 @@ export const AnalyticsScreen = () => {
   // Today, assembled from live outlet telemetry rather than waiting for the
   // midnight rollup to write a history_daily document.
   const liveTodayEntry = useMemo(
-    () => buildLiveTodayEntry(outlets, { rateProfileId }),
-    [outlets, rateProfileId]
+    () => buildLiveTodayEntry(outlets, { rateProfileId, supplyRates }),
+    [outlets, rateProfileId, supplyRates]
   );
 
   const liveAppliances = useMemo(
-    () => buildLiveAppliances(outlets, { rateProfileId }),
-    [outlets, rateProfileId]
+    () => buildLiveAppliances(outlets, { rateProfileId, supplyRates }),
+    [outlets, rateProfileId, supplyRates]
   );
 
   const liveTotalPowerW = liveAppliances.reduce((sum, item) => sum + toNumber(item.powerW), 0);
@@ -445,6 +448,8 @@ export const AnalyticsScreen = () => {
 
       if (result.success) {
         setRateProfileId(result.data.rateProfileId || null);
+        setSupplyRates(result.data.supplyRates || null);
+        setHasSupplyRates(result.data.hasSupplyRates === true);
       }
     };
 
@@ -534,6 +539,7 @@ export const AnalyticsScreen = () => {
         : new Date();
       const bill = calculatePelcoIIIBill(totalEnergy, {
         date: entryDate,
+        supplyRates,
         profileId: rateProfileId || null,
         daysInPeriod: dailyEntry ? 1 : 0,
         billingDays: getDaysInMonth(entryDate),
@@ -591,6 +597,7 @@ export const AnalyticsScreen = () => {
 
     const bill = calculatePelcoIIIBill(totalEnergy, {
       date: endDate,
+      supplyRates,
       profileId: rateProfileId || null,
       daysInPeriod: entries.length > 0 ? days.length : 0,
       billingDays: getDaysInMonth(endDate),
@@ -633,7 +640,7 @@ export const AnalyticsScreen = () => {
       chartData: weeklyBuckets,
       billDetails: bill,
     };
-  }, [selectedTab, rangeEntries, fallbackDaily, liveTodayEntry, rateProfileId]);
+  }, [selectedTab, rangeEntries, fallbackDaily, liveTodayEntry, rateProfileId, supplyRates]);
 
   const { summary, chartLabels, chartData, billDetails } = analytics;
 
@@ -676,7 +683,14 @@ export const AnalyticsScreen = () => {
         <View style={styles.header}>
           <Text style={styles.title}>Analytics</Text>
           <Text style={styles.subtitle}>Track your energy consumption</Text>
+          <Text style={styles.tariffNote}>
+            Costs computed on the PELCO III residential tariff
+          </Text>
         </View>
+
+        {!hasSupplyRates && (
+          <RateNotice onPress={() => navigation?.navigate?.('Settings')} />
+        )}
 
         {/* What is happening right now, straight from live telemetry. */}
         <LiveUsagePanel
@@ -878,6 +892,12 @@ const styles = StyleSheet.create({
     ...FONTS.h2,
     color: COLORS.textDark,
     fontWeight: 'bold',
+  },
+  tariffNote: {
+    fontSize: 11,
+    color: COLORS.primary,
+    fontWeight: '600',
+    marginTop: 4,
   },
   subtitle: {
     ...FONTS.small,

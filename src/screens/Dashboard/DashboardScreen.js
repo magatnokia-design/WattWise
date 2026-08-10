@@ -15,6 +15,7 @@ import { COLORS } from '../../constants/colors';
 import { SIZES, FONTS } from '../../constants/theme';
 import NotificationPanel from '../Notifications/components/NotificationPanel';
 import { useNotifications } from '../Notifications/hooks/useNotifications';
+import { RateNotice } from '../../components/common/RateNotice';
 import OutletControlModal from './components/OutletControlModal';
 import ApplianceSuggestion from './components/ApplianceSuggestion';
 import { useOutletControl } from './hooks/useOutletControl';
@@ -82,6 +83,7 @@ export const DashboardScreen = ({ navigation }) => {
     estimatedCost,
     estimatedCostPerHour,
     effectiveRate,
+    hasSupplyRates,
     isToggling,
     toggleOutlet,
     updateApplianceName,
@@ -228,6 +230,10 @@ export const DashboardScreen = ({ navigation }) => {
         </View>
 
         {/* Compact live snapshot - deliberately small so Smart Outlets leads */}
+        {!hasSupplyRates && (
+          <RateNotice onPress={() => navigation.navigate('Settings')} />
+        )}
+
         <View style={styles.snapshotStrip}>
           <View style={styles.snapshotItem}>
             <Text style={styles.snapshotValue}>{formatEnergyKwh(totalEnergyKwh)}</Text>

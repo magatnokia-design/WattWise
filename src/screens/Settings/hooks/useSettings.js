@@ -93,6 +93,8 @@ export const useSettings = () => {
         electricityRate: preferencesResult.data.electricityRate || 0,
         currency: preferencesResult.data.currency || '₱',
         rateProfileId: preferencesResult.data.rateProfileId || null,
+        supplyRates: preferencesResult.data.supplyRates || null,
+        hasSupplyRates: preferencesResult.data.hasSupplyRates === true,
         notifications: preferencesResult.data.notificationsEnabled ?? true,
         monthlyBudget: Number(budgetData.monthlyBudget || profileData.monthlyBudget || 0),
         profileName: profileData.name || authUser?.displayName || 'User',
@@ -151,27 +153,30 @@ export const useSettings = () => {
     };
   }, [fetchSettings]);
 
-  // Update electricity rate
-  const updateElectricityRate = useCallback(async (rate) => {
+  // Saves the PELCO III Block 1 rates that every peso figure in the app is
+  // priced against.
+  const updateSupplyRates = useCallback(async (rates) => {
     setError(null);
-    
+
     try {
       const userId = auth.currentUser?.uid;
       if (!userId) throw new Error('User not authenticated');
 
-      const result = await userService.updateUserPreferences(userId, {
-        electricityRate: parseFloat(rate)
-      });
-
+      const result = await userService.updateSupplyRates(userId, rates);
       if (!result.success) {
-        throw new Error(result.error);
+        throw new Error(result.error || 'Unable to save rates');
       }
 
-      setSettings(prev => ({ ...prev, electricityRate: parseFloat(rate) }));
+      setSettings((prev) => ({
+        ...prev,
+        supplyRates: result.data,
+        hasSupplyRates: true,
+      }));
+
       return { success: true };
     } catch (err) {
       setError(err.message);
-      console.error('Error updating electricity rate:', err);
+      console.error('Error updating supply rates:', err);
       return { success: false, error: err.message };
     }
   }, []);
@@ -398,7 +403,7 @@ export const useSettings = () => {
     loading,
     error,
     fetchSettings,
-    updateElectricityRate,
+    updateSupplyRates,
     updateRateProfile,
     updateNotifications,
     updateDeviceSettings,

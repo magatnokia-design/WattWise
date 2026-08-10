@@ -184,3 +184,51 @@ test('the finalization delta explains the shift from the estimate', () => {
   assert.equal(delta.direction, 'higher');
   assert.equal(delta.estimateTotal, 1183.97);
 });
+
+// The Settings rung of resolveSupplyRates. Without it a user who entered their
+// generation rate would still be billed at the seeded defaults until their
+// first finalization, which is months away on a new account.
+const SETTINGS_RATES = {
+  generation: 6.2295,
+  generationRateAdj: -0.0306,
+  transmission: 1.2729,
+  systemLoss: 0.5499,
+};
+
+test('rates saved in Settings price the invoice when nothing is finalized yet', () => {
+  const invoice = buildInvoice({
+    billingMonth: '2026-08',
+    dailyEntries: [day('2026-08-15', 94)],
+    todayKey: '2026-09-01',
+    userRates: SETTINGS_RATES,
+  });
+
+  assert.equal(invoice.supplyRates.generation, SETTINGS_RATES.generation);
+  // Still an estimate: these are the user's rates, not PELCO III's official
+  // posting for this billing month.
+  assert.equal(invoice.isEstimate, true);
+});
+
+test('a finalized invoice still outranks the Settings rates', () => {
+  const invoice = buildInvoice({
+    billingMonth: '2026-08',
+    dailyEntries: [day('2026-08-15', 94)],
+    todayKey: '2026-09-01',
+    lastFinalized: { billingMonth: '2026-07', supplyRates: { generation: 5.5034 } },
+    userRates: SETTINGS_RATES,
+  });
+
+  assert.equal(invoice.supplyRates.generation, 5.5034);
+  assert.equal(invoice.rateSourceMonth, '2026-07');
+});
+
+test('a Settings object with no generation rate falls through to the defaults', () => {
+  const invoice = buildInvoice({
+    billingMonth: '2026-08',
+    dailyEntries: [day('2026-08-15', 94)],
+    todayKey: '2026-09-01',
+    userRates: { generation: 0, transmission: 1.2 },
+  });
+
+  assert.notEqual(invoice.supplyRates.generation, 0);
+});

@@ -199,6 +199,7 @@ async function processDailyRollup() {
             billingMonth: monthString,
             todayKey: getManilaDateKey(new Date()),
             isLifeline: userData?.isLifeline === true,
+            userRates: userData?.supplyRates || null,
           });
         } catch (invoiceError) {
           logger.warn('Daily rollup completed but invoice refresh failed', {

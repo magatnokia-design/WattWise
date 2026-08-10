@@ -98,6 +98,50 @@ const SUPPLY_LINES = [
   ['gram', 'GRAM'],
 ];
 
+// Block 1 in bill order, exported so the Settings editor renders one input per
+// line without restating the list. `generation` is flagged primary: it is the
+// only figure PELCO III publishes monthly on rates.php, and it swings ~18%
+// while the rest sit at zero or barely move.
+export const SUPPLY_RATE_FIELDS = SUPPLY_LINES.map(([key, label]) => ({
+  key,
+  label,
+  defaultValue: toNumber(DEFAULT_SUPPLY_RATES[key]),
+  primary: key === 'generation',
+}));
+
+/**
+ * Fills missing lines from the defaults, so a partially saved object still
+ * bills correctly rather than silently treating absent lines as zero.
+ */
+export const normalizeSupplyRates = (raw) => {
+  const source = raw && typeof raw === 'object' ? raw : {};
+
+  return SUPPLY_RATE_FIELDS.reduce((rates, field) => {
+    const value = source[field.key];
+    rates[field.key] = value === undefined || value === null || value === ''
+      ? field.defaultValue
+      : toNumber(value);
+    return rates;
+  }, {});
+};
+
+/** Block 1 total per kWh - the running sum the Settings editor previews live. */
+export const sumSupplyRates = (raw) => {
+  const rates = normalizeSupplyRates(raw);
+  return roundTo(
+    SUPPLY_RATE_FIELDS.reduce((total, field) => total + rates[field.key], 0),
+    4
+  );
+};
+
+/**
+ * True when the user has actually entered their own Block 1 rates. Drives the
+ * "using default rates" banner - a generation rate of 0 is not a real bill, so
+ * anything falsy here means the app is estimating from stale seeded defaults.
+ */
+export const hasSupplyRates = (raw) =>
+  Boolean(raw && typeof raw === 'object' && toNumber(raw.generation) > 0);
+
 const UNIVERSAL_LINES = [
   ['ucME', 'UC-ME'],
   ['fitAll', 'FIT-ALL'],
