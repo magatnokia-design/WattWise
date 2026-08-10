@@ -8,6 +8,7 @@ import { AuthNavigator } from './AuthNavigator';
 import { MainNavigator } from './MainNavigator';
 import { OnboardingScreen } from '../screens/Onboarding/OnboardingScreen';
 import { useAuth } from '../hooks/useAuth';
+import { usePushNotifications } from '../hooks/usePushNotifications';
 import { Loading } from '../components/common/Loading';
 
 const Stack = createStackNavigator();
@@ -16,6 +17,10 @@ export const AppNavigator = () => {
   const { user, loading } = useAuth();
   const [onboardingComplete, setOnboardingComplete] = useState(null);
   const [checkingOnboarding, setCheckingOnboarding] = useState(false);
+
+  // Registers this device for push once signed in. Best-effort by design: a
+  // denied permission leaves the user on email + in-app alerts.
+  usePushNotifications(user?.uid);
 
   const checkOnboarding = useCallback(async () => {
     setCheckingOnboarding(true);

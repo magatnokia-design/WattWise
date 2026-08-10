@@ -24,6 +24,13 @@
         {
           "cameraPermission": "WattWise uses the camera to scan the QR code on your ESP32 device so it can be linked to your account."
         }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#10B981",
+          "defaultChannel": "default"
+        }
       ]
     ],
     "android": {

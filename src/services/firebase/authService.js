@@ -8,6 +8,11 @@ import {
 } from "firebase/auth";
 import { httpsCallable } from 'firebase/functions';
 import { auth, functions } from "./config";
+import { userService } from './userService';
+import {
+  getActivePushToken,
+  clearActivePushToken,
+} from '../notifications/activePushToken';
 
 const normalizeEmail = (email = '') => String(email).trim().toLowerCase();
 
@@ -55,6 +60,18 @@ export const authService = {
   // Logout user
   logout: async () => {
     try {
+      // Unregister this device *before* signing out: Firestore rules only allow
+      // the owner to touch their user document, so the write has to happen
+      // while the account is still authenticated. Otherwise the old account's
+      // alerts would keep pushing to a phone someone else may now be using.
+      const pushToken = getActivePushToken();
+      const userId = auth.currentUser?.uid;
+
+      if (pushToken && userId) {
+        await userService.removePushToken(userId, pushToken);
+      }
+      clearActivePushToken();
+
       await signOut(auth);
       return { success: true };
     } catch (error) {

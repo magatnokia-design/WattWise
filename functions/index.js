@@ -2,7 +2,7 @@ const admin = require('firebase-admin');
 const { onRequest } = require('firebase-functions/v2/https');
 const { onCall } = require('firebase-functions/v2/https');
 const { onSchedule } = require('firebase-functions/v2/scheduler');
-const { onDocumentWritten } = require('firebase-functions/v2/firestore');
+const { onDocumentWritten, onDocumentCreated } = require('firebase-functions/v2/firestore');
 const { setGlobalOptions } = require('firebase-functions/v2');
 
 // Initialize Firebase Admin SDK
@@ -36,6 +36,7 @@ const { handleBudgetAlerts } = require('./src/triggers/handleBudgetAlerts');
 const { handleSafetyAlerts } = require('./src/triggers/handleSafetyAlerts');
 const { handleDeviceCommandEmails } = require('./src/triggers/handleDeviceCommandEmails');
 const { handleDailyReceiptEmails } = require('./src/triggers/handleDailyReceiptEmails');
+const { handlePushNotifications } = require('./src/triggers/handlePushNotifications');
 
 // ===========================
 // HTTP ENDPOINTS
@@ -281,4 +282,17 @@ exports.handleDailyReceiptEmails = onDocumentWritten(
     maxInstances: 5,
   },
   handleDailyReceiptEmails
+);
+
+/**
+ * Triggers when a notification document is created
+ * Sends the notification to the user's devices as a push notification.
+ * Created-only (not written) so marking a notification read never re-sends it.
+ */
+exports.handlePushNotifications = onDocumentCreated(
+  {
+    document: 'users/{userId}/notifications/{notificationId}',
+    maxInstances: 5,
+  },
+  handlePushNotifications
 );

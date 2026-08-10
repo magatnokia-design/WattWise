@@ -1,4 +1,12 @@
-import { doc, getDoc, setDoc, updateDoc, deleteDoc } from 'firebase/firestore';
+import {
+  doc,
+  getDoc,
+  setDoc,
+  updateDoc,
+  deleteDoc,
+  arrayUnion,
+  arrayRemove,
+} from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from './config';
 
@@ -240,6 +248,49 @@ export const userService = {
       return { success: true };
     } catch (error) {
       console.error('Error updating user preferences:', error);
+      return { success: false, error: error.message };
+    }
+  },
+
+  // Registers this device for push. Stored as an array so one account can be
+  // signed in on several phones - `handlePushNotifications` fans out to all of
+  // them and prunes any that Expo reports as uninstalled.
+  savePushToken: async (userId, pushToken) => {
+    if (!userId || !pushToken) {
+      return { success: false, error: 'Missing user or push token' };
+    }
+
+    try {
+      await setDoc(
+        doc(db, 'users', userId),
+        {
+          uid: userId,
+          pushTokens: arrayUnion(pushToken),
+          pushTokenUpdatedAt: new Date(),
+        },
+        { merge: true }
+      );
+      return { success: true };
+    } catch (error) {
+      console.error('Error saving push token:', error);
+      return { success: false, error: error.message };
+    }
+  },
+
+  // Called on sign-out so alerts stop following the account to a device that
+  // is no longer logged in.
+  removePushToken: async (userId, pushToken) => {
+    if (!userId || !pushToken) {
+      return { success: false, error: 'Missing user or push token' };
+    }
+
+    try {
+      await updateDoc(doc(db, 'users', userId), {
+        pushTokens: arrayRemove(pushToken),
+      });
+      return { success: true };
+    } catch (error) {
+      console.error('Error removing push token:', error);
       return { success: false, error: error.message };
     }
   },
