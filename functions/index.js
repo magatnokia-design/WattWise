@@ -89,6 +89,11 @@ exports.getDeviceCommand = onRequest(
 exports.processOutletToggle = onCall(
   {
     maxInstances: 10,
+    // One warm instance. This is the only function a user waits on with their
+    // finger on the screen, and a cold start costs seconds - far more than the
+    // whole rest of the toggle path combined. Every other function here runs
+    // in the background where a cold start is invisible.
+    minInstances: 1,
   },
   processOutletToggle
 );

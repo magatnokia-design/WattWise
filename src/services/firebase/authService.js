@@ -57,6 +57,39 @@ export const authService = {
     }
   },
 
+  // Renames the account.
+  //
+  // Written to both Firebase Auth and the user document: Auth's displayName is
+  // what resolveUserContact reads when addressing emails, and the user document
+  // is what the app reads. Letting them drift means email says one name and the
+  // app another.
+  updateDisplayName: async (displayName) => {
+    const name = String(displayName || '').trim();
+
+    if (name.length < 2) {
+      return { success: false, error: 'Please enter at least 2 characters.' };
+    }
+
+    if (name.length > 60) {
+      return { success: false, error: 'That name is too long.' };
+    }
+
+    try {
+      const user = auth.currentUser;
+      if (!user) {
+        return { success: false, error: 'Not signed in.' };
+      }
+
+      await updateProfile(user, { displayName: name });
+      await userService.updateUserProfile(user.uid, { name });
+
+      return { success: true, name };
+    } catch (error) {
+      console.error('Update display name error:', error);
+      return { success: false, error: error.message };
+    }
+  },
+
   // Logout user
   logout: async () => {
     try {

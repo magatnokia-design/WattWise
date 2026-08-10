@@ -334,26 +334,36 @@ export const useOutletControl = () => {
 
   // Toggle outlet ON/OFF
   const toggleOutlet = useCallback(async (outletNumber, newStatus) => {
+    const setStatus = outletNumber === 2 ? setOutlet2Status : setOutlet1Status;
+    const previousStatus = outletNumber === 2 ? outlet2Status : outlet1Status;
+
+    // Move the switch now rather than after the round trip. The callable has to
+    // reach asia-southeast1, and a cold start alone can take seconds - waiting
+    // on that made a working toggle feel broken. The Firestore listener
+    // overwrites this with the real value moments later either way, and a
+    // failure below puts it straight back.
+    setStatus(newStatus);
     setIsToggling(true);
-    
+
     try {
       const userId = auth.currentUser?.uid;
       if (!userId) throw new Error('User not authenticated');
 
       const result = await outletService.toggleOutlet(userId, outletNumber, newStatus);
-      
+
       if (!result.success) {
         throw new Error(result.error);
       }
-      
+
       return { success: true };
     } catch (error) {
+      setStatus(previousStatus);
       console.error('Error toggling outlet:', error);
       return { success: false, error: error.message };
     } finally {
       setIsToggling(false);
     }
-  }, []);
+  }, [outlet1Status, outlet2Status]);
 
   // Update appliance name
   const updateApplianceName = useCallback(async (outletNumber, newName, options = {}) => {

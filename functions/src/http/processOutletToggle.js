@@ -83,24 +83,26 @@ async function processOutletToggle(request) {
       lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
     }, { merge: true });
 
-    // Keep status update resilient even if activity log creation fails.
-    try {
-      const logsRef = db.collection(`users/${userId}/history_logs`);
-      await logsRef.add({
+    // Not awaited before dispatch: the device is waiting on the command, and
+    // the log only feeds the History screen. Awaiting a second Firestore round
+    // trip first added latency to every toggle for no user-visible benefit.
+    // Still resilient - a failed log must never fail the toggle.
+    const historyWrite = db.collection(`users/${userId}/history_logs`)
+      .add({
         timestamp: admin.firestore.FieldValue.serverTimestamp(),
         outlet: outletNumber,
         outletName: outletData.applianceName || `Outlet ${outletNumber}`,
         action: status ? 'on' : 'off',
         source: 'manual',
         power: outletData.power || 0,
+      })
+      .catch((historyError) => {
+        logger.warn('Outlet toggled but history log failed', {
+          userId,
+          outletId,
+          message: historyError?.message,
+        });
       });
-    } catch (historyError) {
-      logger.warn('Outlet toggled but history log failed', {
-        userId,
-        outletId,
-        message: historyError?.message,
-      });
-    }
 
     const commandResult = await dispatchDeviceCommand({
       userId,
@@ -112,6 +114,11 @@ async function processOutletToggle(request) {
         outletNumber,
       },
     });
+
+    // Settled before returning so the write is not cut off when the function
+    // instance is frozen - it just ran alongside the dispatch rather than
+    // before it.
+    await historyWrite;
 
     logger.info('Outlet toggled', {
       userId,

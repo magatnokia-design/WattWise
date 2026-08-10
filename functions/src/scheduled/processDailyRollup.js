@@ -118,6 +118,10 @@ async function processDailyRollup() {
         const daysInPeriod = 1;
         const bill = calculatePelcoIIIBill(totalEnergy, {
           date: rateLookupDate,
+          // Without this the day was priced at the seeded defaults while the
+          // dashboard priced the same energy at the user's own rates, so budget
+          // spending and the live cost estimate disagreed.
+          supplyRates: userData.supplyRates || null,
           profileId: userData.rateProfileId || null,
           daysInPeriod,
           billingDays,

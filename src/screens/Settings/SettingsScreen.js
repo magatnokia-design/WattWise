@@ -8,11 +8,13 @@ import {
   Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import { COLORS } from '../../constants/colors';
 import SettingsRow from './components/SettingsRow';
 import SupplyRateModal from './components/SupplyRateModal';
 import ESP32DeviceModal from './components/ESP32DeviceModal';
 import DeviceQRScannerModal from './components/DeviceQRScannerModal';
+import ProfileNameModal from './components/ProfileNameModal';
 import { useSettings } from './hooks/useSettings';
 import {
   formatVersion,
@@ -41,17 +43,28 @@ const SettingsScreen = ({ navigation }) => {
   const [rateModalVisible, setRateModalVisible] = useState(false);
   const [deviceModalVisible, setDeviceModalVisible] = useState(false);
   const [scannerVisible, setScannerVisible] = useState(false);
+  const [nameModalVisible, setNameModalVisible] = useState(false);
   const {
     settings,
     savedAppliances,
     loading,
     error,
+    fetchSettings,
     updateSupplyRates,
     updateNotifications,
     updateDeviceSettings,
     clearDeviceSettings,
     removeSavedAppliance,
   } = useSettings();
+
+  // Budget and rates are edited on other screens, so this screen reloads on
+  // focus rather than only once at mount - returning from Budget Tracking used
+  // to show the value from before the change.
+  useFocusEffect(
+    useCallback(() => {
+      fetchSettings();
+    }, [fetchSettings])
+  );
 
   const handleRemoveSavedAppliance = useCallback((label) => {
     Alert.alert(
@@ -126,6 +139,19 @@ const SettingsScreen = ({ navigation }) => {
     ]
   );
 }, []);
+
+  const handleEditName = useCallback(() => {
+    setNameModalVisible(true);
+  }, []);
+
+  const handleNameSave = useCallback(async (name) => {
+    const result = await authService.updateDisplayName(name);
+    if (!result.success) return result;
+
+    // Pull the profile back so the row reflects the new name immediately.
+    await fetchSettings();
+    return { success: true };
+  }, [fetchSettings]);
 
   const handleChangePassword = useCallback(async () => {
     const email = settings.email;
@@ -271,8 +297,10 @@ const SettingsScreen = ({ navigation }) => {
         <SectionCard>
           <SettingsRow
             icon="👤"
-            label="Profile"
+            label="Profile Name"
             value={settings.profileName || 'User'}
+            showArrow
+            onPress={handleEditName}
           />
           <Separator />
           <SettingsRow
@@ -444,6 +472,13 @@ const SettingsScreen = ({ navigation }) => {
           <Text style={styles.footerSub}>Smart Energy Monitoring</Text>
         </View>
       </ScrollView>
+
+      <ProfileNameModal
+        visible={nameModalVisible}
+        currentName={settings.profileName}
+        onClose={() => setNameModalVisible(false)}
+        onSave={handleNameSave}
+      />
 
       {/* PELCO III Block 1 rate editor */}
       <SupplyRateModal
