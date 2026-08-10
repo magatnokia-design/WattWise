@@ -89,11 +89,12 @@ exports.getDeviceCommand = onRequest(
 exports.processOutletToggle = onCall(
   {
     maxInstances: 10,
-    // One warm instance. This is the only function a user waits on with their
-    // finger on the screen, and a cold start costs seconds - far more than the
-    // whole rest of the toggle path combined. Every other function here runs
-    // in the background where a cold start is invisible.
-    minInstances: 1,
+    // Deliberately no minInstances. A warm instance would remove the cold-start
+    // delay on the first toggle after an idle spell, but it bills CPU and
+    // memory for every second of the month whether used or not - more than this
+    // project's whole budget. The optimistic update on the client already hides
+    // that latency: the switch moves immediately and reconciles when the write
+    // lands. Revisit only if the project ever has room for always-on cost.
   },
   processOutletToggle
 );
