@@ -10,23 +10,35 @@ import { COLORS } from '../../constants/colors';
  * readings are the app's critical function, and they must never sit behind a
  * form. The cost figures are the only thing affected.
  */
-export const RateNotice = ({ onPress, style }) => (
-  <TouchableOpacity
-    style={[styles.container, style]}
-    onPress={onPress}
-    activeOpacity={onPress ? 0.7 : 1}
-    disabled={!onPress}
-  >
-    <Text style={styles.icon}>⚠️</Text>
-    <View style={styles.textWrap}>
-      <Text style={styles.title}>Using default PELCO III rates</Text>
-      <Text style={styles.body}>
-        Costs shown are estimates. Enter the generation rate from your bill in
-        Settings so they match what PELCO III actually charges you.
-      </Text>
-    </View>
-    {onPress ? <Text style={styles.chevron}>›</Text> : null}
-  </TouchableOpacity>
+export const RateNotice = ({ onPress, onDismiss, style }) => (
+  <View style={[styles.container, style]}>
+    <TouchableOpacity
+      style={styles.main}
+      onPress={onPress}
+      activeOpacity={onPress ? 0.7 : 1}
+      disabled={!onPress}
+    >
+      <Text style={styles.icon}>⚠️</Text>
+      <View style={styles.textWrap}>
+        <Text style={styles.title}>Using default PELCO III rates</Text>
+        <Text style={styles.body}>
+          Costs shown are estimates. Enter the generation rate from your bill in
+          Settings so they match what PELCO III actually charges you.
+        </Text>
+      </View>
+    </TouchableOpacity>
+
+    {onDismiss ? (
+      <TouchableOpacity
+        style={styles.dismiss}
+        onPress={onDismiss}
+        activeOpacity={0.7}
+        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+      >
+        <Text style={styles.dismissText}>✕</Text>
+      </TouchableOpacity>
+    ) : null}
+  </View>
 );
 
 const styles = StyleSheet.create({
@@ -39,6 +51,20 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 14,
     marginBottom: 16,
+  },
+  main: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  dismiss: {
+    paddingLeft: 10,
+    paddingTop: 1,
+  },
+  dismissText: {
+    fontSize: 15,
+    color: '#B45309',
+    fontWeight: '700',
   },
   icon: {
     fontSize: 16,

@@ -148,8 +148,9 @@ const SupplyRateModal = ({ visible, currentRates, onClose, onSave }) => {
 
             <ScrollView
               style={styles.body}
+              contentContainerStyle={styles.bodyContent}
               keyboardShouldPersistTaps="handled"
-              showsVerticalScrollIndicator={false}
+              showsVerticalScrollIndicator
             >
               <Text style={styles.sectionLabel}>
                 Generation Rate <Text style={styles.required}>*required</Text>
@@ -260,7 +261,9 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: COLORS.white,
     borderRadius: 16,
-    maxHeight: '85%',
+    // Leaves room for the status bar and the Android navigation bar, so the
+    // scrolling body is never clipped against a system chrome edge.
+    maxHeight: '78%',
     overflow: 'hidden',
   },
   header: {
@@ -295,6 +298,11 @@ const styles = StyleSheet.create({
   body: {
     paddingHorizontal: 20,
     paddingTop: 16,
+  },
+  // Without trailing space the last line of the footnote sits flush against the
+  // action bar and reads as cut off.
+  bodyContent: {
+    paddingBottom: 20,
   },
   sectionLabel: {
     fontSize: 13,
@@ -378,15 +386,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 10,
+    marginBottom: 14,
   },
   fieldLabel: {
     flex: 1,
     fontSize: 13,
     color: COLORS.text,
+    // Long labels like "Trans. Demand Adj" wrap rather than colliding with the
+    // input, which is what made the advanced list look cramped.
+    paddingRight: 12,
+    lineHeight: 18,
   },
   fieldInput: {
-    width: 110,
+    width: 104,
     borderWidth: 1,
     borderColor: COLORS.border,
     borderRadius: 8,

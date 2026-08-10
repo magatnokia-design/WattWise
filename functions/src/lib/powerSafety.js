@@ -11,6 +11,13 @@
 
 const HARD_MAX_POWER_W = 500;
 
+// Philippine residential supply is 230 V nominal. The band is deliberately wide:
+// measured mains here sit around 244 V, and a narrow band would flag a healthy
+// supply as a fault every time it drifted. Over-voltage escalates to 'limit',
+// never 'cutoff' - a supply problem is not fixed by switching the load off.
+const DEFAULT_VOLTAGE_MIN = 190;
+const DEFAULT_VOLTAGE_MAX = 260;
+
 // Fractions of the configured limit at which each stage begins.
 const WARNING_RATIO = 0.8;
 const LIMIT_RATIO = 0.95;
@@ -46,11 +53,11 @@ const normalizeThresholds = (raw = {}) => {
 
   return {
     voltageMin: nested
-      ? toFiniteNumber(raw?.voltage?.min, 200)
-      : toFiniteNumber(raw?.voltageMin, 200),
+      ? toFiniteNumber(raw?.voltage?.min, DEFAULT_VOLTAGE_MIN)
+      : toFiniteNumber(raw?.voltageMin, DEFAULT_VOLTAGE_MIN),
     voltageMax: nested
-      ? toFiniteNumber(raw?.voltage?.max, 250)
-      : toFiniteNumber(raw?.voltageMax, 250),
+      ? toFiniteNumber(raw?.voltage?.max, DEFAULT_VOLTAGE_MAX)
+      : toFiniteNumber(raw?.voltageMax, DEFAULT_VOLTAGE_MAX),
     currentMax: nested
       ? toFiniteNumber(raw?.current?.max, 10)
       : toFiniteNumber(raw?.currentMax, 10),
@@ -141,6 +148,8 @@ const evaluateSafety = ({ settings, outlets = [], totalPowerW = 0, nowMs = Date.
 
 module.exports = {
   HARD_MAX_POWER_W,
+  DEFAULT_VOLTAGE_MIN,
+  DEFAULT_VOLTAGE_MAX,
   WARNING_RATIO,
   LIMIT_RATIO,
   READING_WRITE_INTERVAL_MS,

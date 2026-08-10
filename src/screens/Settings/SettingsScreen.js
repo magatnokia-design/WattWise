@@ -11,11 +11,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { COLORS } from '../../constants/colors';
 import SettingsRow from './components/SettingsRow';
 import SupplyRateModal from './components/SupplyRateModal';
-import RatePlanModal from './components/RatePlanModal';
 import ESP32DeviceModal from './components/ESP32DeviceModal';
 import DeviceQRScannerModal from './components/DeviceQRScannerModal';
 import { useSettings } from './hooks/useSettings';
-import { RATE_PROFILES } from '../../utils/billing';
 import {
   formatVersion,
   formatCurrency,
@@ -41,7 +39,6 @@ const formatApplianceSignature = (appliance) => {
 
 const SettingsScreen = ({ navigation }) => {
   const [rateModalVisible, setRateModalVisible] = useState(false);
-  const [ratePlanModalVisible, setRatePlanModalVisible] = useState(false);
   const [deviceModalVisible, setDeviceModalVisible] = useState(false);
   const [scannerVisible, setScannerVisible] = useState(false);
   const {
@@ -50,7 +47,6 @@ const SettingsScreen = ({ navigation }) => {
     loading,
     error,
     updateSupplyRates,
-    updateRateProfile,
     updateNotifications,
     updateDeviceSettings,
     clearDeviceSettings,
@@ -77,14 +73,6 @@ const SettingsScreen = ({ navigation }) => {
     );
   }, [removeSavedAppliance]);
 
-  const rateProfileOptions = Array.isArray(RATE_PROFILES) ? RATE_PROFILES : [];
-  const currentRateProfile = rateProfileOptions.find(
-    (profile) => profile.id === settings.rateProfileId
-  );
-  const ratePlanLabel = settings.rateProfileId
-    ? (currentRateProfile?.name || 'Custom rate plan')
-    : 'Auto (by date)';
-
   // Shows the generation rate specifically, not the Block 1 sum - it is the
   // number printed on the bill, so the user can eyeball that it matches.
   const generationRateLabel = settings.supplyRates?.generation
@@ -99,14 +87,6 @@ const SettingsScreen = ({ navigation }) => {
     setRateModalVisible(false);
   }, []);
 
-  const handleRatePlanPress = useCallback(() => {
-    setRatePlanModalVisible(true);
-  }, []);
-
-  const handleRatePlanClose = useCallback(() => {
-    setRatePlanModalVisible(false);
-  }, []);
-
   const handleRateSave = useCallback(async (rates) => {
     const result = await updateSupplyRates(rates);
 
@@ -117,17 +97,6 @@ const SettingsScreen = ({ navigation }) => {
 
     return { success: true };
   }, [updateSupplyRates]);
-
-  const handleRatePlanSave = useCallback(async (profileId) => {
-    const result = await updateRateProfile(profileId);
-
-    if (!result.success) {
-      Alert.alert('Unable to save rate plan', result.error || 'Please try again.');
-      return result;
-    }
-
-    return { success: true };
-  }, [updateRateProfile]);
 
   const handleNotificationsToggle = useCallback(async (value) => {
     const result = await updateNotifications(value);
@@ -189,7 +158,26 @@ const SettingsScreen = ({ navigation }) => {
   const handleAbout = useCallback(() => {
     Alert.alert(
       'About WattWise',
-      'WattWise is a smart energy monitoring app for apartment rooms.\n\nVersion: 1.0.0',
+      [
+        'WattWise is a smart energy monitoring system for apartment rooms, pairing an ESP32 with PZEM-004T meters to two switchable outlets.',
+        '',
+        'WHAT IT DOES',
+        '• Live voltage, current and power per outlet',
+        '• Remote on/off switching from anywhere',
+        '• Automatic appliance detection from power signatures',
+        '• Scheduled and countdown timers',
+        '• Power safety monitoring with automatic cutoff',
+        '• Monthly budget tracking with threshold alerts',
+        '• Cost estimates and monthly statements',
+        '',
+        'BILLING',
+        'All costs use the PELCO III residential tariff (Pampanga III Electric Cooperative). Distribution and government charges are ERC-approved constants; generation and transmission are entered by you each month from pelco3.org/rates.php.',
+        '',
+        'SAFETY LIMITS',
+        `Low-voltage appliances only. Maximum ${500} W per outlet and ${1000} W combined. Not for air conditioners, heaters, irons, or motors.`,
+        '',
+        `Version ${formatVersion()}`,
+      ].join('\n'),
       [{ text: 'OK' }]
     );
   }, []);
@@ -320,14 +308,6 @@ const SettingsScreen = ({ navigation }) => {
             value={settings.hasSupplyRates ? generationRateLabel : 'Not set'}
             showArrow
             onPress={handleRatePress}
-          />
-          <Separator />
-          <SettingsRow
-            icon="🧾"
-            label="Rate Plan"
-            value={ratePlanLabel}
-            showArrow
-            onPress={handleRatePlanPress}
           />
           <Separator />
           {/* TODO: Budget settings will connect to BudgetTracking screen */}
@@ -471,14 +451,6 @@ const SettingsScreen = ({ navigation }) => {
         currentRates={settings.supplyRates}
         onClose={handleRateClose}
         onSave={handleRateSave}
-      />
-
-      <RatePlanModal
-        visible={ratePlanModalVisible}
-        currentProfileId={settings.rateProfileId}
-        profiles={rateProfileOptions}
-        onClose={handleRatePlanClose}
-        onSave={handleRatePlanSave}
       />
 
       <ESP32DeviceModal

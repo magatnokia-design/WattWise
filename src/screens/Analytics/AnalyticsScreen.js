@@ -23,6 +23,7 @@ import { formatCurrency } from '../BudgetTracking/utils/budgetHelpers';
 import LiveUsagePanel from './components/LiveUsagePanel';
 import InsightsCard from './components/InsightsCard';
 import { RateNotice } from '../../components/common/RateNotice';
+import { useDismissibleNotice } from '../../hooks/useDismissibleNotice';
 
 const { width } = Dimensions.get('window');
 
@@ -392,6 +393,7 @@ export const AnalyticsScreen = ({ navigation }) => {
   const [rateProfileId, setRateProfileId] = useState(null);
   const [supplyRates, setSupplyRates] = useState(null);
   const [hasSupplyRates, setHasSupplyRates] = useState(true);
+  const rateNotice = useDismissibleNotice('rate-notice');
   const [budget, setBudget] = useState({ monthlyBudget: 0, currentSpending: 0 });
   const [loading, setLoading] = useState(false);
   const [outlets, setOutlets] = useState([]);
@@ -688,8 +690,11 @@ export const AnalyticsScreen = ({ navigation }) => {
           </Text>
         </View>
 
-        {!hasSupplyRates && (
-          <RateNotice onPress={() => navigation?.navigate?.('Settings')} />
+        {!hasSupplyRates && rateNotice.visible && (
+          <RateNotice
+            onPress={() => navigation?.navigate?.('Settings')}
+            onDismiss={rateNotice.dismiss}
+          />
         )}
 
         {/* What is happening right now, straight from live telemetry. */}

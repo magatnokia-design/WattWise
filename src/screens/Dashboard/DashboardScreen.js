@@ -16,6 +16,7 @@ import { SIZES, FONTS } from '../../constants/theme';
 import NotificationPanel from '../Notifications/components/NotificationPanel';
 import { useNotifications } from '../Notifications/hooks/useNotifications';
 import { RateNotice } from '../../components/common/RateNotice';
+import { useDismissibleNotice } from '../../hooks/useDismissibleNotice';
 import OutletControlModal from './components/OutletControlModal';
 import ApplianceSuggestion from './components/ApplianceSuggestion';
 import { useOutletControl } from './hooks/useOutletControl';
@@ -64,6 +65,7 @@ export const DashboardScreen = ({ navigation }) => {
 
   // Only the count is used here - the panel loads its own list when opened.
   const { unreadCount } = useNotifications();
+  const rateNotice = useDismissibleNotice('rate-notice');
 
   // Outlet control hook
   const {
@@ -230,8 +232,11 @@ export const DashboardScreen = ({ navigation }) => {
         </View>
 
         {/* Compact live snapshot - deliberately small so Smart Outlets leads */}
-        {!hasSupplyRates && (
-          <RateNotice onPress={() => navigation.navigate('Settings')} />
+        {!hasSupplyRates && rateNotice.visible && (
+          <RateNotice
+            onPress={() => navigation.navigate('Settings')}
+            onDismiss={rateNotice.dismiss}
+          />
         )}
 
         <View style={styles.snapshotStrip}>

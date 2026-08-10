@@ -7,14 +7,14 @@ const MAX_POWER_W = 500;
 
 const ProtectionSettings = ({ enabled, onToggle, thresholds, onSaveThresholds }) => {
   const [isEditing, setIsEditing] = useState(false);
-  const [voltageMin, setVoltageMin] = useState(String(thresholds?.voltage?.min ?? 200));
-  const [voltageMax, setVoltageMax] = useState(String(thresholds?.voltage?.max ?? 250));
+  const [voltageMin, setVoltageMin] = useState(String(thresholds?.voltage?.min ?? 190));
+  const [voltageMax, setVoltageMax] = useState(String(thresholds?.voltage?.max ?? 260));
   const [currentMax, setCurrentMax] = useState(String(thresholds?.current?.max ?? 10));
   const [powerMax, setPowerMax] = useState(String(thresholds?.power?.max ?? 500));
 
   useEffect(() => {
-    setVoltageMin(String(thresholds?.voltage?.min ?? 200));
-    setVoltageMax(String(thresholds?.voltage?.max ?? 250));
+    setVoltageMin(String(thresholds?.voltage?.min ?? 190));
+    setVoltageMax(String(thresholds?.voltage?.max ?? 260));
     setCurrentMax(String(thresholds?.current?.max ?? 10));
     setPowerMax(String(thresholds?.power?.max ?? 500));
   }, [thresholds]);

@@ -2,6 +2,7 @@ const admin = require('firebase-admin');
 const logger = require('firebase-functions/logger');
 const { HttpsError } = require('firebase-functions/v2/https');
 const { dispatchDeviceCommand } = require('../lib/deviceCommandDispatcher');
+const { PENDING_STATUS_WINDOW_MS } = require('../lib/outletStatus');
 
 const HTTPS_ERROR_CODES = new Set([
   'cancelled',
@@ -71,6 +72,14 @@ async function processOutletToggle(request) {
       totalEnergy: outletData.totalEnergy || 0,
       autoDetectedAppliance: outletData.autoDetectedAppliance || '',
       status: status ? 'on' : 'off',
+      // The device only learns about this when it next polls getDeviceCommand,
+      // and it keeps posting telemetry in the meantime carrying its *current*
+      // relay state. Without this marker that telemetry overwrites the status
+      // we just set, and the outlet visibly flips back within a second.
+      // updateOutletMetrics honours the requested status until the device
+      // confirms it or the window lapses.
+      pendingStatus: status ? 'on' : 'off',
+      pendingStatusUntilMs: Date.now() + PENDING_STATUS_WINDOW_MS,
       lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
     }, { merge: true });
 

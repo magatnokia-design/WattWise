@@ -15,6 +15,7 @@ const {
   detectApplianceFromRunState,
 } = require('../lib/applianceDetector');
 const { dispatchDeviceCommand } = require('../lib/deviceCommandDispatcher');
+const { resolveOutletStatus } = require('../lib/outletStatus');
 const { deriveOutletEnergy } = require('../lib/energyAccounting');
 const { evaluateSafety } = require('../lib/powerSafety');
 
@@ -219,13 +220,23 @@ async function updateOutletMetrics(req, res) {
       // the nightly rollup, budgets - reads a real per-day number.
       const energyState = deriveOutletEnergy(previousOutletData, energy, timestampMs);
 
+      // A toggle the device has not polled for yet must not be overwritten by
+      // telemetry still reporting the old relay state.
+      const statusResolution = resolveOutletStatus(previousOutletData, status, now);
+
       const outletUpdate = {
         outletId: `outlet${number}`,
         outletNumber: number,
         voltage,
         current,
         power,
-        status,
+        status: statusResolution.status,
+        ...(statusResolution.clearPending
+          ? {
+            pendingStatus: admin.firestore.FieldValue.delete(),
+            pendingStatusUntilMs: admin.firestore.FieldValue.delete(),
+          }
+          : {}),
         energy: energyState.energyTodayKwh,
         energyTodayKwh: energyState.energyTodayKwh,
         energyDateKey: energyState.energyDateKey,
