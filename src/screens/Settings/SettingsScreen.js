@@ -12,8 +12,8 @@ import { COLORS } from '../../constants/colors';
 import SettingsRow from './components/SettingsRow';
 import ElectricityRateModal from './components/ElectricityRateModal';
 import RatePlanModal from './components/RatePlanModal';
-import OutletNameModal from './components/OutletNameModal';
 import ESP32DeviceModal from './components/ESP32DeviceModal';
+import DeviceQRScannerModal from './components/DeviceQRScannerModal';
 import { useSettings } from './hooks/useSettings';
 import { RATE_PROFILES } from '../../utils/billing';
 import {
@@ -21,7 +21,6 @@ import {
   formatVersion,
   formatCurrency,
   formatDeviceHealthValue,
-  formatAckStatusValue,
 } from './utils/settingsHelpers';
 import { authService } from '../../services/firebase/authService';
 
@@ -35,31 +34,20 @@ const SectionCard = ({ children }) => (
 
 const Separator = () => <View style={styles.separator} />;
 
-const normalizeName = (value) => String(value || '').trim().toLowerCase();
-
-const formatSuggestionValue = (name, confidence) => {
-  const normalizedName = String(name || '').trim();
-  if (!normalizedName) return 'No suggestion';
-
-  if (typeof confidence === 'number') {
-    return `${normalizedName} (${confidence}%)`;
-  }
-
-  return normalizedName;
+// Short "how it was learned" summary shown next to each saved appliance.
+const formatApplianceSignature = (appliance) => {
+  const meanPower = Number(appliance?.meanPower) || 0;
+  return meanPower > 0 ? `~${meanPower.toFixed(1)} W` : 'Learned';
 };
 
 const SettingsScreen = ({ navigation }) => {
   const [rateModalVisible, setRateModalVisible] = useState(false);
   const [ratePlanModalVisible, setRatePlanModalVisible] = useState(false);
   const [deviceModalVisible, setDeviceModalVisible] = useState(false);
-  const [outletModalState, setOutletModalState] = useState({
-    visible: false,
-    outletNumber: 1,
-    currentName: 'Outlet 1',
-  });
-
+  const [scannerVisible, setScannerVisible] = useState(false);
   const {
     settings,
+    savedAppliances,
     loading,
     error,
     updateElectricityRate,
@@ -67,9 +55,28 @@ const SettingsScreen = ({ navigation }) => {
     updateNotifications,
     updateDeviceSettings,
     clearDeviceSettings,
-    updateOutletName,
-    clearOutletDetection,
+    removeSavedAppliance,
   } = useSettings();
+
+  const handleRemoveSavedAppliance = useCallback((label) => {
+    Alert.alert(
+      'Remove Saved Appliance',
+      `Forget the learned power signature for "${label}"? Detection will fall back to the built-in appliance profiles.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: async () => {
+            const result = await removeSavedAppliance(label);
+            if (!result.success) {
+              Alert.alert('Remove Failed', result.error || 'Unable to remove saved appliance.');
+            }
+          },
+        },
+      ]
+    );
+  }, [removeSavedAppliance]);
 
   const rateProfileOptions = Array.isArray(RATE_PROFILES) ? RATE_PROFILES : [];
   const currentRateProfile = rateProfileOptions.find(
@@ -78,14 +85,6 @@ const SettingsScreen = ({ navigation }) => {
   const ratePlanLabel = settings.rateProfileId
     ? (currentRateProfile?.name || 'Custom rate plan')
     : 'Auto (by date)';
-
-  const outlet1CanAcceptSuggestion =
-    !!settings.outlet1SuggestedName &&
-    normalizeName(settings.outlet1SuggestedName) !== normalizeName(settings.outlet1Name);
-
-  const outlet2CanAcceptSuggestion =
-    !!settings.outlet2SuggestedName &&
-    normalizeName(settings.outlet2SuggestedName) !== normalizeName(settings.outlet2Name);
 
   const handleRatePress = useCallback(() => {
     setRateModalVisible(true);
@@ -132,94 +131,6 @@ const SettingsScreen = ({ navigation }) => {
       Alert.alert('Unable to update notifications', result.error || 'Please try again.');
     }
   }, [updateNotifications]);
-
-  const handleOutletNamePress = useCallback((outletNumber) => {
-    const currentName = outletNumber === 1 ? settings.outlet1Name : settings.outlet2Name;
-    setOutletModalState({
-      visible: true,
-      outletNumber,
-      currentName,
-    });
-  }, [settings.outlet1Name, settings.outlet2Name]);
-
-  const handleOutletModalClose = useCallback(() => {
-    setOutletModalState((prev) => ({ ...prev, visible: false }));
-  }, []);
-
-  const handleOutletNameSave = useCallback(async (newName) => {
-    const result = await updateOutletName(outletModalState.outletNumber, newName);
-
-    if (!result.success) {
-      Alert.alert('Unable to update outlet name', result.error || 'Please try again.');
-      return result;
-    }
-
-    return { success: true };
-  }, [outletModalState.outletNumber, updateOutletName]);
-
-  const handleAcceptOutletSuggestion = useCallback((outletNumber) => {
-    const suggestedName = outletNumber === 1
-      ? String(settings.outlet1SuggestedName || '').trim()
-      : String(settings.outlet2SuggestedName || '').trim();
-
-    if (!suggestedName) {
-      return;
-    }
-
-    Alert.alert(
-      'Accept Suggested Name',
-      `Use "${suggestedName}" for Outlet ${outletNumber}?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Accept',
-          onPress: async () => {
-            const confidence = outletNumber === 1
-              ? settings.outlet1SuggestionConfidence
-              : settings.outlet2SuggestionConfidence;
-
-            const result = await updateOutletName(outletNumber, suggestedName, {
-              source: 'auto_suggestion',
-              confidencePercent: confidence,
-            });
-            if (!result.success) {
-              Alert.alert('Unable to apply suggestion', result.error || 'Please try again.');
-            }
-          },
-        },
-      ]
-    );
-  }, [
-    settings.outlet1SuggestedName,
-    settings.outlet2SuggestedName,
-    settings.outlet1SuggestionConfidence,
-    settings.outlet2SuggestionConfidence,
-    updateOutletName,
-  ]);
-
-  const handleClearOutletDetection = useCallback((outletNumber) => {
-    const targetLabel = outletNumber === 1 || outletNumber === 2
-      ? `Outlet ${outletNumber}`
-      : 'all outlets';
-
-    Alert.alert(
-      'Reset Auto-Detection',
-      `Clear detected appliance data for ${targetLabel}?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Reset',
-          style: 'destructive',
-          onPress: async () => {
-            const result = await clearOutletDetection(outletNumber);
-            if (!result.success) {
-              Alert.alert('Unable to reset detection', result.error || 'Please try again.');
-            }
-          },
-        },
-      ]
-    );
-  }, [clearOutletDetection]);
 
   const handleLogout = useCallback(() => {
   Alert.alert(
@@ -308,28 +219,46 @@ const SettingsScreen = ({ navigation }) => {
 
   const handleDeviceUnlink = useCallback(() => {
     if (!settings.esp32Linked) {
-      Alert.alert('No Linked Device', 'There is no ESP32 device linked to this account.');
+      Alert.alert('No Linked Device', 'There is no device linked to this account.');
       return;
     }
 
     Alert.alert(
-      'Unlink ESP32',
-      `Unlink ${settings.esp32DeviceId}? Incoming hardware updates will be rejected until re-linked.`,
+      'Remove Device',
+      `Remove ${settings.esp32DeviceId} from this account? Telemetry and commands from this hardware will be rejected until you link it again by scanning its QR code.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Unlink',
+          text: 'Remove',
           style: 'destructive',
           onPress: async () => {
             const result = await clearDeviceSettings();
             if (!result.success) {
-              Alert.alert('Unable to unlink device', result.error || 'Please try again.');
+              Alert.alert('Unable to remove device', result.error || 'Please try again.');
             }
           },
         },
       ]
     );
   }, [clearDeviceSettings, settings.esp32DeviceId, settings.esp32Linked]);
+
+  const handleScanDeviceQR = useCallback(() => {
+    setScannerVisible(true);
+  }, []);
+
+  const handleScannerClose = useCallback(() => {
+    setScannerVisible(false);
+  }, []);
+
+  // Scanned pairing reuses the manual-entry save path, so both routes produce
+  // identical device state.
+  const handleDeviceScanned = useCallback(async (deviceData) => {
+    const result = await updateDeviceSettings(deviceData);
+    if (result.success) {
+      Alert.alert('Device Linked', `${deviceData.deviceId} is now linked to your account.`);
+    }
+    return result;
+  }, [updateDeviceSettings]);
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
@@ -396,95 +325,67 @@ const SettingsScreen = ({ navigation }) => {
           />
         </SectionCard>
 
-        {/* Device Settings */}
-        <SectionHeader title="Device Settings" />
+        {/* Device */}
+        <SectionHeader title="Device" />
         <SectionCard>
+          {/* Pairing is a single action: scan the QR on the unit. Scanning
+              again simply re-pairs, which is why there is no unlink step. */}
           <SettingsRow
-            icon="📡"
-            label="ESP32 Device"
+            icon="📷"
+            label={settings.esp32Linked ? 'Scan to re-link device' : 'Scan device QR'}
             value={settings.esp32Linked ? settings.esp32DeviceId : 'Not linked'}
             showArrow
-            onPress={handleESP32Settings}
-          />
-          <Separator />
-          <SettingsRow
-            icon="🔐"
-            label="Device Token"
-            value={settings.esp32TokenSet ? 'Configured' : 'Not set'}
-            showArrow
-            onPress={handleESP32Settings}
+            onPress={handleScanDeviceQR}
           />
           <Separator />
           <SettingsRow
             icon="🩺"
-            label="Device Health"
+            label="Device Status"
             value={formatDeviceHealthValue(settings.esp32HealthStatus, settings.esp32LastSeenAtMs)}
           />
           <Separator />
           <SettingsRow
-            icon="✅"
-            label="Last Ack"
-            value={formatAckStatusValue(settings.esp32LastAckStatus)}
+            icon="⌨️"
+            label="Enter details manually"
+            showArrow
+            onPress={handleESP32Settings}
           />
           <Separator />
           <SettingsRow
-            icon="🧹"
-            label="Unlink ESP32"
+            icon="🗑️"
+            label="Remove Device"
+            value={settings.esp32Linked ? settings.esp32DeviceId : 'Nothing linked'}
             isDestructive
             showArrow
             onPress={handleDeviceUnlink}
             disabled={!settings.esp32Linked}
           />
-          <Separator />
-          <SettingsRow
-            icon="🔌"
-            label="Outlet 1 Name"
-            value={settings.outlet1Name}
-            showArrow
-            onPress={() => handleOutletNamePress(1)}
-          />
-          <Separator />
-          <SettingsRow
-            icon="✨"
-            label="Outlet 1 Suggestion"
-            value={formatSuggestionValue(settings.outlet1SuggestedName, settings.outlet1SuggestionConfidence)}
-            showArrow={outlet1CanAcceptSuggestion}
-            onPress={outlet1CanAcceptSuggestion ? () => handleAcceptOutletSuggestion(1) : undefined}
-            disabled={!outlet1CanAcceptSuggestion}
-          />
-          <Separator />
-          <SettingsRow
-            icon="🗑️"
-            label="Clear Outlet 1 Detection"
-            isDestructive
-            showArrow
-            onPress={() => handleClearOutletDetection(1)}
-          />
-          <Separator />
-          <SettingsRow
-            icon="🔌"
-            label="Outlet 2 Name"
-            value={settings.outlet2Name}
-            showArrow
-            onPress={() => handleOutletNamePress(2)}
-          />
-          <Separator />
-          <SettingsRow
-            icon="✨"
-            label="Outlet 2 Suggestion"
-            value={formatSuggestionValue(settings.outlet2SuggestedName, settings.outlet2SuggestionConfidence)}
-            showArrow={outlet2CanAcceptSuggestion}
-            onPress={outlet2CanAcceptSuggestion ? () => handleAcceptOutletSuggestion(2) : undefined}
-            disabled={!outlet2CanAcceptSuggestion}
-          />
-          <Separator />
-          <SettingsRow
-            icon="🗑️"
-            label="Clear Outlet 2 Detection"
-            isDestructive
-            showArrow
-            onPress={() => handleClearOutletDetection(2)}
-          />
+        </SectionCard>
+
+        {/* Saved Appliances */}
+        <SectionHeader title="Saved Appliances" />
+        <SectionCard>
+          {savedAppliances.length === 0 ? (
+            <View style={styles.emptyAppliances}>
+              <Text style={styles.emptyAppliancesText}>
+                No saved appliances yet. Confirm an appliance name on the Dashboard
+                while it is running and WattWise will learn its power signature.
+              </Text>
+            </View>
+          ) : (
+            savedAppliances.map((appliance, index) => (
+              <React.Fragment key={appliance.label}>
+                {index > 0 && <Separator />}
+                <SettingsRow
+                  icon="🔖"
+                  label={appliance.label}
+                  value={formatApplianceSignature(appliance)}
+                  showArrow
+                  onPress={() => handleRemoveSavedAppliance(appliance.label)}
+                />
+              </React.Fragment>
+            ))
+          )}
         </SectionCard>
 
         {/* Preferences */}
@@ -496,13 +397,6 @@ const SettingsScreen = ({ navigation }) => {
             isSwitch
             switchValue={settings.notifications}
             onSwitchChange={handleNotificationsToggle}
-          />
-          <Separator />
-          <SettingsRow
-            icon="🌙"
-            label="Dark Mode"
-            value="Coming Soon"
-            disabled
           />
         </SectionCard>
 
@@ -572,20 +466,18 @@ const SettingsScreen = ({ navigation }) => {
         onSave={handleRatePlanSave}
       />
 
-      <OutletNameModal
-        visible={outletModalState.visible}
-        outletNumber={outletModalState.outletNumber}
-        currentName={outletModalState.currentName}
-        onClose={handleOutletModalClose}
-        onSave={handleOutletNameSave}
-      />
-
       <ESP32DeviceModal
         visible={deviceModalVisible}
         currentDeviceId={settings.esp32DeviceId}
         currentDeviceToken={settings.esp32DeviceToken}
         onClose={handleDeviceModalClose}
         onSave={handleDeviceSave}
+      />
+
+      <DeviceQRScannerModal
+        visible={scannerVisible}
+        onClose={handleScannerClose}
+        onScanned={handleDeviceScanned}
       />
     </SafeAreaView>
   );
@@ -595,6 +487,15 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: COLORS.background,
+  },
+  emptyAppliances: {
+    paddingHorizontal: 16,
+    paddingVertical: 18,
+  },
+  emptyAppliancesText: {
+    fontSize: 13,
+    lineHeight: 19,
+    color: COLORS.textLight,
   },
   header: {
     paddingHorizontal: 16,

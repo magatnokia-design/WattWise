@@ -43,7 +43,7 @@ test('normalizeDetectionState returns idle state defaults', () => {
 });
 
 test('shouldEvaluateLive becomes true after enough on samples', () => {
-  // Live evaluation only runs every 3rd sample, so the count must land on the
+  // Live evaluation runs on every 2nd sample, so the count must land on the
   // interval boundary.
   const state = buildRunState({ powerStart: 80, jitter: 3, sampleCount: 48 });
 
@@ -52,7 +52,7 @@ test('shouldEvaluateLive becomes true after enough on samples', () => {
 });
 
 test('shouldEvaluateLive stays false between evaluation intervals', () => {
-  const state = buildRunState({ powerStart: 80, jitter: 3, sampleCount: 50 });
+  const state = buildRunState({ powerStart: 80, jitter: 3, sampleCount: 49 });
 
   assert.equal(shouldEvaluateLive(state), false);
 });
@@ -67,13 +67,91 @@ test('detectApplianceFromRunState identifies electric fan profile', () => {
   assert.ok(Array.isArray(result.candidates));
 });
 
-test('detectApplianceFromRunState identifies phone charger profile', () => {
+// A steady ~8 W draw genuinely cannot be pinned to one appliance by power
+// alone - a charger, an LED lamp and a small speaker all look like this. The
+// detector's contract for that case is to rank them and let the user decide,
+// not to assert one and sound certain about it.
+test('detectApplianceFromRunState offers a choice for the ambiguous low-watt band', () => {
   const state = buildRunState({ powerStart: 8, jitter: 1, sampleCount: 60 });
   const result = detectApplianceFromRunState(state);
 
   assert.ok(result);
-  assert.equal(result.appliance, 'Phone Charger');
-  assert.ok(result.confidence >= 0.62);
+  assert.equal(result.ambiguous, true);
+  assert.ok(result.candidates.length > 1);
+
+  const names = result.candidates.map((candidate) => candidate.name);
+  assert.ok(names.includes('Phone Charger'));
+  assert.ok(names.includes('LED Lamp'));
+
+  // Honest about being a coin flip rather than reporting false certainty.
+  assert.ok(result.confidence < 0.6);
+});
+
+test('detectApplianceFromRunState is confident when a profile stands alone', () => {
+  const state = buildRunState({ powerStart: 72, jitter: 4, sampleCount: 80 });
+  const result = detectApplianceFromRunState(state);
+
+  assert.ok(result);
+  assert.equal(result.appliance, 'Electric Fan');
+  assert.equal(result.ambiguous, false);
+  assert.ok(result.confidence >= 0.7);
+});
+
+// Regression: an outlet switched on with nothing plugged into it used to start
+// the run immediately, so those 0 W samples were averaged in and a 53 W fan
+// reported a mean of 5.9 W - which scored as a phone charger.
+test('idle samples before a load appears do not skew the run', () => {
+  let state = normalizeDetectionState(null, 'off');
+  const startMs = 1700000000000;
+
+  // Outlet on, nothing plugged in.
+  for (let i = 0; i < 20; i += 1) {
+    state = updateDetectionState(state, {
+      status: 'on',
+      power: 0,
+      timestampMs: startMs + (i * 1000),
+    });
+  }
+
+  assert.equal(state.sampleCount, 0, 'run must not start before a load appears');
+
+  // Fan plugged in.
+  for (let i = 0; i < 40; i += 1) {
+    state = updateDetectionState(state, {
+      status: 'on',
+      power: 53.3 + (i % 2 === 0 ? 1 : -1),
+      timestampMs: startMs + ((20 + i) * 1000),
+    });
+  }
+
+  assert.equal(state.sampleCount, 40);
+  assert.ok(Math.abs(state.meanPower - 53.3) < 1);
+
+  const result = detectApplianceFromRunState(state);
+  assert.ok(result);
+  assert.equal(result.appliance, 'Electric Fan');
+});
+
+test('a brief dip does not end a run, but unplugging does', () => {
+  let state = buildRunState({ powerStart: 53, jitter: 1, sampleCount: 30 });
+  const meanBefore = state.meanPower;
+  let clock = state.lastSampleAtMs;
+
+  // Two near-zero readings: keep the run and its measurements intact.
+  for (let i = 0; i < 2; i += 1) {
+    clock += 1000;
+    state = updateDetectionState(state, { status: 'on', power: 0, timestampMs: clock });
+  }
+
+  assert.equal(state.sampleCount, 30);
+  assert.equal(state.meanPower, meanBefore);
+
+  // A third ends the run - the appliance is gone.
+  clock += 1000;
+  state = updateDetectionState(state, { status: 'on', power: 0, timestampMs: clock });
+
+  assert.equal(state.sampleCount, 0);
+  assert.equal(detectApplianceFromRunState(state), null);
 });
 
 test('detectApplianceFromRunState skips low-sample runs', () => {
@@ -136,7 +214,9 @@ test('a learned signature does not claim a clearly different load', () => {
     'Desk Fan'
   );
 
-  const otherRun = buildRunState({ powerStart: 300, jitter: 10, sampleCount: 45 });
+  // A television-sized load, well outside the learned fan's signature but still
+  // an appliance this system supports.
+  const otherRun = buildRunState({ powerStart: 150, jitter: 12, sampleCount: 60 });
   const result = detectApplianceFromRunState(otherRun, { userProfiles: [signature] });
 
   assert.ok(result);

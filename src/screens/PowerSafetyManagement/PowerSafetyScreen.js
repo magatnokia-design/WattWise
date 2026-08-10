@@ -39,7 +39,7 @@ const PowerSafetyScreen = ({ navigation }) => {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity
@@ -54,6 +54,7 @@ const PowerSafetyScreen = ({ navigation }) => {
 
       <ScrollView
         style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
@@ -138,6 +139,10 @@ const styles = StyleSheet.create({
   },
   scrollView: {
     flex: 1,
+  },
+  // Clears the Android navigation bar so the last card is fully reachable.
+  scrollContent: {
+    paddingBottom: 32,
   },
   section: {
     marginTop: 20,

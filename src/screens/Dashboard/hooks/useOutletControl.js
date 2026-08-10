@@ -1,7 +1,8 @@
 import { useState, useCallback, useEffect } from 'react';
-import { outletService } from '../../../services/firebase';
+import { outletService, userService } from '../../../services/firebase';
 import { auth } from '../../../services/firebase/config';
 import { onAuthStateChanged } from 'firebase/auth';
+import { calculatePelcoIIIBill } from '../../../utils/billing';
 
 const DEFAULT_OUTLET_METRICS = {
   voltage: 0,
@@ -17,6 +18,10 @@ const EMPTY_OUTLET_SUGGESTION = {
   meanPowerW: null,
   runtimeSeconds: null,
   sampleCount: null,
+  // Alternatives the detector could not rule out on power alone. The user picks
+  // between same-wattage appliances the measurements genuinely cannot separate.
+  candidates: [],
+  ambiguous: false,
   showBadge: false,
   canAccept: false,
 };
@@ -162,6 +167,18 @@ const buildOutletSuggestion = (outlet = {}, applianceName = '', runtimeState = {
   const isDifferent = !!suggestedName && normalizedCurrent !== normalizedSuggested;
   const features = outlet.applianceDetection?.features || {};
 
+  const rawCandidates = Array.isArray(outlet.applianceDetection?.candidates)
+    ? outlet.applianceDetection.candidates
+    : [];
+
+  const candidates = rawCandidates
+    .map((candidate) => ({
+      name: String(candidate?.name || '').trim(),
+      confidencePercent: toConfidencePercent(candidate?.confidence),
+      source: String(candidate?.source || 'generic').trim(),
+    }))
+    .filter((candidate) => !!candidate.name);
+
   return {
     ...EMPTY_OUTLET_SUGGESTION,
     name: suggestedName,
@@ -170,6 +187,8 @@ const buildOutletSuggestion = (outlet = {}, applianceName = '', runtimeState = {
     meanPowerW: toOptionalNumber(features.meanPower),
     runtimeSeconds: toOptionalNumber(features.runtimeSec),
     sampleCount: toOptionalNumber(features.sampleCount),
+    candidates,
+    ambiguous: outlet.applianceDetection?.ambiguous === true,
     showBadge: isDifferent,
     canAccept: isDifferent,
   };
@@ -210,7 +229,15 @@ export const useOutletControl = () => {
   const [outlet2Metrics, setOutlet2Metrics] = useState(DEFAULT_OUTLET_METRICS);
   const [outlet1Suggestion, setOutlet1Suggestion] = useState({ ...EMPTY_OUTLET_SUGGESTION });
   const [outlet2Suggestion, setOutlet2Suggestion] = useState({ ...EMPTY_OUTLET_SUGGESTION });
+  // Whether a load is actually drawing power right now. The saved appliance
+  // name is only meaningful while something is plugged in and running.
+  const [outlet1HasLoad, setOutlet1HasLoad] = useState(false);
+  const [outlet2HasLoad, setOutlet2HasLoad] = useState(false);
   const [isToggling, setIsToggling] = useState(false);
+  // Starts true so the UI can show a placeholder instead of briefly rendering
+  // "Not set" before the first Firestore snapshot arrives.
+  const [isLoadingOutlets, setIsLoadingOutlets] = useState(true);
+  const [rateProfileId, setRateProfileId] = useState(null);
 
   const applyOutletData = useCallback((outlet) => {
     if (!outlet || !outlet.outletNumber) return;
@@ -220,17 +247,20 @@ export const useOutletControl = () => {
     const resolvedApplianceName = resolveApplianceName(outlet);
     const suggestion = buildOutletSuggestion(outlet, resolvedApplianceName, runtimeState);
     const metrics = buildOutletMetrics(outlet, resolvedStatus, runtimeState);
+    const hasLoad = runtimeState.hasFreshTelemetry && runtimeState.hasLiveLoad;
 
     if (outlet.outletNumber === 1) {
       setOutlet1Status(resolvedStatus);
       setOutlet1ApplianceName(resolvedApplianceName);
       setOutlet1Metrics(metrics);
       setOutlet1Suggestion(suggestion);
+      setOutlet1HasLoad(hasLoad);
     } else if (outlet.outletNumber === 2) {
       setOutlet2Status(resolvedStatus);
       setOutlet2ApplianceName(resolvedApplianceName);
       setOutlet2Metrics(metrics);
       setOutlet2Suggestion(suggestion);
+      setOutlet2HasLoad(hasLoad);
     }
   }, []);
 
@@ -253,20 +283,42 @@ export const useOutletControl = () => {
         setOutlet2Metrics(DEFAULT_OUTLET_METRICS);
         setOutlet1Suggestion({ ...EMPTY_OUTLET_SUGGESTION });
         setOutlet2Suggestion({ ...EMPTY_OUTLET_SUGGESTION });
+        setOutlet1HasLoad(false);
+        setOutlet2HasLoad(false);
+        setRateProfileId(null);
+        setIsLoadingOutlets(false);
         return;
       }
 
-      const result = await outletService.getOutlets(user.uid);
-      if (result.success && result.data.length > 0) {
-        result.data.forEach((outlet) => applyOutletData(outlet));
+      // Rate profile drives the live cost estimate; a failure here just leaves
+      // the estimate on the default profile rather than blocking the dashboard.
+      userService.getUserPreferences(user.uid)
+        .then((prefs) => {
+          if (prefs?.success) {
+            setRateProfileId(prefs.data?.rateProfileId || null);
+          }
+        })
+        .catch((error) => console.warn('Could not load rate profile:', error?.message));
+
+      try {
+        const result = await outletService.getOutlets(user.uid);
+        if (result.success && result.data.length > 0) {
+          result.data.forEach((outlet) => applyOutletData(outlet));
+        }
+      } finally {
+        setIsLoadingOutlets(false);
       }
 
       unsubscribeOutlets = outletService.subscribeToOutlets(
         user.uid,
         (outlets) => {
           outlets.forEach((outlet) => applyOutletData(outlet));
+          setIsLoadingOutlets(false);
         },
-        (error) => console.error('Outlet subscription error:', error)
+        (error) => {
+          console.error('Outlet subscription error:', error);
+          setIsLoadingOutlets(false);
+        }
       );
     });
 
@@ -308,8 +360,10 @@ export const useOutletControl = () => {
       const fallbackName = outletNumber === 2 ? 'Outlet 2' : 'Outlet 1';
       const sanitizedName = normalizeOutletDisplayName(newName) || fallbackName;
 
+      // One call: it names the outlet and records the measured signature, so
+      // confirming a suggestion both renames and teaches the detector.
       const result = await outletService.updateApplianceName(userId, outletNumber, sanitizedName, options);
-      
+
       if (!result.success) {
         throw new Error(result.error);
       }
@@ -317,24 +371,6 @@ export const useOutletControl = () => {
       const visibleName = isDefaultOutletLabel(sanitizedName, outletNumber)
         ? ''
         : sanitizedName;
-
-      // Confirming a real appliance name teaches the detector this outlet's
-      // measured signature. Best-effort: the outlet may be idle or have too few
-      // samples to learn from, which must never fail the rename itself.
-      let learnedProfile = null;
-      if (visibleName) {
-        const learnResult = await outletService.registerApplianceProfile(
-          userId,
-          outletNumber,
-          visibleName
-        );
-
-        if (learnResult.success) {
-          learnedProfile = learnResult.data?.profile || null;
-        } else {
-          console.warn('Appliance signature not learned:', learnResult.error);
-        }
-      }
 
       // Apply immediately in UI; snapshot listener will keep it in sync afterward.
       if (outletNumber === 1) {
@@ -353,12 +389,29 @@ export const useOutletControl = () => {
         }));
       }
       
-      return { success: true, learnedProfile };
+      return { success: true, learned: !!result.learned, learnError: result.learnError || null };
     } catch (error) {
       console.error('Error updating appliance name:', error);
       return { success: false, error: error.message };
     }
   }, []);
+
+  // Live cost estimate, driven by the same PELCO III tariff the Analytics and
+  // Settings screens use so all three agree.
+  const totalEnergyKwh =
+    toMetricNumber(outlet1Metrics.energy) + toMetricNumber(outlet2Metrics.energy);
+  const totalPowerW =
+    toMetricNumber(outlet1Metrics.power) + toMetricNumber(outlet2Metrics.power);
+
+  const bill = calculatePelcoIIIBill(totalEnergyKwh, { profileId: rateProfileId });
+  const estimatedCost = toMetricNumber(bill?.totals?.total);
+  const effectiveRate = toMetricNumber(bill?.effectiveRate);
+  // Effective rate is 0 until some energy accumulates, so fall back to a
+  // 1 kWh probe to price the current draw on day one.
+  const perKwhRate = effectiveRate > 0
+    ? effectiveRate
+    : toMetricNumber(calculatePelcoIIIBill(1, { profileId: rateProfileId })?.totals?.total);
+  const estimatedCostPerHour = (totalPowerW / 1000) * perKwhRate;
 
   return {
     outlet1Status,
@@ -369,6 +422,14 @@ export const useOutletControl = () => {
     outlet2Metrics,
     outlet1Suggestion,
     outlet2Suggestion,
+    outlet1HasLoad,
+    outlet2HasLoad,
+    isLoadingOutlets,
+    totalEnergyKwh,
+    totalPowerW,
+    estimatedCost,
+    estimatedCostPerHour,
+    effectiveRate: perKwhRate,
     isToggling,
     toggleOutlet,
     updateApplianceName,

@@ -9,7 +9,6 @@ import {
   startAfter,
   doc,
   getDoc,
-  addDoc,
 } from 'firebase/firestore';
 import { db } from './config';
 
@@ -196,18 +195,4 @@ export const historyService = {
     }
   },
 
-  // Add activity log (for testing - in production, server-side only)
-  addActivityLog: async (userId, logData) => {
-    try {
-      const logsRef = collection(db, 'users', userId, 'history_logs');
-      await addDoc(logsRef, {
-        ...logData,
-        timestamp: new Date(),
-      });
-      return { success: true };
-    } catch (error) {
-      console.error('Error adding activity log:', error);
-      return { success: false, error: error.message };
-    }
-  },
 };

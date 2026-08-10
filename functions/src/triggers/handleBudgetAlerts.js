@@ -1,6 +1,6 @@
 const admin = require('firebase-admin');
 const logger = require('firebase-functions/logger');
-const { getTemplateId, resolveUserContact, sendBrevoTemplateEmail } = require('../lib/brevoEmail');
+const { resolveUserContact, enqueueEmail } = require('../lib/mailQueue');
 
 /**
  * Firestore trigger: Fires when budget document is written
@@ -93,21 +93,19 @@ async function handleBudgetAlerts(change, context) {
           const formattedBudget = Number(monthlyBudget || 0).toFixed(2);
           const emailMessage = `You have used ${percentage.toFixed(1)}% of your monthly budget (PHP ${formattedCurrent} / PHP ${formattedBudget}).`;
 
-          emailTasks.push(sendBrevoTemplateEmail({
+          emailTasks.push(enqueueEmail({
             toEmail: contact.email,
-            toName: contact.name,
-            templateId: getTemplateId('budget'),
-            params: {
-              title,
-              message: emailMessage,
-              month,
-              percentage: Number(percentage.toFixed(1)),
-              threshold,
-              currentSpending: Number(formattedCurrent),
-              monthlyBudget: Number(formattedBudget),
-              currency: 'PHP',
-            },
-            tags: ['budget'],
+            subject: `WattWise: ${title}`,
+            heading: title,
+            intro: emailMessage,
+            rows: [
+              ['Month', month],
+              ['Budget used', `${percentage.toFixed(1)}%`],
+              ['Threshold', `${threshold}%`],
+              ['Current spending', `PHP ${formattedCurrent}`],
+              ['Monthly budget', `PHP ${formattedBudget}`],
+            ],
+            tag: 'budget',
           }));
         }
 

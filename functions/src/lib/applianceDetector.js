@@ -1,12 +1,29 @@
-const MODEL_VERSION = 'rule-v2';
-const MIN_SAMPLE_COUNT = 5;
-const MIN_RUNTIME_MS = 5000;
-const LIVE_EVALUATION_SAMPLE_INTERVAL = 3;
+const MODEL_VERSION = 'rule-v3';
 
-const MIN_DETECTABLE_MEAN_POWER_W = 4;
-const MIN_DETECTABLE_PEAK_POWER_W = 6;
+// A "run" is one continuous stretch of an appliance actually drawing power.
+// It deliberately does NOT start when the relay closes: an outlet can sit on
+// with nothing plugged into it, and those 0 W samples would drag the measured
+// mean toward zero and mislabel the appliance that gets plugged in later.
+const LOAD_PRESENT_THRESHOLD_W = 3;
+// Consecutive sub-threshold samples that end a run (appliance unplugged or
+// finished). A short dip does not end it - chargers taper, fans restart.
+const IDLE_SAMPLES_TO_END_RUN = 3;
 
-const MIN_CONFIDENCE = 0.7;
+const MIN_SAMPLE_COUNT = 4;
+const MIN_RUNTIME_MS = 3000;
+const LIVE_EVALUATION_SAMPLE_INTERVAL = 2;
+
+const MIN_DETECTABLE_MEAN_POWER_W = 3;
+const MIN_DETECTABLE_PEAK_POWER_W = 5;
+
+// Whether to report at all is decided by fit alone, never by confidence: two
+// profiles tying is a reason to ask the user which one it is, not a reason to
+// stay silent. Real in-scope loads score roughly 0.13-0.25 here; a load far
+// outside the appliances this system supports scores above 0.5.
+const MAX_ACCEPTABLE_SCORE = 0.55;
+// Below this separation between the top two profiles, power alone cannot settle
+// the answer and the user has to pick.
+const AMBIGUOUS_MARGIN = 0.12;
 
 // Learned ("confirm to learn") signatures recorded from the user's own runs.
 // A saved signature holds measured values rather than the wide ranges the
@@ -15,70 +32,122 @@ const MAX_USER_PROFILES = 20;
 // Above this score the saved signature is too far off to claim a match, and the
 // generic profiles take over.
 const USER_PROFILE_MAX_SCORE = 0.45;
+// Multiplier applied to a learned signature's score so it outranks generic
+// profiles on close calls without overriding a clearly better generic match.
+const LEARNED_SCORE_ADVANTAGE = 0.6;
 
 const ACTIVE_POWER_THRESHOLD_W = 15;
 const HIGH_POWER_THRESHOLD_W = 700;
 const LOW_POWER_THRESHOLD_W = 20;
 
+// Low-voltage appliances only, per the project's hard constraints.
+//
+// Wattage ranges overlap heavily on purpose - a 50 W laptop charger and a 53 W
+// fan really do draw the same power. What separates them is stdDevPower:
+// resistive/steady loads (lamp, fan at a fixed speed, router) hold a flat draw,
+// while switching loads (laptop charger, TV, console) swing with demand. Where
+// even that is not enough, the detector reports the run as ambiguous and the
+// user chooses between the ranked candidates.
 const APPLIANCE_PROFILES = [
   {
     label: 'Phone Charger',
-    meanPower: [2, 25],
-    peakPower: [5, 45],
-    stdDevPower: [0, 12],
+    meanPower: [2, 18],
+    peakPower: [4, 30],
+    stdDevPower: [0.3, 7],
     runtimeSec: [60, 21600],
-    activeRatio: [0.2, 1],
-    highRatio: [0, 0.05],
-    lowRatio: [0.2, 1],
-    weights: {
-      meanPower: 0.42,
-      peakPower: 0.2,
-      stdDevPower: 0.18,
-      runtimeSec: 0.08,
-      activeRatio: 0.06,
-      highRatio: 0.03,
-      lowRatio: 0.03,
-    },
+    activeRatio: [0, 0.35],
+    highRatio: [0, 0.02],
+    lowRatio: [0.7, 1],
+  },
+  {
+    label: 'LED Lamp',
+    meanPower: [3, 22],
+    peakPower: [4, 28],
+    // A lamp is the steadiest load on the list; this is what separates it from
+    // a charger at the same wattage.
+    stdDevPower: [0, 1.5],
+    runtimeSec: [60, 43200],
+    activeRatio: [0, 0.4],
+    highRatio: [0, 0.02],
+    lowRatio: [0.7, 1],
   },
   {
     label: 'Electric Fan',
-    meanPower: [25, 110],
-    peakPower: [35, 160],
-    stdDevPower: [0, 28],
-    runtimeSec: [300, 43200],
-    activeRatio: [0.75, 1],
-    highRatio: [0, 0.04],
-    lowRatio: [0, 0.2],
-    weights: {
-      meanPower: 0.45,
-      peakPower: 0.2,
-      stdDevPower: 0.17,
-      runtimeSec: 0.08,
-      activeRatio: 0.05,
-      highRatio: 0.03,
-      lowRatio: 0.02,
-    },
+    meanPower: [22, 95],
+    peakPower: [28, 130],
+    // Fixed-speed motor: steady once spun up.
+    stdDevPower: [0, 9],
+    runtimeSec: [120, 43200],
+    activeRatio: [0.7, 1],
+    highRatio: [0, 0.03],
+    lowRatio: [0, 0.3],
+  },
+  {
+    label: 'Laptop Charger',
+    meanPower: [18, 80],
+    peakPower: [28, 120],
+    // Swings with CPU load and battery state - the discriminator against a fan.
+    stdDevPower: [6, 30],
+    runtimeSec: [120, 43200],
+    activeRatio: [0.4, 1],
+    highRatio: [0, 0.03],
+    lowRatio: [0, 0.6],
+  },
+  {
+    label: 'Monitor',
+    meanPower: [14, 50],
+    peakPower: [18, 75],
+    stdDevPower: [0.5, 12],
+    runtimeSec: [120, 43200],
+    activeRatio: [0.4, 1],
+    highRatio: [0, 0.02],
+    lowRatio: [0, 0.55],
+  },
+  {
+    label: 'Speaker',
+    meanPower: [5, 45],
+    peakPower: [10, 90],
+    // Audio-dependent: the most erratic low-wattage load.
+    stdDevPower: [4, 30],
+    runtimeSec: [60, 43200],
+    activeRatio: [0.1, 0.95],
+    highRatio: [0, 0.03],
+    lowRatio: [0.05, 0.95],
   },
   {
     label: 'Television',
-    meanPower: [45, 220],
-    peakPower: [70, 320],
-    stdDevPower: [6, 90],
-    runtimeSec: [300, 43200],
-    activeRatio: [0.65, 1],
-    highRatio: [0, 0.08],
-    lowRatio: [0, 0.28],
-    weights: {
-      meanPower: 0.44,
-      peakPower: 0.2,
-      stdDevPower: 0.18,
-      runtimeSec: 0.08,
-      activeRatio: 0.05,
-      highRatio: 0.03,
-      lowRatio: 0.02,
-    },
+    meanPower: [45, 190],
+    peakPower: [60, 270],
+    stdDevPower: [5, 45],
+    runtimeSec: [180, 43200],
+    activeRatio: [0.7, 1],
+    highRatio: [0, 0.06],
+    lowRatio: [0, 0.25],
+  },
+  {
+    label: 'Game Console',
+    meanPower: [60, 230],
+    peakPower: [90, 330],
+    // Load swings hard between menu and gameplay.
+    stdDevPower: [12, 70],
+    runtimeSec: [180, 43200],
+    activeRatio: [0.8, 1],
+    highRatio: [0, 0.05],
+    lowRatio: [0, 0.2],
   },
 ];
+
+// Shared across every generic profile: mean power carries the most signal,
+// spread is the tie-breaker between same-wattage appliances.
+const PROFILE_WEIGHTS = {
+  meanPower: 0.38,
+  peakPower: 0.17,
+  stdDevPower: 0.25,
+  runtimeSec: 0.05,
+  activeRatio: 0.08,
+  highRatio: 0.03,
+  lowRatio: 0.04,
+};
 
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
@@ -87,17 +156,25 @@ const toFiniteNumber = (value, fallback = 0) => {
   return Number.isFinite(parsed) ? parsed : fallback;
 };
 
+// Penalty at the very edge of a profile's range. Scoring in-range values as a
+// flat 0 made every overlapping profile tie, so nothing could ever be told
+// apart; grading by distance from the range's centre is what separates a 53 W
+// fan from a 53 W laptop charger. Out-of-range always scores worse than any
+// in-range value.
+const IN_RANGE_EDGE_PENALTY = 0.35;
+
 const rangePenalty = (value, range) => {
   const [min, max] = range;
+  const span = Math.max(1e-6, max - min);
+
   if (value >= min && value <= max) {
-    return 0;
+    const midpoint = (min + max) / 2;
+    const halfSpan = span / 2;
+    return IN_RANGE_EDGE_PENALTY * (Math.abs(value - midpoint) / halfSpan);
   }
 
-  const span = Math.max(1, max - min);
-  if (value < min) {
-    return (min - value) / span;
-  }
-  return (value - max) / span;
+  const overshoot = value < min ? (min - value) : (value - max);
+  return IN_RANGE_EDGE_PENALTY + (overshoot / Math.max(1, span));
 };
 
 const getRuntimeMs = (state) => {
@@ -113,9 +190,31 @@ const getRuntimeMs = (state) => {
   return end - start;
 };
 
+const emptyRun = (status, sampleTime) => ({
+  modelVersion: MODEL_VERSION,
+  lastStatus: status,
+  runStartedAtMs: null,
+  lastSampleAtMs: sampleTime,
+  sampleCount: 0,
+  meanPower: 0,
+  m2Power: 0,
+  peakPower: 0,
+  activeSamples: 0,
+  highSamples: 0,
+  lowSamples: 0,
+  idleStreak: 0,
+});
+
 const normalizeDetectionState = (rawState = null, fallbackStatus = 'off') => {
   const safeStatus = fallbackStatus === 'on' ? 'on' : 'off';
   const state = rawState && typeof rawState === 'object' ? rawState : {};
+
+  // A run measured under an older model was accumulated by different rules -
+  // earlier versions averaged in the idle samples before a load appeared - so
+  // its totals cannot be compared against these profiles. Start clean instead.
+  if (state.modelVersion && state.modelVersion !== MODEL_VERSION) {
+    return emptyRun(safeStatus, toFiniteNumber(state.lastSampleAtMs, 0));
+  }
 
   const normalized = {
     modelVersion: MODEL_VERSION,
@@ -129,20 +228,11 @@ const normalizeDetectionState = (rawState = null, fallbackStatus = 'off') => {
     activeSamples: Math.max(0, Math.floor(toFiniteNumber(state.activeSamples, 0))),
     highSamples: Math.max(0, Math.floor(toFiniteNumber(state.highSamples, 0))),
     lowSamples: Math.max(0, Math.floor(toFiniteNumber(state.lowSamples, 0))),
+    idleStreak: Math.max(0, Math.floor(toFiniteNumber(state.idleStreak, 0))),
   };
 
   if (normalized.lastStatus !== 'on' || normalized.sampleCount === 0) {
-    return {
-      ...normalized,
-      runStartedAtMs: null,
-      sampleCount: 0,
-      meanPower: 0,
-      m2Power: 0,
-      peakPower: 0,
-      activeSamples: 0,
-      highSamples: 0,
-      lowSamples: 0,
-    };
+    return emptyRun(normalized.lastStatus, normalized.lastSampleAtMs);
   }
 
   if (!normalized.runStartedAtMs) {
@@ -159,22 +249,34 @@ const updateDetectionState = (previousState, sample) => {
   const sampleTime = Math.max(0, Math.floor(toFiniteNumber(sample?.timestampMs, Date.now())));
 
   if (sampleStatus !== 'on') {
+    return emptyRun('off', sampleTime);
+  }
+
+  const hasLoad = samplePower >= LOAD_PRESENT_THRESHOLD_W;
+
+  if (!hasLoad) {
+    // Outlet is on but nothing is drawing power yet: hold at zero samples so the
+    // run begins the moment something is actually plugged in.
+    if (safePrevious.sampleCount === 0) {
+      return emptyRun('on', sampleTime);
+    }
+
+    const idleStreak = safePrevious.idleStreak + 1;
+    if (idleStreak >= IDLE_SAMPLES_TO_END_RUN) {
+      return emptyRun('on', sampleTime);
+    }
+
+    // A brief dip: keep the run's measurements untouched rather than averaging
+    // the near-zero reading into them.
     return {
+      ...safePrevious,
       modelVersion: MODEL_VERSION,
-      lastStatus: 'off',
-      runStartedAtMs: null,
       lastSampleAtMs: sampleTime,
-      sampleCount: 0,
-      meanPower: 0,
-      m2Power: 0,
-      peakPower: 0,
-      activeSamples: 0,
-      highSamples: 0,
-      lowSamples: 0,
+      idleStreak,
     };
   }
 
-  if (safePrevious.lastStatus !== 'on' || safePrevious.sampleCount === 0) {
+  if (safePrevious.sampleCount === 0) {
     return {
       modelVersion: MODEL_VERSION,
       lastStatus: 'on',
@@ -187,6 +289,7 @@ const updateDetectionState = (previousState, sample) => {
       activeSamples: samplePower >= ACTIVE_POWER_THRESHOLD_W ? 1 : 0,
       highSamples: samplePower >= HIGH_POWER_THRESHOLD_W ? 1 : 0,
       lowSamples: samplePower <= LOW_POWER_THRESHOLD_W ? 1 : 0,
+      idleStreak: 0,
     };
   }
 
@@ -207,6 +310,7 @@ const updateDetectionState = (previousState, sample) => {
     activeSamples: safePrevious.activeSamples + (samplePower >= ACTIVE_POWER_THRESHOLD_W ? 1 : 0),
     highSamples: safePrevious.highSamples + (samplePower >= HIGH_POWER_THRESHOLD_W ? 1 : 0),
     lowSamples: safePrevious.lowSamples + (samplePower <= LOW_POWER_THRESHOLD_W ? 1 : 0),
+    idleStreak: 0,
   };
 };
 
@@ -247,25 +351,25 @@ const extractRunFeatures = (state) => {
 };
 
 const scoreProfile = (features, profile) => {
-  const weights = profile.weights;
-
   const score =
-    (weights.meanPower * rangePenalty(features.meanPower, profile.meanPower)) +
-    (weights.peakPower * rangePenalty(features.peakPower, profile.peakPower)) +
-    (weights.stdDevPower * rangePenalty(features.stdDevPower, profile.stdDevPower)) +
-    (weights.runtimeSec * rangePenalty(features.runtimeSec, profile.runtimeSec)) +
-    (weights.activeRatio * rangePenalty(features.activeRatio, profile.activeRatio)) +
-    (weights.highRatio * rangePenalty(features.highRatio, profile.highRatio)) +
-    (weights.lowRatio * rangePenalty(features.lowRatio, profile.lowRatio));
+    (PROFILE_WEIGHTS.meanPower * rangePenalty(features.meanPower, profile.meanPower)) +
+    (PROFILE_WEIGHTS.peakPower * rangePenalty(features.peakPower, profile.peakPower)) +
+    (PROFILE_WEIGHTS.stdDevPower * rangePenalty(features.stdDevPower, profile.stdDevPower)) +
+    (PROFILE_WEIGHTS.runtimeSec * rangePenalty(features.runtimeSec, profile.runtimeSec)) +
+    (PROFILE_WEIGHTS.activeRatio * rangePenalty(features.activeRatio, profile.activeRatio)) +
+    (PROFILE_WEIGHTS.highRatio * rangePenalty(features.highRatio, profile.highRatio)) +
+    (PROFILE_WEIGHTS.lowRatio * rangePenalty(features.lowRatio, profile.lowRatio));
 
-  return {
-    label: profile.label,
-    score,
-  };
+  return { label: profile.label, score };
 };
 
-const toCandidateConfidence = (score) => {
-  return clamp(1 - (score / 2), 0, 0.99);
+// Fit alone is not confidence: two profiles can both fit a run perfectly, and
+// claiming 99% for either would be a lie. Separation from the runner-up is what
+// turns a good fit into a confident answer.
+const toConfidence = (score, margin) => {
+  const fit = 1 - clamp(score / 0.9, 0, 1);
+  const separation = clamp(margin / 0.18, 0, 1);
+  return clamp(fit * (0.55 + (0.45 * separation)), 0, 0.99);
 };
 
 // Deviation relative to the learned value. The floor keeps tiny reference values
@@ -275,13 +379,18 @@ const relativeDeviation = (value, reference, floor) => {
   return Math.abs(toFiniteNumber(value, 0) - toFiniteNumber(reference, 0)) / base;
 };
 
+// "Outlet 1" / "Outlet 2" are placeholder labels, not appliances. Learning one
+// as a signature made every future run match a meaningless profile, and it
+// showed up in Saved Appliances as if the user had confirmed it.
+const isPlaceholderLabel = (label) => /^outlet\s*\d+$/i.test(String(label || '').trim());
+
 const normalizeUserProfiles = (rawProfiles) => {
   if (!Array.isArray(rawProfiles)) return [];
 
   return rawProfiles
     .map((profile) => {
       const label = String(profile?.label || profile?.name || '').trim();
-      if (!label) return null;
+      if (!label || isPlaceholderLabel(label)) return null;
 
       const meanPower = Math.max(0, toFiniteNumber(profile.meanPower, 0));
       const peakPower = Math.max(0, toFiniteNumber(profile.peakPower, 0));
@@ -319,7 +428,7 @@ const scoreUserProfile = (features, profile) => {
 // appliance can be recognised on later runs.
 const buildApplianceSignature = (runState, label) => {
   const normalizedLabel = String(label || '').trim();
-  if (!normalizedLabel) return null;
+  if (!normalizedLabel || isPlaceholderLabel(normalizedLabel)) return null;
 
   const features = extractRunFeatures(normalizeDetectionState(runState, runState?.lastStatus || 'off'));
   if (!features) return null;
@@ -371,32 +480,59 @@ const detectApplianceFromRunState = (runState, options = {}) => {
     .sort((a, b) => a.score - b.score);
 
   const bestLearned = learnedRanked[0] || null;
-  const usingLearned = !!bestLearned && bestLearned.score <= USER_PROFILE_MAX_SCORE;
+  const eligibleLearned = bestLearned && bestLearned.score <= USER_PROFILE_MAX_SCORE
+    ? [bestLearned]
+    : [];
 
-  const ranked = usingLearned
-    ? [bestLearned, ...genericRanked]
-    : genericRanked;
+  // Learned signatures get an advantage, not an automatic win: they describe
+  // this account's actual hardware, but a saved fan must not hijack a run that
+  // plainly matches something else.
+  const ranked = [...eligibleLearned, ...genericRanked]
+    .map((entry) => ({
+      ...entry,
+      effectiveScore: entry.source === 'learned'
+        ? entry.score * LEARNED_SCORE_ADVANTAGE
+        : entry.score,
+    }))
+    .sort((a, b) => a.effectiveScore - b.effectiveScore)
+    // A learned label and a generic profile can share a name; keep the better.
+    .filter((entry, index, all) =>
+      all.findIndex((other) => other.label === entry.label) === index);
 
   const top = ranked[0];
   const second = ranked[1] || null;
-  const margin = second ? (second.score - top.score) : 0.25;
+  const margin = second ? (second.effectiveScore - top.effectiveScore) : 0.35;
 
-  let confidence = toCandidateConfidence(top.score);
-  confidence = clamp(confidence + Math.min(0.15, Math.max(0, margin) * 0.15), 0, 0.99);
-
-  if (top.score > 1.15 || confidence < MIN_CONFIDENCE) {
+  if (top.effectiveScore > MAX_ACCEPTABLE_SCORE) {
     return null;
   }
 
-  const candidates = ranked.slice(0, 3).map((entry) => ({
-    name: entry.label,
-    confidence: Number(toCandidateConfidence(entry.score).toFixed(2)),
-    source: entry.source || 'generic',
-  }));
+  const confidence = toConfidence(top.effectiveScore, margin);
+
+  // Candidates the user can pick from when power alone cannot separate them.
+  const candidates = ranked
+    .filter((entry, index) => index === 0 || entry.effectiveScore <= top.effectiveScore + 0.2)
+    .slice(0, 4)
+    .map((entry, index) => ({
+      name: entry.label,
+      confidence: Number(
+        toConfidence(entry.effectiveScore, index === 0 ? margin : 0).toFixed(2)
+      ),
+      source: entry.source || 'generic',
+    }));
+
+  // Ambiguous when the runner-up is nearly as good an explanation as the
+  // winner - that is the user's call to make, not the detector's.
+  const runnerUpConfidence = candidates[1]?.confidence ?? 0;
+  const isAmbiguous =
+    candidates.length > 1 &&
+    top.source !== 'learned' &&
+    (confidence - runnerUpConfidence) < AMBIGUOUS_MARGIN;
 
   return {
     appliance: top.label,
     confidence: Number(confidence.toFixed(2)),
+    ambiguous: isAmbiguous,
     candidates,
     matchSource: top.source || 'generic',
     modelVersion: MODEL_VERSION,
@@ -416,6 +552,10 @@ const detectApplianceFromRunState = (runState, options = {}) => {
 module.exports = {
   MODEL_VERSION,
   MAX_USER_PROFILES,
+  isPlaceholderLabel,
+  MIN_SAMPLE_COUNT,
+  LOAD_PRESENT_THRESHOLD_W,
+  APPLIANCE_PROFILES,
   normalizeDetectionState,
   updateDetectionState,
   shouldEvaluateLive,

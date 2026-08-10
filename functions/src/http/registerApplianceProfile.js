@@ -21,12 +21,15 @@ const normalizeOutletId = (value) => {
 const normalizeLabel = (value) => String(value || '').trim().slice(0, MAX_LABEL_LENGTH);
 
 /**
- * Records the currently-measured run on an outlet as a learned appliance
- * signature ("confirm to learn"). Signatures are stored on the user document so
- * the telemetry path can match against them without an extra read.
+ * Names the appliance on an outlet and records the currently-measured run as a
+ * learned signature ("confirm to learn").
  *
- * Replaces any existing signature with the same label so re-confirming an
- * appliance refines it rather than accumulating duplicates.
+ * The naming write lives here rather than on the client because firestore.rules
+ * only lets the app touch `applianceName`/`lastUpdated`/`outletNumber` - the
+ * selection metadata it wants to store alongside the name would be rejected.
+ *
+ * Naming always succeeds; learning is best-effort and reported back separately,
+ * since an outlet can be idle or too briefly measured to learn anything from.
  */
 async function registerApplianceProfile(request) {
   try {
@@ -49,36 +52,75 @@ async function registerApplianceProfile(request) {
     const db = admin.firestore();
     const userRef = db.doc(`users/${auth.uid}`);
     const outletRef = db.doc(`users/${auth.uid}/outlets/${outletId}`);
+    const outletNumber = Number(outletId.replace('outlet', ''));
 
-    const signature = await db.runTransaction(async (tx) => {
-      const [userDoc, outletDoc] = await Promise.all([tx.get(userRef), tx.get(outletRef)]);
+    // Read outside the transaction on purpose: the outlet doc is rewritten by
+    // telemetry roughly once a second, so including it in a transaction meant
+    // constant retries and eventual aborts while hardware was live.
+    const outletDoc = await outletRef.get();
+    if (!outletDoc.exists) {
+      throw new HttpsError('not-found', 'Outlet not found');
+    }
 
-      if (!outletDoc.exists) {
-        throw new HttpsError('not-found', 'Outlet not found');
-      }
+    const outletData = outletDoc.data() || {};
+    const signature = buildApplianceSignature(outletData.detectionState, label);
 
-      const outletData = outletDoc.data() || {};
-      const built = buildApplianceSignature(outletData.detectionState, label);
+    const confidencePercent = Number(data?.confidencePercent);
+    const selection = {
+      name: label,
+      source: String(data?.source || 'manual').trim().toLowerCase(),
+      acceptedSuggestion: String(data?.source || '').trim().toLowerCase() === 'auto_suggestion',
+      selectedAtMs: Date.now(),
+      selectedAt: admin.firestore.FieldValue.serverTimestamp(),
+    };
 
-      if (!built) {
-        throw new HttpsError(
-          'failed-precondition',
-          'Not enough measured data to learn this appliance yet. Keep it running for a few seconds and try again.'
-        );
-      }
+    if (Number.isFinite(confidencePercent)) {
+      selection.confidencePercent = confidencePercent;
+    }
 
+    if (data?.modelVersion) {
+      selection.modelVersion = String(data.modelVersion).slice(0, MAX_LABEL_LENGTH);
+    }
+
+    await outletRef.set({
+      outletNumber,
+      applianceName: label,
+      applianceSelection: selection,
+      lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+
+    if (!signature) {
+      logger.info('Appliance named but not learned (insufficient run data)', {
+        userId: auth.uid,
+        outletId,
+        label,
+      });
+
+      return {
+        success: true,
+        outletId,
+        applianceName: label,
+        learned: false,
+        learnError:
+          'Named, but not saved as a signature yet - keep it running for a few seconds and confirm again.',
+      };
+    }
+
+    // Only the user doc is transactional; it is no longer written by telemetry,
+    // so this stays contention-free.
+    await db.runTransaction(async (tx) => {
+      const userDoc = await tx.get(userRef);
       const existing = normalizeUserProfiles((userDoc.data() || {}).applianceProfiles);
       const withoutSameLabel = existing.filter(
         (profile) => profile.label.toLowerCase() !== label.toLowerCase()
       );
 
       const nextProfiles = [
-        { ...built, updatedAtMs: Date.now() },
+        { ...signature, updatedAtMs: Date.now() },
         ...withoutSameLabel,
       ].slice(0, MAX_USER_PROFILES);
 
       tx.set(userRef, { applianceProfiles: nextProfiles }, { merge: true });
-      return built;
     });
 
     logger.info('Appliance signature learned', {
@@ -88,7 +130,13 @@ async function registerApplianceProfile(request) {
       meanPower: signature.meanPower,
     });
 
-    return { success: true, outletId, profile: signature };
+    return {
+      success: true,
+      outletId,
+      applianceName: label,
+      learned: true,
+      profile: signature,
+    };
   } catch (error) {
     if (error instanceof HttpsError) {
       logger.warn('Register appliance profile rejected', {

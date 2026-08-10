@@ -1,5 +1,5 @@
 const logger = require('firebase-functions/logger');
-const { getTemplateId, resolveUserContact, sendBrevoTemplateEmail } = require('../lib/brevoEmail');
+const { resolveUserContact, enqueueEmail } = require('../lib/mailQueue');
 
 const toNumber = (value, fallback = 0) => {
   const parsed = Number(value);
@@ -60,28 +60,29 @@ async function handleDailyReceiptEmails(change, context) {
       formatLineItems(billItems.otherCharges),
     ].filter(Boolean).join('\n');
 
-    await sendBrevoTemplateEmail({
+    const receiptDate = String(after.date || date || '').trim();
+    const outlet1Name = String(after.outlet1Name || 'Outlet 1').trim();
+    const outlet2Name = String(after.outlet2Name || 'Outlet 2').trim();
+
+    await enqueueEmail({
       toEmail: contact.email,
-      toName: contact.name,
-      templateId: getTemplateId('receipt'),
-      params: {
-        date: String(after.date || date || '').trim(),
-        outlet1Name: String(after.outlet1Name || 'Outlet 1').trim(),
-        outlet2Name: String(after.outlet2Name || 'Outlet 2').trim(),
-        outlet1Energy: Number(outlet1Energy.toFixed(3)),
-        outlet2Energy: Number(outlet2Energy.toFixed(3)),
-        totalEnergy: Number(totalEnergy.toFixed(3)),
-        cost: Number(cost.toFixed(2)),
-        billTotal: Number(billTotal.toFixed(2)),
-        billEffectiveRate: Number(billEffectiveRate.toFixed(4)),
-        billProfileName: String(bill.rateProfileName || '').trim(),
-        billSectionTotals,
-        billLineItems,
-        peakPower: Number(peakPower.toFixed(2)),
-        peakHour,
-        currency: 'PHP',
-      },
-      tags: ['receipt'],
+      subject: `WattWise daily summary - ${receiptDate}`,
+      heading: 'Your daily energy summary',
+      intro: `Here is your usage for ${receiptDate}.`,
+      rows: [
+        [outlet1Name, `${outlet1Energy.toFixed(3)} kWh`],
+        [outlet2Name, `${outlet2Energy.toFixed(3)} kWh`],
+        ['Total energy', `${totalEnergy.toFixed(3)} kWh`],
+        ['Estimated cost', `PHP ${cost.toFixed(2)}`],
+        ['Bill total', `PHP ${billTotal.toFixed(2)}`],
+        ['Effective rate', `PHP ${billEffectiveRate.toFixed(4)} / kWh`],
+        ['Rate plan', String(bill.rateProfileName || '').trim()],
+        ['Peak power', `${peakPower.toFixed(2)} W`],
+        ['Peak hour', `${peakHour}:00`],
+        ['Bill sections', billSectionTotals],
+        ['Line items', billLineItems],
+      ],
+      tag: 'receipt',
     });
 
     return null;

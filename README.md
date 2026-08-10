@@ -1,1 +1,1 @@
-# WiseWatt
+# WattWise

@@ -1,5 +1,5 @@
 const logger = require('firebase-functions/logger');
-const { getTemplateId, resolveUserContact, sendBrevoTemplateEmail } = require('../lib/brevoEmail');
+const { resolveUserContact, enqueueEmail } = require('../lib/mailQueue');
 
 const NOTIFIABLE_STATUSES = new Set(['failed', 'rejected', 'timeout']);
 
@@ -33,20 +33,23 @@ async function handleDeviceCommandEmails(change, context) {
       return null;
     }
 
-    await sendBrevoTemplateEmail({
+    const outletId = String(after.outletId || '').trim();
+
+    await enqueueEmail({
       toEmail: contact.email,
-      toName: contact.name,
-      templateId: getTemplateId('device'),
-      params: {
-        commandId,
-        status,
-        action: String(after.action || '').trim(),
-        outletId: String(after.outletId || '').trim(),
-        reason: String(after.reason || '').trim(),
-        source: String(after.source || '').trim(),
-        deviceId: String(after.deviceId || '').trim(),
-      },
-      tags: ['device'],
+      subject: `WattWise: outlet command ${status}`,
+      heading: 'Outlet command did not complete',
+      intro: `A command sent to ${outletId || 'your outlet'} reported status "${status}".`,
+      rows: [
+        ['Outlet', outletId],
+        ['Action', String(after.action || '').trim()],
+        ['Status', status],
+        ['Reason', String(after.reason || '').trim()],
+        ['Source', String(after.source || '').trim()],
+        ['Device', String(after.deviceId || '').trim()],
+        ['Command ID', commandId],
+      ],
+      tag: 'device',
     });
 
     return null;

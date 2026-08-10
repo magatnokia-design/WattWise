@@ -36,8 +36,13 @@ yarn-error.*
 !.env.example
 .env*.local
 
+# firebase extension secret pointers (written by `firebase deploy --only extensions`)
+extensions/*.secret.local
+
 # device / service credentials - never commit
 secrets.h
+# generated pairing QR codes embed the device token
+docs/esp32/qr/
 google-services.json
 GoogleService-Info.plist
 *serviceAccount*.json

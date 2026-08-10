@@ -23,12 +23,15 @@ const { getDeviceCommand } = require('./src/http/getDeviceCommand');
 const { processOutletToggle } = require('./src/http/processOutletToggle');
 const { clearAutoDetection } = require('./src/http/clearAutoDetection');
 const { registerApplianceProfile } = require('./src/http/registerApplianceProfile');
+const { removeApplianceProfile } = require('./src/http/removeApplianceProfile');
+const { linkDeviceToAccount } = require('./src/http/linkDeviceToAccount');
 const { checkUserExistsByEmail } = require('./src/http/checkUserExistsByEmail');
 const { processDailyRollup } = require('./src/scheduled/processDailyRollup');
+const { processMonthlyInvoice } = require('./src/scheduled/processMonthlyInvoice');
+const { finalizeInvoice } = require('./src/http/finalizeInvoice');
 const { checkScheduledTimers } = require('./src/scheduled/checkScheduledTimers');
 const { markStaleDeviceCommands } = require('./src/scheduled/markStaleDeviceCommands');
 const { normalizePowerSafetyThresholds } = require('./src/scheduled/normalizePowerSafetyThresholds');
-const { BREVO_API_KEY } = require('./src/lib/brevoEmail');
 const { handleBudgetAlerts } = require('./src/triggers/handleBudgetAlerts');
 const { handleSafetyAlerts } = require('./src/triggers/handleSafetyAlerts');
 const { handleDeviceCommandEmails } = require('./src/triggers/handleDeviceCommandEmails');
@@ -113,6 +116,40 @@ exports.registerApplianceProfile = onCall(
 );
 
 /**
+ * Callable function to lock a billing month to the official PELCO III rates
+ * Called from: Billing screen ("Update to actual rate")
+ */
+exports.finalizeInvoice = onCall(
+  {
+    maxInstances: 10,
+  },
+  finalizeInvoice
+);
+
+/**
+ * Callable function to delete one learned appliance signature
+ * Called from: Settings screen (Saved Appliances)
+ */
+exports.removeApplianceProfile = onCall(
+  {
+    maxInstances: 10,
+  },
+  removeApplianceProfile
+);
+
+/**
+ * Callable function to bind an ESP32 to the calling account, including taking
+ * it over from a previous account when the correct device token is presented
+ * Called from: Settings screen (QR scan and manual entry)
+ */
+exports.linkDeviceToAccount = onCall(
+  {
+    maxInstances: 10,
+  },
+  linkDeviceToAccount
+);
+
+/**
  * Callable function to verify whether an email exists in Firebase Auth
  * Called from: Forgot password flow before sending reset email
  */
@@ -138,6 +175,22 @@ exports.processDailyRollup = onSchedule(
     maxInstances: 1,
   },
   processDailyRollup
+);
+
+/**
+ * Runs at 00:20 Asia/Manila on the 1st of each month, after processDailyRollup
+ * has closed the final day. Closes the month that just ended, stores the
+ * invoice as PENDING, and emails the user a PDF statement.
+ */
+exports.processMonthlyInvoice = onSchedule(
+  {
+    schedule: '20 0 1 * *', // 00:20 on the 1st
+    timeZone: 'Asia/Manila',
+    maxInstances: 1,
+    timeoutSeconds: 300,
+    memory: '512MiB',
+  },
+  processMonthlyInvoice
 );
 
 /**
@@ -190,7 +243,6 @@ exports.handleBudgetAlerts = onDocumentWritten(
   {
     document: 'users/{userId}/budget/{month}',
     maxInstances: 5,
-    secrets: [BREVO_API_KEY],
   },
   handleBudgetAlerts
 );
@@ -203,7 +255,6 @@ exports.handleSafetyAlerts = onDocumentWritten(
   {
     document: 'users/{userId}/power_safety/{document}',
     maxInstances: 5,
-    secrets: [BREVO_API_KEY],
   },
   handleSafetyAlerts
 );
@@ -216,7 +267,6 @@ exports.handleDeviceCommandEmails = onDocumentWritten(
   {
     document: 'users/{userId}/device_commands/{commandId}',
     maxInstances: 5,
-    secrets: [BREVO_API_KEY],
   },
   handleDeviceCommandEmails
 );
@@ -229,7 +279,6 @@ exports.handleDailyReceiptEmails = onDocumentWritten(
   {
     document: 'users/{userId}/history_daily/{date}',
     maxInstances: 5,
-    secrets: [BREVO_API_KEY],
   },
   handleDailyReceiptEmails
 );

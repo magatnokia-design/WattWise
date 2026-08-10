@@ -22,6 +22,7 @@ import {
 } from './utils/historyHelpers';
 
 const TABS = ['Activity', 'Usage'];
+const ACTIVITY_PAGE_SIZE = 20;
 
 const FilterChip = ({ label, active, onPress }) => (
   <TouchableOpacity
@@ -42,8 +43,12 @@ const HistoryScreen = () => {
   const [activeFilter, setActiveFilter] = useState('All');
   const [activeRangeId, setActiveRangeId] = useState('all');
   const [dateModalVisible, setDateModalVisible] = useState(false);
+  // The activity listener is capped by count, so "load more" raises the cap and
+  // re-subscribes. Growing the live query keeps realtime updates working, which
+  // a separate paginated fetch would fight with.
+  const [logLimit, setLogLimit] = useState(ACTIVITY_PAGE_SIZE);
 
- const { activityLogs, usageHistory, loading, subscribeActivityLogs, fetchUsageHistory } = useHistory();
+ const { activityLogs, usageHistory, loading, hasMore, subscribeActivityLogs, fetchUsageHistory } = useHistory();
 
  const filterToOutletValue = useMemo(() => ({
    All: 'all',
@@ -55,12 +60,18 @@ const HistoryScreen = () => {
 useEffect(() => {
   if (authLoading || !user || activeTab !== 0) return;
 
-  const unsubscribe = subscribeActivityLogs({
-    outlet: filterToOutletValue[activeFilter] || 'all',
-  });
+  const unsubscribe = subscribeActivityLogs(
+    { outlet: filterToOutletValue[activeFilter] || 'all' },
+    logLimit
+  );
 
   return unsubscribe;
-}, [activeFilter, activeTab, authLoading, user, subscribeActivityLogs, filterToOutletValue]);
+}, [activeFilter, activeTab, authLoading, user, subscribeActivityLogs, filterToOutletValue, logLimit]);
+
+// Changing the outlet or date filter starts a fresh window.
+useEffect(() => {
+  setLogLimit(ACTIVITY_PAGE_SIZE);
+}, [activeFilter, activeRangeId]);
 
 const { startDate, endDate } = useMemo(
   () => resolveDateRange(activeRangeId),
@@ -90,6 +101,10 @@ useEffect(() => {
 
   const handleDateModalClose = useCallback(() => {
     setDateModalVisible(false);
+  }, []);
+
+  const handleLoadMoreActivity = useCallback(() => {
+    setLogLimit((current) => current + ACTIVITY_PAGE_SIZE);
   }, []);
 
   // Activity logs stream in unfiltered by date (the listener is capped by count,
@@ -188,9 +203,24 @@ useEffect(() => {
         showsVerticalScrollIndicator={false}
       >
         {activeTab === 0 ? (
-          <ActivityLog logs={visibleActivityLogs} />
+          <>
+            {/* The listener is capped by count, so a date range can only filter
+                what has been loaded. Say so rather than implying completeness. */}
+            {activeRangeId !== 'all' && hasMore ? (
+              <Text style={styles.rangeNotice}>
+                Showing the {activityLogs.length} most recent entries within this range.
+                Load more below to look further back.
+              </Text>
+            ) : null}
+            <ActivityLog
+              logs={visibleActivityLogs}
+              loading={loading}
+              hasMore={hasMore}
+              onLoadMore={handleLoadMoreActivity}
+            />
+          </>
         ) : (
-          <UsageHistory usage={usageHistory} />
+          <UsageHistory usage={usageHistory} loading={loading} />
         )}
       </ScrollView>
 
@@ -325,6 +355,17 @@ const styles = StyleSheet.create({
   dateFilterTextActive: {
     color: COLORS.white,
     fontWeight: '600',
+  },
+  rangeNotice: {
+    fontSize: 11,
+    lineHeight: 16,
+    color: COLORS.textLight,
+    backgroundColor: COLORS.white,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 8,
+    padding: 10,
+    marginBottom: 10,
   },
   scrollView: {
     flex: 1,

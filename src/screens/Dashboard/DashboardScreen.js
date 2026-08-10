@@ -1,5 +1,5 @@
 // Dashboard Screen
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -10,22 +10,15 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import { COLORS } from '../../constants/colors';
 import { SIZES, FONTS } from '../../constants/theme';
 import NotificationPanel from '../Notifications/components/NotificationPanel';
 import OutletControlModal from './components/OutletControlModal';
-import EditApplianceNameModal from './components/EditApplianceNameModal';
+import ApplianceSuggestion from './components/ApplianceSuggestion';
 import { useOutletControl } from './hooks/useOutletControl';
-
-const formatSuggestionLabel = (suggestion) => {
-  if (!suggestion?.name) return '';
-
-  if (typeof suggestion.confidencePercent === 'number') {
-    return `Suggested: ${suggestion.name} (${suggestion.confidencePercent}%)`;
-  }
-
-  return `Suggested: ${suggestion.name}`;
-};
+import { budgetService } from '../../services/firebase';
+import { auth } from '../../services/firebase/config';
 
 const toMetricNumber = (value) => {
   const parsed = Number(value);
@@ -45,55 +38,22 @@ const formatEnergyKwh = (value) => {
   return `${formatted} kWh`;
 };
 
-const formatRuntimeLabel = (runtimeSeconds) => {
-  const seconds = toMetricNumber(runtimeSeconds);
-  if (!Number.isFinite(seconds) || seconds <= 0) {
-    return '';
-  }
+/**
+ * Appliance line under each outlet title. It reflects what is actually drawing
+ * power right now: while loading we stay blank rather than flashing "Not set",
+ * and with no live load we say so instead of showing a stale saved name.
+ */
+const formatApplianceName = (name, { hasLoad, isLoading }) => {
+  if (isLoading) return '—';
+  if (!hasLoad) return 'Nothing plugged in';
 
-  const roundedSeconds = Math.round(seconds);
-  if (roundedSeconds < 60) {
-    return `${roundedSeconds}s`;
-  }
-
-  const totalMinutes = Math.floor(roundedSeconds / 60);
-  if (totalMinutes < 60) {
-    return `${totalMinutes}m`;
-  }
-
-  const hours = Math.floor(totalMinutes / 60);
-  const minutes = totalMinutes % 60;
-  return minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
-};
-
-const formatSuggestionWhy = (suggestion) => {
-  const details = [];
-
-  if (typeof suggestion?.meanPowerW === 'number') {
-    details.push(`Avg power ${toMetricNumber(suggestion.meanPowerW).toFixed(1)} W`);
-  }
-
-  const runtimeLabel = formatRuntimeLabel(suggestion?.runtimeSeconds);
-  if (runtimeLabel) {
-    details.push(`Runtime ${runtimeLabel}`);
-  }
-
-  if (typeof suggestion?.confidencePercent === 'number') {
-    details.push(`Confidence ${suggestion.confidencePercent}%`);
-  }
-
-  if (typeof suggestion?.sampleCount === 'number') {
-    details.push(`Samples ${Math.max(0, Math.round(suggestion.sampleCount))}`);
-  }
-
-  return details.length > 0
-    ? details.join(' • ')
-    : 'Based on recent live power telemetry.';
-};
-
-const formatApplianceName = (name) => {
   const normalized = String(name || '').trim();
   return normalized ? normalized : 'Not set';
+};
+
+const formatPeso = (value) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed.toFixed(2) : '0.00';
 };
 
 export const DashboardScreen = ({ navigation }) => {
@@ -110,6 +70,14 @@ export const DashboardScreen = ({ navigation }) => {
     outlet2Metrics,
     outlet1Suggestion,
     outlet2Suggestion,
+    outlet1HasLoad,
+    outlet2HasLoad,
+    isLoadingOutlets,
+    totalEnergyKwh,
+    totalPowerW,
+    estimatedCost,
+    estimatedCostPerHour,
+    effectiveRate,
     isToggling,
     toggleOutlet,
     updateApplianceName,
@@ -117,15 +85,55 @@ export const DashboardScreen = ({ navigation }) => {
 
   const outlet1Label = 'Outlet 1';
   const outlet2Label = 'Outlet 2';
-  const outlet1ApplianceLabel = formatApplianceName(outlet1ApplianceName);
-  const outlet2ApplianceLabel = formatApplianceName(outlet2ApplianceName);
+  const outlet1ApplianceLabel = formatApplianceName(outlet1ApplianceName, {
+    hasLoad: outlet1HasLoad,
+    isLoading: isLoadingOutlets,
+  });
+  const outlet2ApplianceLabel = formatApplianceName(outlet2ApplianceName, {
+    hasLoad: outlet2HasLoad,
+    isLoading: isLoadingOutlets,
+  });
 
-  const totalEnergyKwh = toMetricNumber(outlet1Metrics.energy) + toMetricNumber(outlet2Metrics.energy);
   const activeOutletsCount = (outlet1Status === true ? 1 : 0) + (outlet2Status === true ? 1 : 0);
+
+  // Budget summary. Reloaded whenever the screen regains focus so a change made
+  // on the Budget Tracking screen is reflected on returning here.
+  const [budget, setBudget] = useState({ monthlyBudget: 0, currentSpending: 0 });
+
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+
+      const loadBudget = async () => {
+        const userId = auth.currentUser?.uid;
+        if (!userId) return;
+
+        const result = await budgetService.getCurrentMonthBudget(userId);
+        if (!active || !result.success) return;
+
+        setBudget({
+          monthlyBudget: toMetricNumber(result.data?.monthlyBudget),
+          currentSpending: toMetricNumber(result.data?.currentSpending),
+        });
+      };
+
+      loadBudget();
+      return () => {
+        active = false;
+      };
+    }, [])
+  );
+
+  const budgetRemaining = Math.max(0, budget.monthlyBudget - budget.currentSpending);
+  const budgetPercent = budget.monthlyBudget > 0
+    ? Math.min(100, (budget.currentSpending / budget.monthlyBudget) * 100)
+    : 0;
 
   // Modal states
   const [controlModal, setControlModal] = useState({ visible: false, outlet: null });
-  const [editModal, setEditModal] = useState({ visible: false, outlet: null });
+  // Outlet number currently being named, so its suggestion buttons disable
+  // during the round trip instead of queueing duplicate writes.
+  const [isNamingOutlet, setIsNamingOutlet] = useState(null);
 
   // Handle toggle outlet
   const handleToggleOutlet = (outletNumber) => {
@@ -146,43 +154,48 @@ export const DashboardScreen = ({ navigation }) => {
     Alert.alert('Toggle Failed', result.error || 'Unable to update outlet status right now.');
   };
 
-  // Handle edit name
-  const handleEditName = (outletNumber) => {
-    setEditModal({ visible: true, outlet: outletNumber });
-  };
-
-  // Save appliance name
-  const handleSaveName = async (newName) => {
-    const { outlet } = editModal;
-    const result = await updateApplianceName(outlet, newName);
-    if (!result.success) {
-      Alert.alert('Update Failed', result.error || 'Unable to update appliance name right now.');
-      return;
-    }
-    setEditModal({ visible: false, outlet: null });
-  };
-
   const toggleSuggestionWhy = (outletNumber) => {
     setExpandedSuggestionOutlet((current) => (current === outletNumber ? null : outletNumber));
   };
 
-  const handleAcceptSuggestion = async (outletNumber) => {
+  // Confirms an appliance for an outlet - either the top suggestion or one of
+  // the same-wattage alternatives the user picked instead.
+  const handleChooseAppliance = async (outletNumber, chosenName) => {
     const suggestion = outletNumber === 1 ? outlet1Suggestion : outlet2Suggestion;
-    if (!suggestion?.canAccept || !suggestion?.name) {
+    const name = String(chosenName || '').trim();
+    if (!name || isNamingOutlet) {
       return;
     }
 
-    const result = await updateApplianceName(outletNumber, suggestion.name, {
-      source: 'auto_suggestion',
-      confidencePercent: suggestion.confidencePercent,
-      modelVersion: suggestion.modelVersion,
-    });
-    if (!result.success) {
-      Alert.alert('Update Failed', result.error || 'Unable to apply suggested appliance name.');
-      return;
-    }
+    const isTopSuggestion = name === suggestion?.name;
+    setIsNamingOutlet(outletNumber);
 
-    setExpandedSuggestionOutlet((current) => (current === outletNumber ? null : current));
+    try {
+      const result = await updateApplianceName(outletNumber, name, {
+        source: isTopSuggestion ? 'auto_suggestion' : 'user_choice',
+        confidencePercent: isTopSuggestion ? suggestion?.confidencePercent : undefined,
+        modelVersion: suggestion?.modelVersion,
+      });
+
+      if (!result.success) {
+        Alert.alert('Update Failed', result.error || 'Unable to apply the appliance name.');
+        return;
+      }
+
+      setExpandedSuggestionOutlet((current) => (current === outletNumber ? null : current));
+
+      // Naming always lands; learning the signature needs a few seconds of live
+      // measurement, so say so instead of failing silently.
+      if (!result.learned) {
+        Alert.alert(
+          'Saved as name only',
+          result.learnError ||
+            'Named, but not saved as a signature yet - keep it running for a few seconds and confirm again.'
+        );
+      }
+    } finally {
+      setIsNamingOutlet(null);
+    }
   };
 
   return (
@@ -193,10 +206,7 @@ export const DashboardScreen = ({ navigation }) => {
       >
         {/* Header */}
         <View style={styles.header}>
-          <View>
-            <Text style={styles.greeting}>Good Morning 👋</Text>
-            <Text style={styles.headerTitle}>WattWise</Text>
-          </View>
+          <Text style={styles.headerTitle}>WattWise</Text>
           <TouchableOpacity
             style={styles.notificationButton}
             onPress={() => setNotificationVisible(true)}
@@ -206,32 +216,34 @@ export const DashboardScreen = ({ navigation }) => {
           </TouchableOpacity>
         </View>
 
-        {/* Total Energy Summary Card */}
-        <View style={styles.summaryCard}>
-          <View style={styles.summaryGlowCircle} />
-          <View style={styles.summaryTopRow}>
-            <View>
-              <Text style={styles.summaryEyebrow}>Live Household Snapshot</Text>
-              <Text style={styles.summaryTitle}>Total Energy Usage</Text>
-            </View>
-            <View style={styles.summaryIconBadge}>
-              <Ionicons name="flash" size={18} color={COLORS.white} />
-            </View>
+        {/* Compact live snapshot - deliberately small so Smart Outlets leads */}
+        <View style={styles.snapshotStrip}>
+          <View style={styles.snapshotItem}>
+            <Text style={styles.snapshotValue}>{formatEnergyKwh(totalEnergyKwh)}</Text>
+            <Text style={styles.snapshotLabel}>Total energy</Text>
           </View>
-
-          <Text style={styles.summaryValue}>{formatEnergyKwh(totalEnergyKwh)}</Text>
-
-          <View style={styles.summaryPillRow}>
-            <View style={styles.summaryPill}>
-              <Text style={styles.summaryPillValue}>₱0.00</Text>
-              <Text style={styles.summaryPillLabel}>Estimated Cost</Text>
-            </View>
-            <View style={styles.summaryPill}>
-              <Text style={styles.summaryPillValue}>{activeOutletsCount}</Text>
-              <Text style={styles.summaryPillLabel}>Active Outlets</Text>
-            </View>
+          <View style={styles.snapshotDivider} />
+          <View style={styles.snapshotItem}>
+            <Text style={styles.snapshotValue}>₱{formatPeso(estimatedCost)}</Text>
+            <Text style={styles.snapshotLabel}>Est. cost</Text>
+          </View>
+          <View style={styles.snapshotDivider} />
+          <View style={styles.snapshotItem}>
+            <Text style={styles.snapshotValue}>{activeOutletsCount}/2</Text>
+            <Text style={styles.snapshotLabel}>Active</Text>
           </View>
         </View>
+
+        {/* Live draw + what it costs per hour at the user's rate */}
+        {totalPowerW > 0 ? (
+          <View style={styles.liveRateRow}>
+            <Ionicons name="flash" size={13} color={COLORS.primary} />
+            <Text style={styles.liveRateText}>
+              Drawing {totalPowerW.toFixed(1)} W · ≈₱{formatPeso(estimatedCostPerHour)}/hr at ₱
+              {effectiveRate.toFixed(2)}/kWh
+            </Text>
+          </View>
+        ) : null}
 
         {/* Power Safety Status */}
         <TouchableOpacity
@@ -249,8 +261,11 @@ export const DashboardScreen = ({ navigation }) => {
           </View>
         </TouchableOpacity>
 
-        {/* Outlets Section */}
-        <Text style={styles.sectionTitle}>Smart Outlets</Text>
+        {/* Outlets Section - the primary content of this screen */}
+        <View style={styles.sectionHeaderRow}>
+          <View style={styles.sectionAccent} />
+          <Text style={styles.sectionTitle}>Smart Outlets</Text>
+        </View>
 
         {/* Outlet Cards */}
         <View style={styles.outletsContainer}>
@@ -264,17 +279,11 @@ export const DashboardScreen = ({ navigation }) => {
                   <Text
                     style={[
                       styles.applianceValue,
-                      !outlet1ApplianceName && styles.applianceValuePlaceholder,
+                      (!outlet1HasLoad || !outlet1ApplianceName) && styles.applianceValuePlaceholder,
                     ]}
                   >
                     {outlet1ApplianceLabel}
                   </Text>
-                  <TouchableOpacity
-                    style={styles.applianceEditButton}
-                    onPress={() => handleEditName(1)}
-                  >
-                    <Ionicons name="create-outline" size={14} color={COLORS.primary} />
-                  </TouchableOpacity>
                 </View>
               </View>
               <View style={[styles.statusBadge, outlet1Status ? styles.statusOn : styles.statusOff]}>
@@ -308,39 +317,13 @@ export const DashboardScreen = ({ navigation }) => {
               </View>
             </View>
 
-            {outlet1Suggestion.showBadge ? (
-              <>
-                <View style={styles.suggestionRow}>
-                  <Text style={styles.suggestionText}>{formatSuggestionLabel(outlet1Suggestion)}</Text>
-                  <View style={styles.suggestionActions}>
-                    <TouchableOpacity
-                      style={[
-                        styles.suggestionMetaButton,
-                        expandedSuggestionOutlet === 1 && styles.suggestionMetaButtonActive,
-                      ]}
-                      onPress={() => toggleSuggestionWhy(1)}
-                    >
-                      <Ionicons name="information-circle-outline" size={14} color={COLORS.primary} />
-                      <Text style={styles.suggestionMetaText}>Why</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.suggestionAction, isToggling && styles.suggestionActionDisabled]}
-                      onPress={() => handleAcceptSuggestion(1)}
-                      disabled={isToggling}
-                    >
-                      <Text style={styles.suggestionActionText}>Accept</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-
-                {expandedSuggestionOutlet === 1 ? (
-                  <View style={styles.suggestionDetailCard}>
-                    <Text style={styles.suggestionDetailTitle}>Why this suggestion?</Text>
-                    <Text style={styles.suggestionDetailText}>{formatSuggestionWhy(outlet1Suggestion)}</Text>
-                  </View>
-                ) : null}
-              </>
-            ) : null}
+            <ApplianceSuggestion
+              suggestion={outlet1Suggestion}
+              expanded={expandedSuggestionOutlet === 1}
+              disabled={isNamingOutlet === 1}
+              onToggleWhy={() => toggleSuggestionWhy(1)}
+              onChoose={(name) => handleChooseAppliance(1, name)}
+            />
 
             <TouchableOpacity
               style={[styles.toggleButton, outlet1Status ? styles.toggleButtonOn : styles.toggleButtonOff]}
@@ -368,17 +351,11 @@ export const DashboardScreen = ({ navigation }) => {
                   <Text
                     style={[
                       styles.applianceValue,
-                      !outlet2ApplianceName && styles.applianceValuePlaceholder,
+                      (!outlet2HasLoad || !outlet2ApplianceName) && styles.applianceValuePlaceholder,
                     ]}
                   >
                     {outlet2ApplianceLabel}
                   </Text>
-                  <TouchableOpacity
-                    style={styles.applianceEditButton}
-                    onPress={() => handleEditName(2)}
-                  >
-                    <Ionicons name="create-outline" size={14} color={COLORS.primary} />
-                  </TouchableOpacity>
                 </View>
               </View>
               <View style={[styles.statusBadge, outlet2Status ? styles.statusOn : styles.statusOff]}>
@@ -412,39 +389,13 @@ export const DashboardScreen = ({ navigation }) => {
               </View>
             </View>
 
-            {outlet2Suggestion.showBadge ? (
-              <>
-                <View style={styles.suggestionRow}>
-                  <Text style={styles.suggestionText}>{formatSuggestionLabel(outlet2Suggestion)}</Text>
-                  <View style={styles.suggestionActions}>
-                    <TouchableOpacity
-                      style={[
-                        styles.suggestionMetaButton,
-                        expandedSuggestionOutlet === 2 && styles.suggestionMetaButtonActive,
-                      ]}
-                      onPress={() => toggleSuggestionWhy(2)}
-                    >
-                      <Ionicons name="information-circle-outline" size={14} color={COLORS.primary} />
-                      <Text style={styles.suggestionMetaText}>Why</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.suggestionAction, isToggling && styles.suggestionActionDisabled]}
-                      onPress={() => handleAcceptSuggestion(2)}
-                      disabled={isToggling}
-                    >
-                      <Text style={styles.suggestionActionText}>Accept</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-
-                {expandedSuggestionOutlet === 2 ? (
-                  <View style={styles.suggestionDetailCard}>
-                    <Text style={styles.suggestionDetailTitle}>Why this suggestion?</Text>
-                    <Text style={styles.suggestionDetailText}>{formatSuggestionWhy(outlet2Suggestion)}</Text>
-                  </View>
-                ) : null}
-              </>
-            ) : null}
+            <ApplianceSuggestion
+              suggestion={outlet2Suggestion}
+              expanded={expandedSuggestionOutlet === 2}
+              disabled={isNamingOutlet === 2}
+              onToggleWhy={() => toggleSuggestionWhy(2)}
+              onChoose={(name) => handleChooseAppliance(2, name)}
+            />
 
             <TouchableOpacity
               style={[styles.toggleButton, outlet2Status ? styles.toggleButtonOn : styles.toggleButtonOff]}
@@ -474,14 +425,6 @@ export const DashboardScreen = ({ navigation }) => {
           isLoading={isToggling}
         />
 
-        <EditApplianceNameModal
-          visible={editModal.visible}
-          onClose={() => setEditModal({ visible: false, outlet: null })}
-          outletNumber={editModal.outlet}
-          currentName={editModal.outlet === 1 ? outlet1ApplianceName : outlet2ApplianceName}
-          onSave={handleSaveName}
-        />
-
         {/* Budget Overview */}
         <TouchableOpacity
           style={styles.budgetCard}
@@ -490,12 +433,18 @@ export const DashboardScreen = ({ navigation }) => {
         >
           <View style={styles.budgetHeader}>
             <Text style={styles.budgetTitle}>Monthly Budget</Text>
-            <Text style={styles.budgetAmount}>₱0.00 / ₱0.00</Text>
+            <Text style={styles.budgetAmount}>
+              ₱{formatPeso(budget.currentSpending)} / ₱{formatPeso(budget.monthlyBudget)}
+            </Text>
           </View>
           <View style={styles.budgetBar}>
-            <View style={[styles.budgetFill, { width: '0%' }]} />
+            <View style={[styles.budgetFill, { width: `${budgetPercent}%` }]} />
           </View>
-          <Text style={styles.budgetRemaining}>₱0.00 remaining</Text>
+          <Text style={styles.budgetRemaining}>
+            {budget.monthlyBudget > 0
+              ? `₱${formatPeso(budgetRemaining)} remaining`
+              : 'Tap to set a monthly budget'}
+          </Text>
         </TouchableOpacity>
 
         {/* Reference Comparison Card */}
@@ -538,10 +487,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 20,
   },
-  greeting: {
-    ...FONTS.body,
-    color: COLORS.textLight,
-  },
   headerTitle: {
     ...FONTS.h2,
     color: COLORS.textDark,
@@ -560,85 +505,50 @@ const styles = StyleSheet.create({
   notificationIcon: {
     fontSize: 20,
   },
-  summaryCard: {
-    backgroundColor: COLORS.primary,
-    borderRadius: SIZES.radius * 1.5,
-    padding: SIZES.padding * 1.5,
-    borderWidth: 1,
-    borderColor: COLORS.primaryDark,
-    overflow: 'hidden',
-    marginBottom: 16,
-  },
-  summaryGlowCircle: {
-    position: 'absolute',
-    width: 180,
-    height: 180,
-    borderRadius: 90,
+  snapshotStrip: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: COLORS.white,
-    opacity: 0.08,
-    top: -48,
-    right: -36,
-  },
-  summaryTopRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  summaryEyebrow: {
-    ...FONTS.small,
-    color: COLORS.white,
-    opacity: 0.84,
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
-    marginBottom: 4,
-  },
-  summaryTitle: {
-    ...FONTS.body,
-    color: COLORS.white,
-    opacity: 0.95,
-    fontWeight: '600',
-  },
-  summaryIconBadge: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: COLORS.white + '2E',
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderRadius: SIZES.radius,
     borderWidth: 1,
-    borderColor: COLORS.white + '4D',
+    borderColor: COLORS.border,
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    marginBottom: 10,
   },
-  summaryValue: {
-    fontSize: 40,
-    fontWeight: 'bold',
-    color: COLORS.white,
-    marginBottom: 14,
-    letterSpacing: 0.3,
-  },
-  summaryPillRow: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  summaryPill: {
+  snapshotItem: {
     flex: 1,
-    backgroundColor: COLORS.white + '1F',
-    borderWidth: 1,
-    borderColor: COLORS.white + '2E',
-    borderRadius: 10,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
+    alignItems: 'center',
   },
-  summaryPillValue: {
-    ...FONTS.h4,
-    color: COLORS.white,
-    fontWeight: 'bold',
+  snapshotValue: {
+    ...FONTS.body,
+    fontSize: 15,
+    fontWeight: '700',
+    color: COLORS.textDark,
   },
-  summaryPillLabel: {
+  snapshotLabel: {
     ...FONTS.small,
-    color: COLORS.white,
-    opacity: 0.82,
-    marginTop: 4,
+    fontSize: 11,
+    color: COLORS.textLight,
+    marginTop: 2,
+  },
+  snapshotDivider: {
+    width: 1,
+    height: 26,
+    backgroundColor: COLORS.border,
+  },
+  liveRateRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 16,
+    paddingHorizontal: 4,
+  },
+  liveRateText: {
+    ...FONTS.small,
+    fontSize: 11,
+    color: COLORS.textLight,
+    flexShrink: 1,
   },
   safetyCard: {
     backgroundColor: COLORS.white,
@@ -678,11 +588,23 @@ const styles = StyleSheet.create({
     color: COLORS.white,
     fontWeight: '600',
   },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12,
+    marginTop: 4,
+  },
+  sectionAccent: {
+    width: 4,
+    height: 20,
+    borderRadius: 2,
+    backgroundColor: COLORS.primary,
+  },
   sectionTitle: {
-    ...FONTS.h4,
+    ...FONTS.h3,
     color: COLORS.textDark,
     fontWeight: 'bold',
-    marginBottom: 12,
   },
   outletsContainer: {
     marginBottom: 8,
@@ -725,9 +647,6 @@ const styles = StyleSheet.create({
   applianceValuePlaceholder: {
     color: COLORS.textLight,
     fontWeight: '500',
-  },
-  applianceEditButton: {
-    padding: 4,
   },
   statusBadge: {
     flexDirection: 'row',
@@ -788,86 +707,6 @@ const styles = StyleSheet.create({
     color: COLORS.textLight,
     marginTop: 2,
     fontSize: 10,
-  },
-  suggestionRow: {
-    marginTop: -4,
-    marginBottom: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: COLORS.primary + '12',
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: COLORS.primary + '40',
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    gap: 8,
-  },
-  suggestionText: {
-    flex: 1,
-    ...FONTS.small,
-    color: COLORS.textDark,
-    fontWeight: '600',
-  },
-  suggestionActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  suggestionMetaButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: COLORS.primary + '55',
-    backgroundColor: COLORS.white,
-  },
-  suggestionMetaButtonActive: {
-    backgroundColor: COLORS.primary + '14',
-    borderColor: COLORS.primary,
-  },
-  suggestionMetaText: {
-    ...FONTS.small,
-    color: COLORS.primary,
-    fontWeight: '700',
-  },
-  suggestionAction: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 999,
-    backgroundColor: COLORS.primary,
-  },
-  suggestionActionDisabled: {
-    opacity: 0.55,
-  },
-  suggestionActionText: {
-    ...FONTS.small,
-    color: COLORS.white,
-    fontWeight: '700',
-  },
-  suggestionDetailCard: {
-    marginTop: -2,
-    marginBottom: 8,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    backgroundColor: COLORS.background,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-  },
-  suggestionDetailTitle: {
-    ...FONTS.small,
-    color: COLORS.textDark,
-    fontWeight: '700',
-    marginBottom: 4,
-  },
-  suggestionDetailText: {
-    ...FONTS.small,
-    color: COLORS.textLight,
-    lineHeight: 16,
   },
   toggleButton: {
     flexDirection: 'row',

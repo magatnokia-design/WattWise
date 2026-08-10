@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-WiseWatt (repo folder `C:\App\WiseWatt`; Firebase project ID is still `wattwise-fe394` — an
+WattWise (repo folder `C:\App\WattWise`; Firebase project ID is still `wattwise-fe394` — an
 earlier name — see `.firebaserc` and `src/services/firebase/config.js`) is a smart energy
 monitoring app for apartment rooms with ESP32-based outlet control. It covers exactly 2
 outlets, live telemetry, appliance auto-detection, scheduling, safety cutoff, budget tracking,
@@ -42,7 +42,7 @@ infrastructure exists only under `functions/`.
 - Exactly **2 outlets** (`outlet1`, `outlet2`), stable IDs, never more.
 - **Low-voltage appliances only** (chargers, laptops, fans, TVs, LED lamps, consoles).
 - `outlet1` -> relay CH2 -> **GPIO22**. `outlet2` -> relay CH1 -> **GPIO23**. Do not swap these
-  (see `docs/esp32/WiseWatt_ESP32_Relay_Cloud/WiseWatt_ESP32_Relay_Cloud.ino`).
+  (see `docs/esp32/WattWise_ESP32_Relay_Cloud/WattWise_ESP32_Relay_Cloud.ino`).
 - Theme is green/white only, from `src/constants/colors.js`. Primary `#10B981`. UI is minimal:
   white cards, rounded corners, subdued borders, dim-overlay modals, emoji bottom-tab icons.
 - **No mock/dummy data with intervals.** Use `0` or real Firebase data.
@@ -69,7 +69,7 @@ ESP32 does not receive pushed commands. Instead:
 4. `markStaleDeviceCommands` (scheduled, every minute) times out commands that never got
    acknowledged.
 5. `handleDeviceCommandEmails` (Firestore trigger on `device_commands/{commandId}`) sends
-   failure-notification emails via Brevo.
+   failure-notification emails by queueing them to the `mail` collection.
 
 Telemetry flows the other direction: ESP32 posts sensor readings to `updateOutletMetrics`
 (HTTP), which validates the device via `deviceSecurity.js` (timestamp freshness, per-device
@@ -87,7 +87,8 @@ Function-first layout under `functions/src/`:
 - `scheduled/` - `onSchedule` cron jobs (all `Asia/Manila` timezone)
 - `triggers/` - `onDocumentWritten` Firestore triggers
 - `lib/` - shared logic: `deviceSecurity.js` (device auth/validation), `deviceCommandDispatcher.js`
-  (command writes), `applianceDetector.js`, `billing.js`, `brevoEmail.js` (secret-backed email)
+  (command writes), `applianceDetector.js`, `billing.js`, `mailQueue.js` (queues email docs
+  to the top-level `mail` collection for the Firestore "Trigger Email" extension to send)
 
 `functions/index.js` is the single export registry and runtime config entry point - every
 exported function's trigger config (region inherited from `setGlobalOptions`, schedule, Firestore

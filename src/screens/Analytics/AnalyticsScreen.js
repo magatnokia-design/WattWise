@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -8,32 +8,187 @@ import {
   Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { COLORS } from '../../constants/colors';
+import { COLORS, CHART_COLORS } from '../../constants/colors';
 import { FONTS, SIZES } from '../../constants/theme';
 import { useAuth } from '../../hooks/useAuth';
-import { budgetService, historyService, userService } from '../../services/firebase';
+import {
+  budgetService,
+  historyService,
+  outletService,
+  userService,
+} from '../../services/firebase';
 import { calculatePelcoIIIBill } from '../../utils/billing';
+import { buildLiveAppliances, buildLiveTodayEntry, withLiveToday } from '../../utils/liveUsage';
 import { formatCurrency } from '../BudgetTracking/utils/budgetHelpers';
+import LiveUsagePanel from './components/LiveUsagePanel';
+import InsightsCard from './components/InsightsCard';
 
 const { width } = Dimensions.get('window');
 
 const TABS = ['Daily', 'Weekly', 'Monthly'];
 
-const DEFAULT_SUMMARY = {
-  totalEnergy: 0,
-  totalCost: 0,
-  averageUsage: 0,
-  peakUsage: 0,
-  peakHour: 'N/A',
-  bestDay: 'N/A',
-  outlet1Total: 0,
-  outlet2Total: 0,
-  effectiveRate: 0,
-};
+// Matches the dashboard's staleness window, so both screens agree on whether
+// the hardware is currently reporting.
+const HARDWARE_STALE_THRESHOLD_MS = 12000;
 
 const toNumber = (value) => {
   const numeric = Number(value);
   return Number.isFinite(numeric) ? numeric : 0;
+};
+
+/**
+ * Builds the situational insight list. Every entry is conditional: an insight
+ * only appears when the data actually supports it, so the card never states
+ * something the numbers cannot back up.
+ *
+ * Each insight carries a `signature` combining its key with the figures it
+ * quotes. That is what dismissal is keyed on, so hiding "on pace for P500"
+ * does not also hide "on pace for P900" when the situation worsens.
+ */
+const buildInsights = ({
+  summary,
+  budget,
+  selectedTab,
+  chartData,
+  chartLabels,
+  liveAppliances = [],
+  isLive = false,
+}) => {
+  const insights = [];
+  const totalEnergy = toNumber(summary.totalEnergy);
+
+  const add = (key, stamp, entry) => {
+    insights.push({ key, signature: `${key}:${stamp}`, ...entry });
+  };
+
+  // Live status first - it is the only part that reflects this moment rather
+  // than the selected period.
+  const drawing = liveAppliances.filter((appliance) => appliance.isDrawing);
+  const idleOn = liveAppliances.filter((appliance) => appliance.isOn && !appliance.isDrawing);
+
+  if (isLive && drawing.length > 0) {
+    const livePower = drawing.reduce((sum, appliance) => sum + toNumber(appliance.powerW), 0);
+    const liveCostPerHour = drawing.reduce((sum, appliance) => sum + toNumber(appliance.costPerHour), 0);
+    const names = drawing.map((appliance) => appliance.applianceName).join(' and ');
+
+    add('live-draw', `${Math.round(livePower / 5) * 5}`, {
+      icon: '⚡',
+      tone: 'good',
+      text: `${names} ${drawing.length > 1 ? 'are' : 'is'} drawing ${livePower.toFixed(1)} W right now, about ${formatCurrency(liveCostPerHour)} per hour if it keeps running.`,
+    });
+  }
+
+  if (isLive && idleOn.length > 0) {
+    add('idle-outlet', idleOn.map((appliance) => appliance.outletNumber).join('-'), {
+      icon: '🔌',
+      tone: 'warn',
+      text: `Outlet ${idleOn.map((appliance) => appliance.outletNumber).join(' and ')} ${idleOn.length > 1 ? 'are' : 'is'} switched on but nothing is drawing power. Turning ${idleOn.length > 1 ? 'them' : 'it'} off costs you nothing to try.`,
+    });
+  }
+
+  if (totalEnergy <= 0) return insights;
+
+  // Biggest consumer for the period.
+  const topAppliance = summary.applianceUsage?.[0];
+  if (topAppliance && topAppliance.energyKwh > 0) {
+    const share = (topAppliance.energyKwh / totalEnergy) * 100;
+    add('top-appliance', `${topAppliance.applianceName}:${share.toFixed(0)}`, {
+      icon: '📌',
+      tone: 'neutral',
+      text: `${topAppliance.applianceName} is your biggest consumer at ${share.toFixed(0)}% of usage (${formatCurrency(topAppliance.cost)}).`,
+    });
+  }
+
+  // Outlet imbalance, only when one side is meaningfully heavier.
+  const energy1 = toNumber(summary.outlet1Total);
+  const energy2 = toNumber(summary.outlet2Total);
+  const heavier = energy1 >= energy2 ? 1 : 2;
+  const lighter = Math.min(energy1, energy2);
+  if (lighter > 0.01) {
+    const ratio = Math.max(energy1, energy2) / lighter;
+    if (ratio >= 1.5) {
+      add('imbalance', `${heavier}:${ratio.toFixed(1)}`, {
+        icon: '⚖️',
+        tone: 'neutral',
+        text: `Outlet ${heavier} is drawing ${ratio.toFixed(1)}x more than Outlet ${heavier === 1 ? 2 : 1}.`,
+      });
+    }
+  }
+
+  // Peak day within the charted range.
+  const peakIndex = chartData.reduce(
+    (best, value, index) => (toNumber(value) > toNumber(chartData[best]) ? index : best),
+    0
+  );
+  if (chartData.length > 1 && toNumber(chartData[peakIndex]) > 0 && chartLabels[peakIndex]) {
+    add('peak', `${chartLabels[peakIndex]}:${toNumber(chartData[peakIndex]).toFixed(2)}`, {
+      icon: '📈',
+      tone: 'neutral',
+      text: `Highest usage was ${chartLabels[peakIndex]} at ${toNumber(chartData[peakIndex]).toFixed(2)} kWh.`,
+    });
+  }
+
+  // Month-end projection against the configured budget.
+  const monthlyBudget = toNumber(budget.monthlyBudget);
+  const currentSpending = toNumber(budget.currentSpending);
+  if (monthlyBudget > 0 && currentSpending > 0) {
+    const now = new Date();
+    const dayOfMonth = now.getDate();
+    const daysInMonth = getDaysInMonth(now);
+    const projected = (currentSpending / dayOfMonth) * daysInMonth;
+    const projectedPercent = (projected / monthlyBudget) * 100;
+
+    add('projection', `${Math.round(projectedPercent / 5) * 5}`, {
+      icon: projectedPercent > 100 ? '⚠️' : '🎯',
+      tone: projectedPercent > 100 ? 'alert' : 'good',
+      text: projectedPercent > 100
+        ? `On pace for ${formatCurrency(projected)} by month end - ${(projectedPercent - 100).toFixed(0)}% over your ${formatCurrency(monthlyBudget)} budget.`
+        : `On pace for ${formatCurrency(projected)} by month end, ${projectedPercent.toFixed(0)}% of your ${formatCurrency(monthlyBudget)} budget.`,
+    });
+  } else if (monthlyBudget <= 0) {
+    add('no-budget', 'unset', {
+      icon: '🎯',
+      tone: 'neutral',
+      text: 'Set a monthly budget to see whether your usage is on track.',
+    });
+  }
+
+  // Effective rate, which makes the bill total explainable.
+  const effectiveRate = toNumber(summary.effectiveRate);
+  if (effectiveRate > 0) {
+    add('rate', `${selectedTab}:${effectiveRate.toFixed(2)}`, {
+      icon: '💰',
+      tone: 'neutral',
+      text: `You are effectively paying ${formatCurrency(effectiveRate)} per kWh this ${selectedTab.toLowerCase()} period.`,
+    });
+  }
+
+  return insights;
+};
+
+/**
+ * Rolls the per-day applianceBreakdown written by processDailyRollup into one
+ * list for the selected range, largest consumer first.
+ */
+const aggregateApplianceUsage = (entries) => {
+  const totals = new Map();
+
+  (Array.isArray(entries) ? entries : []).forEach((entry) => {
+    const breakdown = Array.isArray(entry?.applianceBreakdown) ? entry.applianceBreakdown : [];
+
+    breakdown.forEach((item) => {
+      const name = String(item?.applianceName || '').trim();
+      const energyKwh = toNumber(item?.energyKwh);
+      if (!name || energyKwh <= 0) return;
+
+      const existing = totals.get(name) || { applianceName: name, energyKwh: 0, cost: 0 };
+      existing.energyKwh += energyKwh;
+      existing.cost += toNumber(item?.cost);
+      totals.set(name, existing);
+    });
+  });
+
+  return Array.from(totals.values()).sort((a, b) => b.energyKwh - a.energyKwh);
 };
 
 const toDateKey = (date) => {
@@ -61,6 +216,19 @@ const buildDateRange = (startDate, endDate) => {
     cursor.setDate(cursor.getDate() + 1);
   }
   return days;
+};
+
+// Shared by the fetch effect and the compute memo so the queried window and the
+// charted window can never drift apart.
+const getTabRange = (tab) => {
+  const endDate = new Date();
+  endDate.setHours(0, 0, 0, 0);
+
+  const startDate = tab === 'Weekly'
+    ? addDays(endDate, -6)
+    : new Date(endDate.getFullYear(), endDate.getMonth(), 1);
+
+  return { startDate, endDate };
 };
 
 const formatShortDate = (date) => {
@@ -108,21 +276,6 @@ const SimpleBarChart = ({ data, labels }) => {
   );
 };
 
-const StatCard = ({ label, value, icon, trend }) => (
-  <View style={styles.statCard}>
-    <Text style={styles.statIcon}>{icon}</Text>
-    <Text style={styles.statLabel}>{label}</Text>
-    <Text style={styles.statValue}>{value}</Text>
-    {trend !== undefined && (
-      <View style={styles.trendContainer}>
-        <Text style={[styles.trendText, trend > 0 ? styles.trendUp : styles.trendDown]}>
-          {trend > 0 ? '↑' : trend < 0 ? '↓' : '–'} {Math.abs(trend)}%
-        </Text>
-      </View>
-    )}
-  </View>
-);
-
 const BillBreakdownSection = ({ title, items, total }) => {
   if (!items || items.length === 0) return null;
 
@@ -142,39 +295,89 @@ const BillBreakdownSection = ({ title, items, total }) => {
   );
 };
 
-const OutletComparisonCard = ({ outlet1, outlet2 }) => {
-  const total = parseFloat(outlet1) + parseFloat(outlet2);
-  const outlet1Percent = total > 0 ? (parseFloat(outlet1) / total) * 100 : 50;
-  
+/**
+ * Outlet split for the selected period. Cost per outlet uses
+ * energy x effectiveRate, matching how processDailyRollup splits the bill so
+ * these figures agree with Budget and the daily receipt email.
+ */
+const OutletComparisonCard = ({ outlet1Energy, outlet2Energy, effectiveRate, appliance1, appliance2 }) => {
+  const energy1 = Number(outlet1Energy) || 0;
+  const energy2 = Number(outlet2Energy) || 0;
+  const total = energy1 + energy2;
+  const hasData = total > 0;
+
+  const rate = Number(effectiveRate) || 0;
+  const cost1 = energy1 * rate;
+  const cost2 = energy2 * rate;
+
+  const outlet1Percent = hasData ? (energy1 / total) * 100 : 0;
+  const outlet2Percent = hasData ? 100 - outlet1Percent : 0;
+
+  const heavier = energy1 >= energy2 ? 1 : 2;
+  const heavierEnergy = Math.max(energy1, energy2);
+  const lighterEnergy = Math.min(energy1, energy2);
+  // Only claim a ratio when the smaller side is non-trivial, otherwise "12x"
+  // is just noise from a near-idle outlet.
+  const ratio = lighterEnergy > 0.01 ? heavierEnergy / lighterEnergy : null;
+
   return (
     <View style={styles.comparisonCard}>
-      <Text style={styles.comparisonTitle}>Outlet Comparison</Text>
       <View style={styles.comparisonRow}>
         <View style={styles.comparisonItem}>
-          <View style={[styles.comparisonDot, { backgroundColor: COLORS.primary }]} />
+          <View style={[styles.comparisonDot, { backgroundColor: CHART_COLORS.series[0] }]} />
           <View style={styles.comparisonInfo}>
-            <Text style={styles.comparisonLabel}>Outlet 1</Text>
-            <Text style={styles.comparisonValue}>{outlet1} kWh</Text>
+            <Text style={styles.comparisonLabel} numberOfLines={1}>
+              {appliance1 || 'Outlet 1'}
+            </Text>
+            <Text style={styles.comparisonValue}>{energy1.toFixed(2)} kWh</Text>
+            <Text style={styles.comparisonCost}>{formatCurrency(cost1)}</Text>
           </View>
         </View>
         <View style={styles.comparisonItem}>
-          <View style={[styles.comparisonDot, { backgroundColor: COLORS.primaryLight }]} />
+          <View style={[styles.comparisonDot, { backgroundColor: CHART_COLORS.series[1] }]} />
           <View style={styles.comparisonInfo}>
-            <Text style={styles.comparisonLabel}>Outlet 2</Text>
-            <Text style={styles.comparisonValue}>{outlet2} kWh</Text>
+            <Text style={styles.comparisonLabel} numberOfLines={1}>
+              {appliance2 || 'Outlet 2'}
+            </Text>
+            <Text style={styles.comparisonValue}>{energy2.toFixed(2)} kWh</Text>
+            <Text style={styles.comparisonCost}>{formatCurrency(cost2)}</Text>
           </View>
         </View>
       </View>
-      <View style={styles.comparisonBar}>
-        <View style={[styles.comparisonFill, { 
-          width: `${outlet1Percent}%`, 
-          backgroundColor: COLORS.primary 
-        }]} />
-        <View style={[styles.comparisonFill, { 
-          width: `${100 - outlet1Percent}%`, 
-          backgroundColor: COLORS.primaryLight 
-        }]} />
-      </View>
+
+      {hasData ? (
+        <>
+          {/* Two adjacent fills get a surface gap between them so the boundary
+              stays visible rather than reading as one continuous bar. */}
+          <View style={styles.comparisonBar}>
+            <View style={[styles.comparisonFill, {
+              width: `${outlet1Percent}%`,
+              backgroundColor: CHART_COLORS.series[0],
+            }]} />
+            <View style={styles.comparisonFillGap} />
+            <View style={[styles.comparisonFill, {
+              width: `${outlet2Percent}%`,
+              backgroundColor: CHART_COLORS.series[1],
+            }]} />
+          </View>
+          <View style={styles.comparisonSplitRow}>
+            <Text style={styles.comparisonSplitText}>
+              {outlet1Percent.toFixed(0)}% / {outlet2Percent.toFixed(0)}%
+            </Text>
+            {ratio && ratio >= 1.2 ? (
+              <Text style={styles.comparisonSplitText}>
+                Outlet {heavier} used {ratio.toFixed(1)}x more
+              </Text>
+            ) : null}
+          </View>
+        </>
+      ) : (
+        <View style={styles.comparisonEmpty}>
+          <Text style={styles.comparisonEmptyText}>
+            No usage recorded for this period yet.
+          </Text>
+        </View>
+      )}
     </View>
   );
 };
@@ -182,13 +385,36 @@ const OutletComparisonCard = ({ outlet1, outlet2 }) => {
 export const AnalyticsScreen = () => {
   const { user, loading: authLoading } = useAuth();
   const [selectedTab, setSelectedTab] = useState('Daily');
-  const [summary, setSummary] = useState(DEFAULT_SUMMARY);
-  const [chartLabels, setChartLabels] = useState([]);
-  const [chartData, setChartData] = useState([]);
-  const [billDetails, setBillDetails] = useState(null);
+  const [rangeEntries, setRangeEntries] = useState([]);
+  // Last rolled-up day, shown only when today has measured nothing yet.
+  const [fallbackDaily, setFallbackDaily] = useState(null);
   const [rateProfileId, setRateProfileId] = useState(null);
   const [budget, setBudget] = useState({ monthlyBudget: 0, currentSpending: 0 });
   const [loading, setLoading] = useState(false);
+  const [outlets, setOutlets] = useState([]);
+  // Insights are dismissed by signature, so an insight returns when the figures
+  // it quotes change. Session-scoped on purpose: a new day should start clean.
+  const [dismissedInsights, setDismissedInsights] = useState([]);
+
+  // Today, assembled from live outlet telemetry rather than waiting for the
+  // midnight rollup to write a history_daily document.
+  const liveTodayEntry = useMemo(
+    () => buildLiveTodayEntry(outlets, { rateProfileId }),
+    [outlets, rateProfileId]
+  );
+
+  const liveAppliances = useMemo(
+    () => buildLiveAppliances(outlets, { rateProfileId }),
+    [outlets, rateProfileId]
+  );
+
+  const liveTotalPowerW = liveAppliances.reduce((sum, item) => sum + toNumber(item.powerW), 0);
+  const liveCostPerHour = liveAppliances.reduce((sum, item) => sum + toNumber(item.costPerHour), 0);
+  // Telemetry arrives every couple of seconds while the device is connected.
+  const telemetryIsStale = !outlets.some((outlet) => {
+    const updatedMs = Number(outlet?.metricsUpdatedAtMs) || 0;
+    return updatedMs > 0 && Date.now() - updatedMs < HARDWARE_STALE_THRESHOLD_MS;
+  });
 
   useEffect(() => {
     if (!user?.uid) {
@@ -224,160 +450,60 @@ export const AnalyticsScreen = () => {
 
     fetchPreferences();
 
+    // Live outlet telemetry. This is what makes today's usage appear
+    // immediately instead of waiting for the midnight rollup.
+    const unsubscribeOutlets = outletService.subscribeToOutlets(
+      user.uid,
+      (nextOutlets) => {
+        if (active) setOutlets(nextOutlets);
+      },
+      (error) => console.error('Analytics outlet subscription error:', error)
+    );
+
     return () => {
       active = false;
+      unsubscribeOutlets();
     };
   }, [user?.uid]);
 
+  // Fetch only. Kept off the live telemetry path on purpose: recomputing is
+  // cheap, but re-querying Firestore on every sensor reading is not.
   useEffect(() => {
     if (authLoading) return;
 
     if (!user?.uid) {
-      setSummary(DEFAULT_SUMMARY);
-      setChartLabels([]);
-      setChartData([]);
-      setBillDetails(null);
+      setRangeEntries([]);
+      setFallbackDaily(null);
       return;
     }
 
     let active = true;
-
-    const applySummary = (nextSummary, nextLabels, nextData, nextBill) => {
-      if (!active) return;
-      setSummary(nextSummary);
-      setChartLabels(nextLabels);
-      setChartData(nextData);
-      setBillDetails(nextBill || null);
-    };
 
     const fetchAnalytics = async () => {
       setLoading(true);
 
       try {
         if (selectedTab === 'Daily') {
+          // Only needed as a fallback for when nothing has been measured today.
           const dailyResult = await historyService.getDailyUsage(user.uid, {}, null, 1);
-          const dailyEntry = dailyResult.success && dailyResult.data.length
-            ? dailyResult.data[0]
-            : null;
+          if (!active) return;
 
-          const totalEnergy = toNumber(dailyEntry?.totalEnergy);
-          const outlet1Total = toNumber(dailyEntry?.outlet1Energy);
-          const outlet2Total = toNumber(dailyEntry?.outlet2Energy);
-          const entryDate = dailyEntry?.date
-            ? new Date(`${dailyEntry.date}T00:00:00`)
-            : new Date();
-          const billingDays = getDaysInMonth(entryDate);
-          const daysInPeriod = dailyEntry ? 1 : 0;
-          const bill = calculatePelcoIIIBill(totalEnergy, {
-            date: entryDate,
-            profileId: rateProfileId || null,
-            daysInPeriod,
-            billingDays,
-          });
-
-          applySummary(
-            {
-              totalEnergy,
-              totalCost: bill.totals.total,
-              averageUsage: totalEnergy,
-              peakUsage: totalEnergy,
-              peakHour: formatPeakHour(dailyEntry?.peakHour),
-              bestDay: dailyEntry?.date ? formatShortDate(entryDate) : 'N/A',
-              outlet1Total,
-              outlet2Total,
-              effectiveRate: bill.effectiveRate,
-            },
-            ['Outlet 1', 'Outlet 2', 'Total'],
-            [outlet1Total, outlet2Total, totalEnergy],
-            bill
+          setFallbackDaily(
+            dailyResult.success && dailyResult.data.length ? dailyResult.data[0] : null
           );
-
+          setRangeEntries([]);
           return;
         }
 
-        const endDate = new Date();
-        endDate.setHours(0, 0, 0, 0);
-
-        let startDate = endDate;
-        if (selectedTab === 'Weekly') {
-          startDate = addDays(endDate, -6);
-        } else {
-          startDate = new Date(endDate.getFullYear(), endDate.getMonth(), 1);
-        }
-
+        const { startDate, endDate } = getTabRange(selectedTab);
         const rangeResult = await historyService.getUsageByDateRange(
           user.uid,
           toDateKey(startDate),
           toDateKey(endDate)
         );
+        if (!active) return;
 
-        const entries = rangeResult.success ? rangeResult.data : [];
-        const entriesByDate = new Map();
-        entries.forEach((entry) => {
-          entriesByDate.set(entry.date, entry);
-        });
-
-        const hasEntries = entries.length > 0;
-
-        const days = buildDateRange(startDate, endDate);
-        const dailyValues = days.map((day) => {
-          const entry = entriesByDate.get(toDateKey(day));
-          return toNumber(entry?.totalEnergy);
-        });
-
-        const totalEnergy = dailyValues.reduce((sum, value) => sum + value, 0);
-        const outlet1Total = days.reduce((sum, day) => {
-          const entry = entriesByDate.get(toDateKey(day));
-          return sum + toNumber(entry?.outlet1Energy);
-        }, 0);
-        const outlet2Total = days.reduce((sum, day) => {
-          const entry = entriesByDate.get(toDateKey(day));
-          return sum + toNumber(entry?.outlet2Energy);
-        }, 0);
-
-        const peakUsage = dailyValues.length ? Math.max(...dailyValues) : 0;
-        const bestDayData = dailyValues
-          .map((value, index) => ({ value, date: days[index] }))
-          .filter((item) => item.value > 0)
-          .sort((a, b) => a.value - b.value)[0];
-        const bestDay = bestDayData ? formatShortDate(bestDayData.date) : 'N/A';
-
-        const bill = calculatePelcoIIIBill(totalEnergy, {
-          date: endDate,
-          profileId: rateProfileId || null,
-          daysInPeriod: hasEntries ? days.length : 0,
-          billingDays: getDaysInMonth(endDate),
-        });
-
-        const nextSummary = {
-          totalEnergy,
-          totalCost: bill.totals.total,
-          averageUsage: days.length ? totalEnergy / days.length : 0,
-          peakUsage,
-          peakHour: 'N/A',
-          bestDay,
-          outlet1Total,
-          outlet2Total,
-          effectiveRate: bill.effectiveRate,
-        };
-
-        if (selectedTab === 'Weekly') {
-          applySummary(nextSummary, days.map(formatWeekday), dailyValues, bill);
-          return;
-        }
-
-        const weeklyBuckets = [0, 0, 0, 0];
-        dailyValues.forEach((value, index) => {
-          const bucket = Math.min(3, Math.floor(index / 7));
-          weeklyBuckets[bucket] += value;
-        });
-
-        applySummary(
-          nextSummary,
-          ['Week 1', 'Week 2', 'Week 3', 'Week 4'],
-          weeklyBuckets,
-          bill
-        );
+        setRangeEntries(rangeResult.success ? rangeResult.data : []);
       } catch (error) {
         console.error('Error loading analytics:', error);
       } finally {
@@ -390,18 +516,155 @@ export const AnalyticsScreen = () => {
     return () => {
       active = false;
     };
-  }, [authLoading, rateProfileId, selectedTab, user?.uid]);
+  }, [authLoading, selectedTab, user?.uid]);
+
+  // Compute from stored history plus the live day. This re-runs on every
+  // telemetry update, which is what makes today's figures move in real time.
+  const analytics = useMemo(() => {
+    if (selectedTab === 'Daily') {
+      // Today first. Only when nothing has been measured yet does this fall
+      // back to the last rolled-up day.
+      const dailyEntry = liveTodayEntry || fallbackDaily;
+
+      const totalEnergy = toNumber(dailyEntry?.totalEnergy);
+      const outlet1Total = toNumber(dailyEntry?.outlet1Energy);
+      const outlet2Total = toNumber(dailyEntry?.outlet2Energy);
+      const entryDate = dailyEntry?.date
+        ? new Date(`${dailyEntry.date}T00:00:00`)
+        : new Date();
+      const bill = calculatePelcoIIIBill(totalEnergy, {
+        date: entryDate,
+        profileId: rateProfileId || null,
+        daysInPeriod: dailyEntry ? 1 : 0,
+        billingDays: getDaysInMonth(entryDate),
+      });
+
+      return {
+        summary: {
+          totalEnergy,
+          totalCost: bill.totals.total,
+          averageUsage: totalEnergy,
+          peakUsage: totalEnergy,
+          peakHour: formatPeakHour(dailyEntry?.peakHour),
+          bestDay: dailyEntry?.date ? formatShortDate(entryDate) : 'N/A',
+          outlet1Total,
+          outlet2Total,
+          effectiveRate: bill.effectiveRate,
+          applianceUsage: aggregateApplianceUsage(dailyEntry ? [dailyEntry] : []),
+          outlet1Name: String(dailyEntry?.outlet1Name || '').trim(),
+          outlet2Name: String(dailyEntry?.outlet2Name || '').trim(),
+        },
+        chartLabels: ['Outlet 1', 'Outlet 2', 'Total'],
+        chartData: [outlet1Total, outlet2Total, totalEnergy],
+        billDetails: bill,
+      };
+    }
+
+    const { startDate, endDate } = getTabRange(selectedTab);
+
+    // Today has no rolled-up document until midnight, so splice in the live
+    // figure - otherwise the current day always charted as zero.
+    const entries = withLiveToday(rangeEntries, liveTodayEntry);
+    const entriesByDate = new Map();
+    entries.forEach((entry) => {
+      entriesByDate.set(entry.date, entry);
+    });
+
+    const days = buildDateRange(startDate, endDate);
+    const dailyValues = days.map((day) => toNumber(entriesByDate.get(toDateKey(day))?.totalEnergy));
+
+    const totalEnergy = dailyValues.reduce((sum, value) => sum + value, 0);
+    const outlet1Total = days.reduce(
+      (sum, day) => sum + toNumber(entriesByDate.get(toDateKey(day))?.outlet1Energy),
+      0
+    );
+    const outlet2Total = days.reduce(
+      (sum, day) => sum + toNumber(entriesByDate.get(toDateKey(day))?.outlet2Energy),
+      0
+    );
+
+    const peakUsage = dailyValues.length ? Math.max(...dailyValues) : 0;
+    const bestDayData = dailyValues
+      .map((value, index) => ({ value, date: days[index] }))
+      .filter((item) => item.value > 0)
+      .sort((a, b) => a.value - b.value)[0];
+
+    const bill = calculatePelcoIIIBill(totalEnergy, {
+      date: endDate,
+      profileId: rateProfileId || null,
+      daysInPeriod: entries.length > 0 ? days.length : 0,
+      billingDays: getDaysInMonth(endDate),
+    });
+
+    const summary = {
+      totalEnergy,
+      totalCost: bill.totals.total,
+      averageUsage: days.length ? totalEnergy / days.length : 0,
+      peakUsage,
+      peakHour: 'N/A',
+      bestDay: bestDayData ? formatShortDate(bestDayData.date) : 'N/A',
+      outlet1Total,
+      outlet2Total,
+      effectiveRate: bill.effectiveRate,
+      applianceUsage: aggregateApplianceUsage(entries),
+      // Names come from the most recent day in range, so a rename shows the
+      // current label rather than a stale one.
+      outlet1Name: String(entries[entries.length - 1]?.outlet1Name || '').trim(),
+      outlet2Name: String(entries[entries.length - 1]?.outlet2Name || '').trim(),
+    };
+
+    if (selectedTab === 'Weekly') {
+      return {
+        summary,
+        chartLabels: days.map(formatWeekday),
+        chartData: dailyValues,
+        billDetails: bill,
+      };
+    }
+
+    const weeklyBuckets = [0, 0, 0, 0];
+    dailyValues.forEach((value, index) => {
+      weeklyBuckets[Math.min(3, Math.floor(index / 7))] += value;
+    });
+
+    return {
+      summary,
+      chartLabels: ['Week 1', 'Week 2', 'Week 3', 'Week 4'],
+      chartData: weeklyBuckets,
+      billDetails: bill,
+    };
+  }, [selectedTab, rangeEntries, fallbackDaily, liveTodayEntry, rateProfileId]);
+
+  const { summary, chartLabels, chartData, billDetails } = analytics;
 
   const budgetPercent = budget.monthlyBudget > 0
     ? (budget.currentSpending / budget.monthlyBudget) * 100
     : 0;
   const remainingBudget = Math.max(0, budget.monthlyBudget - budget.currentSpending);
   const showBreakdown = billDetails && summary.totalEnergy > 0;
-  const insightsText = loading
-    ? 'Loading analytics...'
-    : summary.totalEnergy > 0
-      ? `Estimated bill for the ${selectedTab.toLowerCase()} period is ${formatCurrency(summary.totalCost)}.`
-      : 'No data available yet. Connect your appliances to start tracking energy usage.';
+
+  const allInsights = useMemo(
+    () => buildInsights({
+      summary,
+      budget,
+      selectedTab,
+      chartData,
+      chartLabels,
+      liveAppliances,
+      isLive: !telemetryIsStale,
+    }),
+    [summary, budget, selectedTab, chartData, chartLabels, liveAppliances, telemetryIsStale]
+  );
+
+  const insights = allInsights.filter(
+    (insight) => !dismissedInsights.includes(insight.signature)
+  );
+
+  const handleDismissInsight = (signature) => {
+    setDismissedInsights((previous) =>
+      previous.includes(signature) ? previous : [...previous, signature]
+    );
+  };
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -414,6 +677,14 @@ export const AnalyticsScreen = () => {
           <Text style={styles.title}>Analytics</Text>
           <Text style={styles.subtitle}>Track your energy consumption</Text>
         </View>
+
+        {/* What is happening right now, straight from live telemetry. */}
+        <LiveUsagePanel
+          appliances={liveAppliances}
+          totalPowerW={liveTotalPowerW}
+          costPerHour={liveCostPerHour}
+          isStale={telemetryIsStale}
+        />
 
         {/* Summary Card */}
         <View style={styles.summaryCard}>
@@ -458,50 +729,6 @@ export const AnalyticsScreen = () => {
           <SimpleBarChart data={chartData} labels={chartLabels} />
         </View>
 
-        {/* Statistics Grid */}
-        <Text style={styles.sectionTitle}>Statistics</Text>
-        <View style={styles.statsGrid}>
-          <StatCard
-            icon="⚡"
-            label="Total Usage"
-            value={`${summary.totalEnergy.toFixed(2)} kWh`}
-            trend={0}
-          />
-          <StatCard
-            icon="📊"
-            label="Average"
-            value={`${summary.averageUsage.toFixed(2)} kWh`}
-            trend={0}
-          />
-        </View>
-
-        <View style={styles.statsGrid}>
-          <StatCard
-            icon="📈"
-            label="Peak Usage"
-            value={`${summary.peakUsage.toFixed(2)} kWh`}
-          />
-          <StatCard
-            icon="🕐"
-            label="Peak Hour"
-            value={summary.peakHour}
-          />
-        </View>
-
-        <View style={styles.statsGrid}>
-          <StatCard
-            icon="💰"
-            label="Total Cost"
-            value={formatCurrency(summary.totalCost)}
-            trend={0}
-          />
-          <StatCard
-            icon="💡"
-            label="Best Day"
-            value={summary.bestDay}
-          />
-        </View>
-
         {showBreakdown && (
           <>
             <Text style={styles.sectionTitle}>Bill Breakdown</Text>
@@ -544,11 +771,56 @@ export const AnalyticsScreen = () => {
           </>
         )}
 
+        {/* Usage per appliance, from the daily rollup breakdown */}
+        <Text style={styles.sectionTitle}>Usage by Appliance</Text>
+        <View style={styles.applianceCard}>
+          {summary.applianceUsage.length === 0 ? (
+            <Text style={styles.applianceEmptyText}>
+              No appliance usage recorded for this period yet. Plug something in and
+              usage appears here as it is measured.
+            </Text>
+          ) : (
+            summary.applianceUsage.map((item, index) => {
+              const share = summary.totalEnergy > 0
+                ? (item.energyKwh / summary.totalEnergy) * 100
+                : 0;
+
+              return (
+                <View
+                  key={item.applianceName}
+                  style={[styles.applianceRow, index > 0 && styles.applianceRowDivider]}
+                >
+                  <View style={styles.applianceRowTop}>
+                    <Text style={styles.applianceName} numberOfLines={1}>
+                      {item.applianceName}
+                    </Text>
+                    <Text style={styles.applianceCost}>{formatCurrency(item.cost)}</Text>
+                  </View>
+                  <View style={styles.applianceBarTrack}>
+                    <View
+                      style={[
+                        styles.applianceBarFill,
+                        { width: `${Math.max(2, Math.min(100, share))}%` },
+                      ]}
+                    />
+                  </View>
+                  <Text style={styles.applianceMeta}>
+                    {item.energyKwh.toFixed(2)} kWh · {share.toFixed(0)}% of total
+                  </Text>
+                </View>
+              );
+            })
+          )}
+        </View>
+
         {/* Outlet Comparison */}
         <Text style={styles.sectionTitle}>Outlet Comparison</Text>
         <OutletComparisonCard
-          outlet1={summary.outlet1Total.toFixed(2)}
-          outlet2={summary.outlet2Total.toFixed(2)}
+          outlet1Energy={summary.outlet1Total}
+          outlet2Energy={summary.outlet2Total}
+          effectiveRate={summary.effectiveRate}
+          appliance1={summary.outlet1Name}
+          appliance2={summary.outlet2Name}
         />
 
         {/* Budget Progress */}
@@ -575,11 +847,14 @@ export const AnalyticsScreen = () => {
           </View>
         </View>
 
-        {/* Insights */}
-        <View style={styles.insightsCard}>
-          <Text style={styles.insightsTitle}>💡 Insights</Text>
-          <Text style={styles.insightsText}>{insightsText}</Text>
-        </View>
+        {/* Insights - conditional on the data, and dismissible once read */}
+        <InsightsCard
+          insights={insights}
+          loading={loading && allInsights.length === 0}
+          onDismiss={handleDismissInsight}
+          onReset={() => setDismissedInsights([])}
+          hasDismissed={dismissedInsights.length > 0}
+        />
       </ScrollView>
     </SafeAreaView>
   );
@@ -751,48 +1026,6 @@ const styles = StyleSheet.create({
     marginHorizontal: SIZES.padding,
     marginBottom: 12,
   },
-  statsGrid: {
-    flexDirection: 'row',
-    paddingHorizontal: SIZES.padding,
-    gap: 12,
-    marginBottom: 12,
-  },
-  statCard: {
-    flex: 1,
-    backgroundColor: COLORS.white,
-    padding: SIZES.padding,
-    borderRadius: SIZES.radius,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    alignItems: 'center',
-  },
-  statIcon: {
-    fontSize: 28,
-    marginBottom: 8,
-  },
-  statLabel: {
-    ...FONTS.small,
-    color: COLORS.textLight,
-    marginBottom: 4,
-  },
-  statValue: {
-    ...FONTS.h4,
-    color: COLORS.textDark,
-    fontWeight: 'bold',
-  },
-  trendContainer: {
-    marginTop: 4,
-  },
-  trendText: {
-    ...FONTS.small,
-    fontWeight: '600',
-  },
-  trendUp: {
-    color: COLORS.error,
-  },
-  trendDown: {
-    color: COLORS.success,
-  },
   breakdownCard: {
     backgroundColor: COLORS.white,
     marginHorizontal: SIZES.padding,
@@ -862,12 +1095,6 @@ const styles = StyleSheet.create({
     borderColor: COLORS.border,
     marginBottom: 24,
   },
-  comparisonTitle: {
-    ...FONTS.h4,
-    color: COLORS.textDark,
-    fontWeight: 'bold',
-    marginBottom: 16,
-  },
   comparisonRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -903,8 +1130,93 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     flexDirection: 'row',
   },
+  comparisonFillGap: {
+    width: 2,
+    alignSelf: 'stretch',
+    backgroundColor: COLORS.white,
+  },
   comparisonFill: {
     height: '100%',
+  },
+  comparisonCost: {
+    ...FONTS.small,
+    fontSize: 11,
+    color: COLORS.primary,
+    fontWeight: '700',
+    marginTop: 2,
+  },
+  comparisonSplitRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  comparisonSplitText: {
+    ...FONTS.small,
+    fontSize: 11,
+    color: COLORS.textLight,
+  },
+  comparisonEmpty: {
+    paddingTop: 10,
+  },
+  comparisonEmptyText: {
+    ...FONTS.small,
+    color: COLORS.textLight,
+  },
+  applianceCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: SIZES.radius,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    padding: SIZES.padding,
+    marginBottom: 16,
+  },
+  applianceEmptyText: {
+    ...FONTS.small,
+    color: COLORS.textLight,
+    lineHeight: 18,
+  },
+  applianceRow: {
+    paddingVertical: 10,
+  },
+  applianceRowDivider: {
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+  },
+  applianceRowTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  applianceName: {
+    ...FONTS.body,
+    color: COLORS.textDark,
+    fontWeight: '600',
+    flexShrink: 1,
+    marginRight: 8,
+  },
+  applianceCost: {
+    ...FONTS.body,
+    color: COLORS.primary,
+    fontWeight: '700',
+  },
+  applianceBarTrack: {
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: COLORS.border,
+    overflow: 'hidden',
+  },
+  applianceBarFill: {
+    height: '100%',
+    borderRadius: 3,
+    backgroundColor: COLORS.primary,
+  },
+  applianceMeta: {
+    ...FONTS.small,
+    fontSize: 11,
+    color: COLORS.textLight,
+    marginTop: 5,
   },
   budgetProgressCard: {
     backgroundColor: COLORS.white,
@@ -949,23 +1261,5 @@ const styles = StyleSheet.create({
   budgetProgressText: {
     ...FONTS.small,
     color: COLORS.textLight,
-  },
-  insightsCard: {
-    backgroundColor: COLORS.primary,
-    marginHorizontal: SIZES.padding,
-    padding: SIZES.padding,
-    borderRadius: SIZES.radius,
-    opacity: 0.9,
-  },
-  insightsTitle: {
-    ...FONTS.body,
-    color: COLORS.white,
-    fontWeight: 'bold',
-    marginBottom: 8,
-  },
-  insightsText: {
-    ...FONTS.small,
-    color: COLORS.white,
-    lineHeight: 20,
   },
 });

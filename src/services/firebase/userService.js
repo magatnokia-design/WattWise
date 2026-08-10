@@ -1,5 +1,6 @@
 import { doc, getDoc, setDoc, updateDoc, deleteDoc } from 'firebase/firestore';
-import { db } from './config';
+import { httpsCallable } from 'firebase/functions';
+import { db, functions } from './config';
 
 const DEFAULT_USER_PREFERENCES = {
   electricityRate: 0,
@@ -245,22 +246,24 @@ export const userService = {
 
   // Link or update ESP32 device configuration for a user.
   updateDeviceConfig: async (userId, deviceConfig = {}) => {
+    // Declared outside the try so the permission-denied fallback in catch can
+    // still see them.
+    const deviceId = String(deviceConfig.deviceId || '').trim();
+    const deviceToken = String(deviceConfig.deviceToken || '').trim();
+
+    if (!deviceId) {
+      return { success: false, error: 'Device ID is required' };
+    }
+
+    if (!deviceToken) {
+      return { success: false, error: 'Device token is required' };
+    }
+
+    if (deviceToken.length < 8) {
+      return { success: false, error: 'Device token must be at least 8 characters' };
+    }
+
     try {
-      const deviceId = String(deviceConfig.deviceId || '').trim();
-      const deviceToken = String(deviceConfig.deviceToken || '').trim();
-
-      if (!deviceId) {
-        return { success: false, error: 'Device ID is required' };
-      }
-
-      if (!deviceToken) {
-        return { success: false, error: 'Device token is required' };
-      }
-
-      if (deviceToken.length < 8) {
-        return { success: false, error: 'Device token must be at least 8 characters' };
-      }
-
       const userRef = doc(db, 'users', userId);
       const userDoc = await getDoc(userRef);
       const existingUserData = userDoc.exists() ? (userDoc.data() || {}) : {};
@@ -287,6 +290,26 @@ export const userService = {
             tokenRotatedAtMs: null,
           };
 
+      // Ownership mapping first. This is the write security rules reject when the
+      // hardware still belongs to another account, so doing it before the profile
+      // write keeps users/{userId} from claiming a device the link never got.
+      await setDoc(doc(db, 'devices', deviceId), {
+        userId,
+        deviceId,
+        deviceToken,
+        previousDeviceToken: previousTokenPayload.previousToken,
+        previousDeviceTokenValidUntilMs: previousTokenPayload.previousTokenValidUntilMs,
+        tokenRotatedAtMs: previousTokenPayload.tokenRotatedAtMs,
+        active: true,
+        health: {
+          status: 'online',
+          statusReason: 'linked',
+          linkedAtMs: nowMs,
+          updatedAtMs: nowMs,
+        },
+        updatedAt: new Date(),
+      }, { merge: true });
+
       await setDoc(userRef, {
         uid: userId,
         deviceId,
@@ -306,31 +329,46 @@ export const userService = {
         lastLogin: new Date(),
       }, { merge: true });
 
-      await setDoc(doc(db, 'devices', deviceId), {
-        userId,
-        deviceId,
-        deviceToken,
-        previousDeviceToken: previousTokenPayload.previousToken,
-        previousDeviceTokenValidUntilMs: previousTokenPayload.previousTokenValidUntilMs,
-        tokenRotatedAtMs: previousTokenPayload.tokenRotatedAtMs,
-        active: true,
-        health: {
-          status: 'online',
-          statusReason: 'linked',
-          linkedAtMs: nowMs,
-          updatedAtMs: nowMs,
-        },
-        updatedAt: new Date(),
-      }, { merge: true });
-
       if (previousDeviceId && previousDeviceId !== deviceId) {
         await deleteDoc(doc(db, 'devices', previousDeviceId));
       }
 
       return { success: true };
     } catch (error) {
+      // Security rules only allow writing a devices/{deviceId} document this
+      // account already owns, so linking hardware that is still bound to another
+      // account fails here. Fall back to the callable, which can verify the token
+      // with admin privileges and transfer ownership.
+      const code = String(error?.code || '').toLowerCase();
+      const message = String(error?.message || '').toLowerCase();
+      const isPermissionDenied =
+        code.includes('permission-denied') || message.includes('insufficient permissions');
+
+      if (isPermissionDenied) {
+        return userService.linkDeviceViaFunction(deviceId, deviceToken);
+      }
+
       console.error('Error updating device config:', error);
       return { success: false, error: error.message };
+    }
+  },
+
+  // Server-side device binding. Used when the device belongs to another account
+  // (new test account, replaced phone, handed-over hardware).
+  linkDeviceViaFunction: async (deviceId, deviceToken) => {
+    try {
+      const linkDevice = httpsCallable(functions, 'linkDeviceToAccount');
+      const result = await linkDevice({ deviceId, deviceToken });
+
+      if (!result?.data?.success) {
+        throw new Error(result?.data?.error || 'Failed to link device');
+      }
+
+      return { success: true, transferred: !!result.data.transferred };
+    } catch (error) {
+      const details = error?.details || error?.message || 'Failed to link device';
+      console.error('Error linking device via function:', details);
+      return { success: false, error: details };
     }
   },
 
@@ -436,6 +474,32 @@ export const userService = {
         },
       };
     } catch (error) {
+      // Security rules gate reads on devices/{deviceId}.userId matching the
+      // caller. A document that does not exist has no userId to compare, so
+      // Firestore answers permission-denied rather than "not found" - and the
+      // same happens when the hardware is still bound to another account.
+      // Neither is an error worth surfacing: report it as unlinked health.
+      const code = String(error?.code || '').toLowerCase();
+      const message = String(error?.message || '').toLowerCase();
+      const isPermissionDenied =
+        code.includes('permission-denied') || message.includes('insufficient permissions');
+
+      if (isPermissionDenied) {
+        return {
+          success: true,
+          data: {
+            status: 'unregistered',
+            statusReason: 'mapping_unavailable',
+            lastSeenAtMs: 0,
+            lastAckStatus: '',
+            lastMetricsAtMs: 0,
+            lastAckAtMs: 0,
+            lastCommandIssuedAtMs: 0,
+            lastCommandTimeoutAtMs: 0,
+          },
+        };
+      }
+
       console.error('Error getting device health:', error);
       return { success: false, error: error.message };
     }

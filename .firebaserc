@@ -1,5 +1,13 @@
 {
   "projects": {
     "default": "wattwise-fe394"
+  },
+  "targets": {},
+  "etags": {
+    "wattwise-fe394": {
+      "extensionInstances": {
+        "firestore-send-email": "9270118571188a6b609b108b674331bfd10a7cbc1c695b8688b12ddc1d196379"
+      }
+    }
   }
 }

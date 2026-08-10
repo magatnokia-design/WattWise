@@ -79,6 +79,17 @@ service cloud.firestore {
       }
       
       // ===========================
+      // INVOICES SUBCOLLECTION
+      // ===========================
+      match /invoices/{billingMonth} {
+        // Read-only. Invoices are built and finalized server-side so a client
+        // can never alter a billed figure; finalizing goes through the
+        // finalizeInvoice callable.
+        allow read: if isOwner(userId);
+        allow write: if false;
+      }
+
+      // ===========================
       // SCHEDULES SUBCOLLECTION
       // ===========================
       match /schedules/{scheduleId} {

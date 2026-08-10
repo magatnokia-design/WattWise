@@ -18,3 +18,16 @@ export const COLORS = {
   
   overlay: 'rgba(0, 0, 0, 0.5)',
 };
+
+// Series colours for charts, in fixed order - outlet 1 always takes the first
+// slot so a filter or an empty series never repaints the other one.
+//
+// Both are steps of the theme green, keeping the green/white rule. The pair was
+// checked for colour-blind separation (deltaE 18.9 deutan, 19.3 normal) rather
+// than picked by eye; `series[1]` sits under 3:1 against white, so every mark
+// using it carries a visible text label rather than relying on colour alone.
+export const CHART_COLORS = {
+  series: ['#047857', '#10B981'],
+  track: '#E5E7EB',
+  grid: '#F3F4F6',
+};

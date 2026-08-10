@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "WiseWatt",
-    "slug": "WiseWatt",
+    "name": "WattWise",
+    "slug": "WattWise",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/applogo-circle.png",
@@ -13,15 +13,26 @@
       "backgroundColor": "#10B981"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "WattWise uses the camera to scan the QR code on your ESP32 device so it can be linked to your account."
+      }
     },
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "WattWise uses the camera to scan the QR code on your ESP32 device so it can be linked to your account."
+        }
+      ]
+    ],
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/applogo-circle.png",
         "backgroundColor": "#10B981"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.magat_nokia.WiseWatt"
+      "package": "com.magat_nokia.WattWise"
     },
     "web": {
       "favicon": "./assets/applogo-circle.png"

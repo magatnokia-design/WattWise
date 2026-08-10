@@ -4,25 +4,44 @@ import {
   Text,
   StyleSheet,
   FlatList,
+  TouchableOpacity,
+  ActivityIndicator,
   useWindowDimensions,
 } from 'react-native';
 import { COLORS } from '../../../constants/colors';
+import { describeLogSource, formatWatts } from '../utils/historyHelpers';
 
 const EMPTY_LOGS = [];
 
+const SOURCE_TONES = {
+  danger: { background: '#FEE2E2', text: '#B91C1C' },
+  info: { background: '#DBEAFE', text: '#1D4ED8' },
+  neutral: { background: COLORS.border, text: COLORS.textLight },
+};
+
 const ActivityLogItem = ({ item }) => {
   const { width } = useWindowDimensions();
+  const isOn = item.status === 'ON';
+  const source = describeLogSource(item.source);
+  const tone = SOURCE_TONES[source.tone] || SOURCE_TONES.neutral;
+  const watts = formatWatts(item.power);
 
   return (
     <View style={[styles.logItem, { width: width - 32 }]}>
-      <View style={[styles.statusDot, { backgroundColor: item.status === 'ON' ? COLORS.primary : COLORS.textLight }]} />
+      <View style={[styles.statusDot, { backgroundColor: isOn ? COLORS.primary : COLORS.textLight }]} />
       <View style={styles.logInfo}>
         <Text style={styles.logTitle}>{item.outletName || 'Outlet --'}</Text>
-        <Text style={styles.logSub}>{item.applianceName || 'No appliance'}</Text>
+        <View style={styles.logMetaRow}>
+          {/* Why the outlet changed state - the backend always records this. */}
+          <View style={[styles.sourceBadge, { backgroundColor: tone.background }]}>
+            <Text style={[styles.sourceText, { color: tone.text }]}>{source.label}</Text>
+          </View>
+          {watts ? <Text style={styles.logSub}>{watts}</Text> : null}
+        </View>
       </View>
       <View style={styles.logRight}>
-        <View style={[styles.statusBadge, { backgroundColor: item.status === 'ON' ? COLORS.primaryLight + '20' : COLORS.border }]}>
-          <Text style={[styles.statusText, { color: item.status === 'ON' ? COLORS.primary : COLORS.textLight }]}>
+        <View style={[styles.statusBadge, { backgroundColor: isOn ? COLORS.primaryLight + '20' : COLORS.border }]}>
+          <Text style={[styles.statusText, { color: isOn ? COLORS.primary : COLORS.textLight }]}>
             {item.status || '--'}
           </Text>
         </View>
@@ -33,20 +52,48 @@ const ActivityLogItem = ({ item }) => {
   );
 };
 
-const ActivityLog = ({ logs = EMPTY_LOGS }) => {
-  const { width } = useWindowDimensions();
-
+const ActivityLog = ({ logs = EMPTY_LOGS, loading = false, hasMore = false, onLoadMore }) => {
   const renderItem = useCallback(({ item }) => (
     <ActivityLogItem item={item} />
   ), []);
 
-  const renderEmpty = useMemo(() => (
-    <View style={styles.emptyContainer}>
-      <Text style={styles.emptyIcon}>📋</Text>
-      <Text style={styles.emptyTitle}>No Activity Yet</Text>
-      <Text style={styles.emptySub}>Outlet ON/OFF activity will appear here</Text>
-    </View>
-  ), []);
+  const renderEmpty = useMemo(() => {
+    // Distinguish "still loading" from "genuinely nothing", so the empty state
+    // does not flash before the first snapshot arrives.
+    if (loading) {
+      return (
+        <View style={styles.emptyContainer}>
+          <ActivityIndicator color={COLORS.primary} />
+          <Text style={styles.emptySub}>Loading activity...</Text>
+        </View>
+      );
+    }
+
+    return (
+      <View style={styles.emptyContainer}>
+        <Text style={styles.emptyIcon}>📋</Text>
+        <Text style={styles.emptyTitle}>No Activity Yet</Text>
+        <Text style={styles.emptySub}>Outlet ON/OFF activity will appear here</Text>
+      </View>
+    );
+  }, [loading]);
+
+  const renderFooter = useCallback(() => {
+    if (!hasMore || logs.length === 0) return null;
+
+    return (
+      <TouchableOpacity
+        style={styles.loadMoreButton}
+        onPress={onLoadMore}
+        activeOpacity={0.7}
+        disabled={loading}
+      >
+        <Text style={styles.loadMoreText}>
+          {loading ? 'Loading...' : 'Load older activity'}
+        </Text>
+      </TouchableOpacity>
+    );
+  }, [hasMore, logs.length, loading, onLoadMore]);
 
   return (
     <FlatList
@@ -54,6 +101,7 @@ const ActivityLog = ({ logs = EMPTY_LOGS }) => {
       keyExtractor={(item, index) => item.id || `${item.timestamp || 'log'}-${index}`}
       renderItem={renderItem}
       ListEmptyComponent={renderEmpty}
+      ListFooterComponent={renderFooter}
       contentContainerStyle={styles.list}
       showsVerticalScrollIndicator={false}
       scrollEnabled={false}
@@ -93,7 +141,35 @@ const styles = StyleSheet.create({
   logSub: {
     fontSize: 12,
     color: COLORS.textLight,
-    marginTop: 2,
+  },
+  logMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 4,
+  },
+  sourceBadge: {
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  sourceText: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  loadMoreButton: {
+    paddingVertical: 12,
+    alignItems: 'center',
+    backgroundColor: COLORS.white,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    marginTop: 4,
+  },
+  loadMoreText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: COLORS.primary,
   },
   logRight: {
     alignItems: 'flex-end',

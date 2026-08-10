@@ -175,19 +175,19 @@ const styles = StyleSheet.create({
   detailsContainer: {
     flex: 1,
   },
+  // Stacked rather than label-left/value-right: this column sits beside a 140px
+  // circle, leaving too little width for both on one line, so they collided.
   detailRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 10,
   },
   detailLabel: {
-    fontSize: 13,
+    fontSize: 12,
     color: COLORS.textLight,
+    marginBottom: 2,
   },
   detailValue: {
-    fontSize: 15,
-    fontWeight: '600',
+    fontSize: 16,
+    fontWeight: '700',
     color: COLORS.text,
   },
   separator: {
@@ -196,12 +196,13 @@ const styles = StyleSheet.create({
     marginVertical: 8,
   },
   remainingLabel: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '600',
     color: COLORS.text,
+    marginBottom: 2,
   },
   remainingValue: {
-    fontSize: 18,
+    fontSize: 19,
     fontWeight: '700',
   },
   noBudgetContainer: {

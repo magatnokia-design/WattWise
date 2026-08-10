@@ -4,6 +4,7 @@ import {
   Text,
   StyleSheet,
   FlatList,
+  ActivityIndicator,
   useWindowDimensions,
 } from 'react-native';
 import { COLORS } from '../../../constants/colors';
@@ -19,15 +20,24 @@ const UsageHistoryItem = ({ item }) => {
       <View style={styles.dateContainer}>
         <Text style={styles.dateDay}>{item.day || '--'}</Text>
         <Text style={styles.dateMonth}>{item.month || '---'}</Text>
+        {/* Today is measured so far, not a closed day - say so rather than
+            letting a partial total read as a final one. */}
+        {item.isLive ? <Text style={styles.liveTag}>Today</Text> : null}
       </View>
       <View style={styles.divider} />
       <View style={styles.usageInfo}>
+        {/* processDailyRollup stores the appliance name per outlet, so show
+            what was actually plugged in rather than a generic outlet label. */}
         <View style={styles.usageRow}>
-          <Text style={styles.usageLabel}>Outlet 1</Text>
+          <Text style={styles.usageLabel} numberOfLines={1}>
+            {item.outlet1Name || 'Outlet 1'}
+          </Text>
           <Text style={styles.usageValue}>{formatKwh(item.outlet1Kwh)}</Text>
         </View>
         <View style={styles.usageRow}>
-          <Text style={styles.usageLabel}>Outlet 2</Text>
+          <Text style={styles.usageLabel} numberOfLines={1}>
+            {item.outlet2Name || 'Outlet 2'}
+          </Text>
           <Text style={styles.usageValue}>{formatKwh(item.outlet2Kwh)}</Text>
         </View>
       </View>
@@ -40,23 +50,36 @@ const UsageHistoryItem = ({ item }) => {
   );
 };
 
-const UsageHistory = ({ usage = EMPTY_USAGE }) => {
+const UsageHistory = ({ usage = EMPTY_USAGE, loading = false }) => {
   const renderItem = useCallback(({ item }) => (
     <UsageHistoryItem item={item} />
   ), []);
 
-  const renderEmpty = useMemo(() => (
-    <View style={styles.emptyContainer}>
-      <Text style={styles.emptyIcon}>📊</Text>
-      <Text style={styles.emptyTitle}>No Usage Records Yet</Text>
-      <Text style={styles.emptySub}>Daily energy usage will appear here</Text>
-    </View>
-  ), []);
+  const renderEmpty = useMemo(() => {
+    if (loading) {
+      return (
+        <View style={styles.emptyContainer}>
+          <ActivityIndicator color={COLORS.primary} />
+          <Text style={styles.emptySub}>Loading usage records...</Text>
+        </View>
+      );
+    }
+
+    return (
+      <View style={styles.emptyContainer}>
+        <Text style={styles.emptyIcon}>📊</Text>
+        <Text style={styles.emptyTitle}>No Usage Records Yet</Text>
+        <Text style={styles.emptySub}>
+          Today&apos;s usage appears here as soon as an outlet starts drawing power.
+        </Text>
+      </View>
+    );
+  }, [loading]);
 
   return (
     <FlatList
       data={usage}
-      keyExtractor={(item, index) => index.toString()}
+      keyExtractor={(item, index) => item.date || String(index)}
       renderItem={renderItem}
       ListEmptyComponent={renderEmpty}
       contentContainerStyle={styles.list}
@@ -95,6 +118,17 @@ const styles = StyleSheet.create({
     color: COLORS.textLight,
     marginTop: 2,
     textTransform: 'uppercase',
+  },
+  liveTag: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: COLORS.primaryDark,
+    backgroundColor: COLORS.primary + '18',
+    borderRadius: 999,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    marginTop: 4,
+    overflow: 'hidden',
   },
   divider: {
     width: 1,

@@ -15,7 +15,6 @@ const DEFAULT_SETTINGS = {
   currency: '₱',
   rateProfileId: null,
   notifications: true,
-  darkMode: false,
   monthlyBudget: 0,
   profileName: 'User',
   email: '',
@@ -38,12 +37,14 @@ const DEFAULT_SETTINGS = {
 
 export const useSettings = () => {
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
+  const [savedAppliances, setSavedAppliances] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
   const fetchSettings = useCallback(async (currentUserId) => {
     if (!currentUserId) {
       setSettings(DEFAULT_SETTINGS);
+      setSavedAppliances([]);
       setLoading(false);
       return;
     }
@@ -52,12 +53,21 @@ export const useSettings = () => {
     setError(null);
 
     try {
-      const [preferencesResult, profileResult, budgetResult, outletsResult] = await Promise.all([
+      const [
+        preferencesResult,
+        profileResult,
+        budgetResult,
+        outletsResult,
+        savedAppliancesResult,
+      ] = await Promise.all([
         userService.getUserPreferences(currentUserId),
         userService.getUserProfile(currentUserId),
         budgetService.getCurrentMonthBudget(currentUserId),
         outletService.getAllOutlets(currentUserId),
+        outletService.getSavedAppliances(currentUserId),
       ]);
+
+      setSavedAppliances(savedAppliancesResult.success ? savedAppliancesResult.data : []);
 
       if (!preferencesResult.success) {
         throw new Error(preferencesResult.error);
@@ -84,7 +94,6 @@ export const useSettings = () => {
         currency: preferencesResult.data.currency || '₱',
         rateProfileId: preferencesResult.data.rateProfileId || null,
         notifications: preferencesResult.data.notificationsEnabled ?? true,
-        darkMode: preferencesResult.data.darkMode || false,
         monthlyBudget: Number(budgetData.monthlyBudget || profileData.monthlyBudget || 0),
         profileName: profileData.name || authUser?.displayName || 'User',
         email: profileData.email || authUser?.email || '',
@@ -113,13 +122,33 @@ export const useSettings = () => {
     }
   }, []);
 
-  // Load settings once auth is available and refresh on auth changes.
+  // Load settings once auth is available and refresh on auth changes. Saved
+  // appliances additionally stay subscribed: they are written by a Cloud
+  // Function when a suggestion is confirmed, and Settings stays mounted as a
+  // tab, so a one-shot read only caught up on the next app launch.
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
+    let unsubscribeSavedAppliances = null;
+
+    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+      if (unsubscribeSavedAppliances) {
+        unsubscribeSavedAppliances();
+        unsubscribeSavedAppliances = null;
+      }
+
       fetchSettings(user?.uid || null);
+
+      if (user?.uid) {
+        unsubscribeSavedAppliances = outletService.subscribeToSavedAppliances(
+          user.uid,
+          setSavedAppliances
+        );
+      }
     });
 
-    return unsubscribe;
+    return () => {
+      if (unsubscribeSavedAppliances) unsubscribeSavedAppliances();
+      unsubscribeAuth();
+    };
   }, [fetchSettings]);
 
   // Update electricity rate
@@ -337,8 +366,35 @@ export const useSettings = () => {
     }
   }, []);
 
+  // Remove one learned appliance signature. Goes through a callable because
+  // applianceProfiles lives on the user document, which the client cannot write.
+  const removeSavedAppliance = useCallback(async (label) => {
+    setError(null);
+
+    try {
+      const userId = auth.currentUser?.uid;
+      if (!userId) throw new Error('User not authenticated');
+
+      const result = await outletService.removeApplianceProfile(userId, label);
+      if (!result.success) {
+        throw new Error(result.error || 'Unable to remove saved appliance');
+      }
+
+      setSavedAppliances((previous) => previous.filter(
+        (appliance) => appliance.label.toLowerCase() !== String(label || '').trim().toLowerCase()
+      ));
+
+      return { success: true };
+    } catch (err) {
+      setError(err.message);
+      console.error('Error removing saved appliance:', err);
+      return { success: false, error: err.message };
+    }
+  }, []);
+
   return {
     settings,
+    savedAppliances,
     loading,
     error,
     fetchSettings,
@@ -349,5 +405,6 @@ export const useSettings = () => {
     clearDeviceSettings,
     updateOutletName,
     clearOutletDetection,
+    removeSavedAppliance,
   };
 };

@@ -1373,7 +1373,7 @@ void setup() {
 
   Serial.println();
   Serial.println("========================================");
-  Serial.println("WiseWatt ESP32 Controller Boot");
+  Serial.println("WattWise ESP32 Controller Boot");
   Serial.print("Firmware: ");
   Serial.println(FIRMWARE_VERSION);
   Serial.println("Serial commands: help");

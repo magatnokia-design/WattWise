@@ -50,7 +50,17 @@ const TimerCard = ({ item, onDelete, onToggle }) => {
   }, [item, onToggle]);
 
   const handleDelete = useCallback(() => {
-    if (onDelete) onDelete(item.id);
+    if (!onDelete) return;
+
+    // Pass a human description so the confirmation names the timer being removed.
+    const outletLabel = item?.outlet ? `Outlet ${String(item.outlet).replace('outlet', '')}` : '';
+    const actionLabel = String(item?.action || '').toUpperCase();
+    const timeLabel = item?.type === 'scheduled' ? item?.scheduledTime : item?.countdownTime;
+    const description = [outletLabel, actionLabel, timeLabel && `at ${timeLabel}`]
+      .filter(Boolean)
+      .join(' ');
+
+    onDelete(item.id, description);
   }, [item, onDelete]);
 
   return (

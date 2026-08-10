@@ -1,6 +1,8 @@
-import { useState, useCallback, useRef } from 'react';
-import { historyService } from '../../../services/firebase';
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
+import { onAuthStateChanged } from 'firebase/auth';
+import { historyService, outletService, userService } from '../../../services/firebase';
 import { auth } from '../../../services/firebase/config';
+import { buildLiveTodayEntry, withLiveToday } from '../../../utils/liveUsage';
 import { formatDate, formatTime, getTimestampMs, splitDailyDate } from '../utils/historyHelpers';
 
 const toNumber = (value) => {
@@ -67,6 +69,7 @@ const mapUsageRecord = (record = {}) => {
     outlet2Kwh,
     totalKwh,
     totalCost: toNumber(record.cost),
+    isLive: record.isLive === true,
   };
 };
 
@@ -74,12 +77,50 @@ const normalizeUsageHistory = (records = []) => records.map(mapUsageRecord);
 
 export const useHistory = () => {
   const [activityLogs, setActivityLogs] = useState([]);
-  const [usageHistory, setUsageHistory] = useState([]);
+  const [storedUsage, setStoredUsage] = useState([]);
+  const [usageRange, setUsageRange] = useState({ startDate: null, endDate: null });
+  const [outlets, setOutlets] = useState([]);
+  const [rateProfileId, setRateProfileId] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [lastDoc, setLastDoc] = useState(null);
   const [hasMore, setHasMore] = useState(true);
   const lastDocRef = useRef(null);
+
+  // Live telemetry, so today's row moves as usage accumulates.
+  useEffect(() => {
+    let unsubscribeOutlets = null;
+
+    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+      if (unsubscribeOutlets) {
+        unsubscribeOutlets();
+        unsubscribeOutlets = null;
+      }
+
+      if (!user?.uid) {
+        setOutlets([]);
+        setRateProfileId(null);
+        return;
+      }
+
+      userService.getUserPreferences(user.uid)
+        .then((result) => {
+          if (result?.success) setRateProfileId(result.data?.rateProfileId || null);
+        })
+        .catch((prefsError) => console.warn('Could not load rate profile:', prefsError?.message));
+
+      unsubscribeOutlets = outletService.subscribeToOutlets(
+        user.uid,
+        setOutlets,
+        (subscriptionError) => console.error('History outlet subscription error:', subscriptionError)
+      );
+    });
+
+    return () => {
+      if (unsubscribeOutlets) unsubscribeOutlets();
+      unsubscribeAuth();
+    };
+  }, []);
 
   // Fetch activity logs with pagination
   const fetchActivityLogs = useCallback(async (filters = {}, loadMore = false) => {
@@ -170,7 +211,8 @@ export const useHistory = () => {
         throw new Error(result.error);
       }
 
-      setUsageHistory(normalizeUsageHistory(result.data));
+      setStoredUsage(result.data);
+      setUsageRange({ startDate, endDate });
     } catch (err) {
       setError(err.message);
       console.error('Error fetching usage history:', err);
@@ -178,6 +220,27 @@ export const useHistory = () => {
       setLoading(false);
     }
   }, []);
+
+  // Today has no rolled-up document until midnight Manila, so it is assembled
+  // from live outlet telemetry and merged in here. Without this the current day
+  // was simply missing from History until the next morning.
+  const usageHistory = useMemo(() => {
+    const liveToday = buildLiveTodayEntry(outlets, { rateProfileId });
+
+    // Only splice today in when the selected range actually covers it -
+    // otherwise browsing an earlier week would show today's row as well.
+    const { startDate, endDate } = usageRange;
+    const inRange = !!liveToday &&
+      (!startDate || liveToday.date >= startDate) &&
+      (!endDate || liveToday.date <= endDate);
+
+    const merged = withLiveToday(storedUsage, inRange ? liveToday : null);
+
+    // getDailyUsage returns newest first; withLiveToday sorts ascending.
+    return normalizeUsageHistory(
+      [...merged].sort((a, b) => String(b?.date).localeCompare(String(a?.date)))
+    );
+  }, [storedUsage, outlets, rateProfileId, usageRange]);
 
   return {
     activityLogs,

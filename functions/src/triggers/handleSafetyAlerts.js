@@ -1,7 +1,7 @@
 const admin = require('firebase-admin');
 const logger = require('firebase-functions/logger');
 const { dispatchDeviceCommand } = require('../lib/deviceCommandDispatcher');
-const { getTemplateId, resolveUserContact, sendBrevoTemplateEmail } = require('../lib/brevoEmail');
+const { resolveUserContact, enqueueEmail } = require('../lib/mailQueue');
 
 /**
  * Firestore trigger: Fires when power_safety document is written
@@ -93,23 +93,18 @@ async function handleSafetyAlerts(change, context) {
 
     const contact = await resolveUserContact(userId);
     if (contact?.email) {
-      await sendBrevoTemplateEmail({
+      await enqueueEmail({
         toEmail: contact.email,
-        toName: contact.name,
-        templateId: getTemplateId('safety'),
-        params: {
-          title,
-          message,
-          stage: currentStage,
-          type,
-          outlet1Voltage: outlet1?.voltage || 0,
-          outlet1Current: outlet1?.current || 0,
-          outlet1Power: outlet1?.power || 0,
-          outlet2Voltage: outlet2?.voltage || 0,
-          outlet2Current: outlet2?.current || 0,
-          outlet2Power: outlet2?.power || 0,
-        },
-        tags: ['safety'],
+        subject: `WattWise safety alert: ${title}`,
+        heading: title,
+        intro: message,
+        rows: [
+          ['Stage', currentStage],
+          ['Type', type],
+          ['Outlet 1', `${outlet1?.voltage || 0} V / ${outlet1?.current || 0} A / ${outlet1?.power || 0} W`],
+          ['Outlet 2', `${outlet2?.voltage || 0} V / ${outlet2?.current || 0} A / ${outlet2?.power || 0} W`],
+        ],
+        tag: 'safety',
       });
     }
 

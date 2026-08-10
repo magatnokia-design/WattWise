@@ -13,6 +13,24 @@ const monthLabelFromKey = (monthKey) => {
   };
 };
 
+/**
+ * The budget the user set is mirrored onto the user document by
+ * setMonthlyBudget, which makes it the durable source when a given month's
+ * budget document does not exist or predates the setting.
+ */
+const readProfileMonthlyBudget = async (userId) => {
+  try {
+    const userDoc = await getDoc(doc(db, 'users', userId));
+    if (!userDoc.exists()) return 0;
+
+    const parsed = Number(userDoc.data()?.monthlyBudget);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+  } catch (error) {
+    console.error('Error reading profile monthly budget:', error);
+    return 0;
+  }
+};
+
 export const budgetService = {
   // Get current month budget
   getCurrentMonthBudget: async (userId) => {
@@ -21,17 +39,32 @@ export const budgetService = {
       const budgetDoc = await getDoc(
         doc(db, 'users', userId, 'budget', currentMonth)
       );
-      
+
       if (budgetDoc.exists()) {
-        return { success: true, data: budgetDoc.data() };
+        const data = budgetDoc.data() || {};
+
+        // A month document can exist (created by spending rollups) without ever
+        // carrying the budget the user set, so fall back to the profile value.
+        if (!Number(data.monthlyBudget)) {
+          const carriedBudget = await readProfileMonthlyBudget(userId);
+          if (carriedBudget > 0) {
+            return { success: true, data: { ...data, monthlyBudget: carriedBudget } };
+          }
+        }
+
+        return { success: true, data };
       }
-      
-      // Return default structure if not exists
+
+      // No document for this month yet. The budget the user set is stored on the
+      // user profile too, so carry it forward instead of reporting zero - a new
+      // month must not silently wipe the configured budget.
+      const carriedBudget = await readProfileMonthlyBudget(userId);
+
       return {
         success: true,
         data: {
           month: currentMonth,
-          monthlyBudget: 0,
+          monthlyBudget: carriedBudget,
           currentSpending: 0,
           outlet1Spending: 0,
           outlet2Spending: 0,
@@ -169,6 +202,46 @@ export const budgetService = {
   },
 
   // Initialize budget for new user (called once after registration)
+  // Creates the current month's budget document only when it is missing, and
+  // carries the configured budget forward so a new month does not read as zero.
+  // Safe to call on every sign-in, unlike initializeBudget which overwrites.
+  ensureCurrentMonthBudget: async (userId) => {
+    try {
+      const currentMonth = new Date().toISOString().slice(0, 7);
+      const budgetRef = doc(db, 'users', userId, 'budget', currentMonth);
+      const snapshot = await getDoc(budgetRef);
+
+      if (snapshot.exists()) {
+        return { success: true, created: false };
+      }
+
+      const carriedBudget = await readProfileMonthlyBudget(userId);
+
+      await setDoc(budgetRef, {
+        month: currentMonth,
+        monthlyBudget: carriedBudget,
+        currentSpending: 0,
+        outlet1Spending: 0,
+        outlet2Spending: 0,
+        dailyAverage: 0,
+        projectedTotal: 0,
+        lastUpdated: new Date(),
+        alerts: [],
+        thresholds: {
+          fifty: false,
+          seventyFive: false,
+          ninety: false,
+          hundred: false,
+        },
+      });
+
+      return { success: true, created: true };
+    } catch (error) {
+      console.error('Error ensuring current month budget:', error);
+      return { success: false, error: error.message };
+    }
+  },
+
   initializeBudget: async (userId) => {
     try {
       const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM

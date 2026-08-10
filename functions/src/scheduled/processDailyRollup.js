@@ -1,6 +1,15 @@
 const admin = require('firebase-admin');
 const logger = require('firebase-functions/logger');
 const { calculatePelcoIIIBill } = require('../lib/billing');
+const {
+  getManilaHour,
+  getManilaDateKey,
+  getManilaDayBounds,
+  getManilaPreviousDateKey,
+  getDaysInManilaMonth,
+} = require('../lib/manilaTime');
+const { resolveEnergyForDate } = require('../lib/energyAccounting');
+const { upsertInvoice } = require('./processMonthlyInvoice');
 
 const upsertApplianceBreakdown = (items, applianceName, energyKwh, cost, outletNumber) => {
   const normalizedName = String(applianceName || '').trim();
@@ -33,15 +42,23 @@ const upsertApplianceBreakdown = (items, applianceName, energyKwh, cost, outletN
 async function processDailyRollup() {
   try {
     const db = admin.firestore();
-    const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
-    yesterday.setHours(0, 0, 0, 0);
-
-    const yesterdayEnd = new Date(yesterday);
-    yesterdayEnd.setHours(23, 59, 59, 999);
-
-    const dateString = yesterday.toISOString().split('T')[0]; // YYYY-MM-DD
+    // The cron fires at midnight Manila, which is 16:00 UTC the previous day.
+    // Deriving the window from the UTC clock rolled up the wrong 24 hours and
+    // labelled the document with the wrong date, so resolve it in Manila terms.
+    const dateString = getManilaPreviousDateKey(new Date()); // YYYY-MM-DD
     const monthString = dateString.substring(0, 7); // YYYY-MM
+
+    const bounds = getManilaDayBounds(dateString);
+    if (!bounds) {
+      logger.error('Could not resolve Manila day bounds for rollup', { dateString });
+      return { success: false };
+    }
+
+    const yesterday = bounds.start;
+    const yesterdayEnd = bounds.end;
+    // Midday of the Manila day, used only for rate-profile selection so the
+    // lookup cannot land on the neighbouring date when normalised in UTC.
+    const rateLookupDate = new Date(bounds.start.getTime() + (12 * 60 * 60 * 1000));
 
     logger.info('Starting daily rollup', { date: dateString });
 
@@ -51,7 +68,6 @@ async function processDailyRollup() {
     const promises = usersSnapshot.docs.map(async (userDoc) => {
       const userId = userDoc.id;
       const userData = userDoc.data();
-      const electricityRate = userData.electricityRate || 0;
 
       try {
         // Get all activity logs for yesterday
@@ -65,8 +81,17 @@ async function processDailyRollup() {
         const outlet1Doc = await db.doc(`users/${userId}/outlets/outlet1`).get();
         const outlet2Doc = await db.doc(`users/${userId}/outlets/outlet2`).get();
 
-        const outlet1Energy = outlet1Doc.exists ? (outlet1Doc.data().energy || 0) : 0;
-        const outlet2Energy = outlet2Doc.exists ? (outlet2Doc.data().energy || 0) : 0;
+        // Energy attributable to the day being rolled up. The device reports a
+        // lifetime counter, so the per-day figure is the one accumulated by
+        // updateOutletMetrics - never the raw meter reading.
+        const outlet1Energy = resolveEnergyForDate(
+          outlet1Doc.exists ? outlet1Doc.data() : {},
+          dateString
+        );
+        const outlet2Energy = resolveEnergyForDate(
+          outlet2Doc.exists ? outlet2Doc.data() : {},
+          dateString
+        );
         const totalEnergy = outlet1Energy + outlet2Energy;
         const outlet1Name = outlet1Doc.exists
           ? String(outlet1Doc.data().applianceName || 'Outlet 1').trim()
@@ -84,18 +109,15 @@ async function processDailyRollup() {
           if (logData.power > peakPower) {
             peakPower = logData.power;
             const timestamp = logData.timestamp?.toDate() || new Date();
-            peakHour = timestamp.getHours();
+            // Reported to the user as a Manila hour, so convert from the UTC clock.
+            peakHour = getManilaHour(timestamp);
           }
         });
 
-        const billingDays = new Date(
-          yesterday.getFullYear(),
-          yesterday.getMonth() + 1,
-          0
-        ).getDate();
+        const billingDays = getDaysInManilaMonth(dateString);
         const daysInPeriod = 1;
         const bill = calculatePelcoIIIBill(totalEnergy, {
-          date: yesterday,
+          date: rateLookupDate,
           profileId: userData.rateProfileId || null,
           daysInPeriod,
           billingDays,
@@ -103,9 +125,15 @@ async function processDailyRollup() {
 
         // Calculate cost (PELCO III bill model)
         const cost = bill.totals.total;
-        const effectiveRate = bill.effectiveRate || electricityRate || 0;
-        const outlet1Cost = Number((outlet1Energy * effectiveRate).toFixed(2));
-        const outlet2Cost = Number((outlet2Energy * effectiveRate).toFixed(2));
+        // Split the bill by each outlet's share of the day's energy so the parts
+        // add up to the total. Costing each outlet at the effective rate did not:
+        // the tariff's fixed charges were counted twice, once per outlet.
+        const outlet1Cost = totalEnergy > 0
+          ? Number((cost * (outlet1Energy / totalEnergy)).toFixed(2))
+          : 0;
+        const outlet2Cost = totalEnergy > 0
+          ? Number((cost - outlet1Cost).toFixed(2))
+          : 0;
 
         const applianceBreakdown = [];
         upsertApplianceBreakdown(applianceBreakdown, outlet1Name, outlet1Energy, outlet1Cost, 1);
@@ -119,6 +147,8 @@ async function processDailyRollup() {
           outlet2Energy,
           outlet1Name,
           outlet2Name,
+          outlet1Cost,
+          outlet2Cost,
           totalEnergy,
           cost,
           bill,
@@ -128,47 +158,60 @@ async function processDailyRollup() {
           createdAt: admin.firestore.FieldValue.serverTimestamp(),
         });
 
-        // Update monthly budget
-        const budgetRef = db.doc(`users/${userId}/budget/${monthString}`);
-        const budgetDoc = await budgetRef.get();
+        // Recompute the month from its daily documents rather than adding to a
+        // running total. Accumulating made a retry or a re-run double-count, and
+        // there was no way to correct a bad day once it landed.
+        const monthlySnapshot = await db
+          .collection(`users/${userId}/history_daily`)
+          .where('date', '>=', `${monthString}-01`)
+          .where('date', '<=', `${monthString}-31`)
+          .get();
 
-        const currentSpending = budgetDoc.exists 
-          ? (budgetDoc.data().currentSpending || 0) 
-          : 0;
-        const outlet1Spending = budgetDoc.exists 
-          ? (budgetDoc.data().outlet1Spending || 0) 
-          : 0;
-        const outlet2Spending = budgetDoc.exists 
-          ? (budgetDoc.data().outlet2Spending || 0) 
-          : 0;
+        let currentSpending = 0;
+        let outlet1Spending = 0;
+        let outlet2Spending = 0;
 
-        await budgetRef.set({
+        monthlySnapshot.forEach((dayDoc) => {
+          const day = dayDoc.data() || {};
+          currentSpending += Number(day.cost) || 0;
+          outlet1Spending += Number(day.outlet1Cost) || 0;
+          outlet2Spending += Number(day.outlet2Cost) || 0;
+        });
+
+        await db.doc(`users/${userId}/budget/${monthString}`).set({
           month: monthString,
-          currentSpending: currentSpending + cost,
-          outlet1Spending: outlet1Spending + outlet1Cost,
-          outlet2Spending: outlet2Spending + outlet2Cost,
+          currentSpending: Number(currentSpending.toFixed(2)),
+          outlet1Spending: Number(outlet1Spending.toFixed(2)),
+          outlet2Spending: Number(outlet2Spending.toFixed(2)),
           lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
         }, { merge: true });
 
-        // Reset daily energy counters
-        if (outlet1Doc.exists) {
-          await db.doc(`users/${userId}/outlets/outlet1`).set({
-            energy: 0,
-            lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
-          }, { merge: true });
+        // The daily counters are not reset here. updateOutletMetrics rolls them
+        // over on the first sample of a new Manila day, and a reset written here
+        // was overwritten by the next telemetry post seconds later anyway.
+
+        // Keep the open period's DRAFT invoice in step with the day just rolled
+        // up, so the Billing screen reflects it without waiting for month end.
+        try {
+          await upsertInvoice({
+            db,
+            userId,
+            billingMonth: monthString,
+            todayKey: getManilaDateKey(new Date()),
+            isLifeline: userData?.isLifeline === true,
+          });
+        } catch (invoiceError) {
+          logger.warn('Daily rollup completed but invoice refresh failed', {
+            userId,
+            monthString,
+            message: invoiceError?.message,
+          });
         }
 
-        if (outlet2Doc.exists) {
-          await db.doc(`users/${userId}/outlets/outlet2`).set({
-            energy: 0,
-            lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
-          }, { merge: true });
-        }
-
-        logger.info('Daily rollup completed for user', { 
-          userId, 
-          totalEnergy, 
-          cost 
+        logger.info('Daily rollup completed for user', {
+          userId,
+          totalEnergy,
+          cost
         });
 
       } catch (userError) {

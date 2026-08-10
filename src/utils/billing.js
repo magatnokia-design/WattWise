@@ -1,3 +1,15 @@
+// PELCO III residential billing.
+//
+// Implements WATTWISE_PELCO3_BILLING_SPEC.md, derived from seven real bills.
+// Deliberately duplicated in functions/src/lib/billing.js - keep both in sync.
+//
+// Structure: three charge blocks over one kWh figure for the whole period.
+//   Block 1  Generation & Transmission  - user-entered, changes monthly
+//   Block 2  Distribution               - ERC-approved constants
+//   Block 3  Government charges         - constants + VAT
+//
+// The only non-linear item in the entire bill is the P5.00 metering rate.
+
 const roundTo = (value, decimals = 2) => {
   const factor = Math.pow(10, decimals);
   return Math.round((value + Number.EPSILON) * factor) / factor;
@@ -10,288 +22,217 @@ const toNumber = (value) => {
 
 const roundCurrency = (value) => roundTo(value, 2);
 
-const buildPerKwhItem = (key, label, rate, kwh) => {
-  const rateValue = toNumber(rate);
-  if (rateValue === 0) return null;
+// Rates as of this date; shown in the invoice footer.
+export const RATE_EFFECTIVE_DATE = '2026-06';
 
-  return {
-    key,
-    label,
-    kind: 'perKwh',
-    rate: rateValue,
-    amount: roundCurrency(kwh * rateValue),
-  };
+// Block 2 - Distribution (ERC-approved, stable)
+export const DISTRIBUTION_RATES = {
+  distribution: 0.2748,
+  supplySystem: 0.4140,
+  meterSystem: 0.3460,
+  rfsc: 0.1518,
+  lifelineSubsidy: 0.0100,
 };
 
-const buildFixedItem = (key, label, amount, proration) => {
-  const base = toNumber(amount);
-  if (base === 0) return null;
+// Charged once per billing period. Never per-kWh, never prorated by days:
+// a 10-day period pays P5.00 and so does a 45-day one.
+export const METERING_FLAT = 5.0;
 
-  return {
-    key,
-    label,
-    kind: 'fixed',
-    rate: base,
-    amount: roundCurrency(base * proration),
-  };
+// Block 3 - Universal charges
+export const UNIVERSAL_RATES = {
+  ucME: 0.2763,
+  fitAll: 0.2011,
+  ucStrandedDebt: 0.0428,
+  geaAll: 0.0371,
+  ucEC: 0.0025,
+  ucStrandedCost: 0.0000,
 };
 
-const sumItems = (items) => {
-  return roundCurrency(items.reduce((sum, item) => sum + item.amount, 0));
+export const VAT_RATE = 0.12;
+// Supply-side EVAT (GENCO/TRANSCO/ANCILLARY/SYSGENCO/SYSTRANSCO). PELCO III does
+// not publish a formula, so this is the single approximation in the model. It is
+// a factor rather than fixed per-kWh rates so it tracks the generation rate the
+// user enters instead of being pinned to one month's bill.
+//
+// Fitted to the two sample bills whose blocks reconcile exactly (94 kWh implies
+// 11.91%, 216 kWh implies 11.82%); both land within PHP 1.00 at this value. The
+// 116 and 135 kWh samples imply 11.26% and 10.89%, which contradict their own
+// printed government totals - treat those two rows as bad data rather than
+// re-fitting this constant to them.
+export const EVAT_SUPPLY_FACTOR = 0.1187;
+
+// VAT on distribution applies to Distribution + Supply System + Meter System and
+// the metering flat. RFSC and Lifeline Subsidy are VAT-exempt.
+const EVAT_DIST_BASE_PER_KWH =
+  DISTRIBUTION_RATES.distribution + DISTRIBUTION_RATES.supplySystem + DISTRIBUTION_RATES.meterSystem;
+
+export const DEFAULT_GEN_RATE_ADJ = -0.0306;
+
+// Block 1 - user-entered generation & transmission rates. Defaults track the
+// most recent sample bill; the user updates these monthly from rates.php.
+export const DEFAULT_SUPPLY_RATES = {
+  generation: 6.5269,
+  generationRateAdj: DEFAULT_GEN_RATE_ADJ,
+  transmission: 1.1136,
+  transmissionCostAdj: 0,
+  ancillary: 0,
+  systemLoss: 0.5762,
+  systemLossAdj: 0,
+  transDemand: 0,
+  transDemandAdj: 0,
+  icera: 0,
+  gram: 0,
 };
 
-const resolveProration = (daysInPeriod, billingDays) => {
-  const periodDays = Math.max(0, toNumber(daysInPeriod));
-  const totalDays = Math.max(0, toNumber(billingDays));
+const SUPPLY_LINES = [
+  ['generation', 'Generation'],
+  ['generationRateAdj', 'Gen. Rate Adj'],
+  ['transmission', 'Transmission'],
+  ['transmissionCostAdj', 'Trans. Cost Adj'],
+  ['ancillary', 'Ancillary Charge'],
+  ['systemLoss', 'System Loss'],
+  ['systemLossAdj', 'System Loss Adj'],
+  ['transDemand', 'Trans. Demand'],
+  ['transDemandAdj', 'Trans. Demand Adj'],
+  ['icera', 'ICERA'],
+  ['gram', 'GRAM'],
+];
 
-  if (!periodDays) return 0;
-  if (!totalDays) return 1;
-  return Math.min(1, periodDays / totalDays);
-};
-
-const normalizeDate = (value) => {
-  if (!value) return null;
-  if (value instanceof Date) return value;
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
-};
-
-// Rates sourced from PELCO III April 2026 bill (216 kWh sample).
-export const PELCO_III_RATES_2026_04 = {
-  referenceRate: 10.2745,
-  perKwh: {
-    generation: 5.5924,
-    generationRateAdj: -0.0306,
-    transmission: 1.5257,
-    transmissionCostAdj: 0,
-    systemLoss: 0.5301,
-    distribution: 0.2748,
-    supplySystem: 0.414,
-    meteringSystem: 0.346,
-    rfs: 0.1518,
-    lifelineRateAdj: 0.01,
-    evatGenCo: 0.6645,
-    evatTransCo: 0.1724,
-    evatDistribution: 0.12694,
-    evatSystemGenCo: 0.05,
-    evatSystemTransCo: 0.0136,
-    ucME: 0.2763,
-    ucEC: 0.0025,
-    ucStrandedCost: 0.2011,
-    fitAll: 0.0371,
-    geAll: 0.0428,
-  },
-  fixed: {
-    meteringRate: 5.0,
-    otherNonTaxable: 147.65,
-  },
-};
+const UNIVERSAL_LINES = [
+  ['ucME', 'UC-ME'],
+  ['fitAll', 'FIT-ALL'],
+  ['ucStrandedDebt', 'UC-Stranded Debt'],
+  ['geaAll', 'GEA-ALL (Renewable)'],
+  ['ucEC', 'UC-EC'],
+  ['ucStrandedCost', 'UC-Stranded Cost'],
+];
 
 export const RATE_PROFILES = [
   {
-    id: 'pelco-iii-2026-04',
-    name: 'PELCO III Apr 2026',
-    effectiveFrom: '2026-04-21',
-    rates: PELCO_III_RATES_2026_04,
+    id: 'pelco-iii-default',
+    name: 'PELCO III (current)',
+    effectiveFrom: RATE_EFFECTIVE_DATE + '-01',
+    supplyRates: DEFAULT_SUPPLY_RATES,
   },
 ];
 
-const resolveRateProfile = ({ date, profileId, profiles, rates }) => {
-  if (rates) {
-    return {
-      id: 'custom',
-      name: 'Custom Rate',
-      effectiveFrom: null,
-      rates,
-    };
-  }
-
-  const pool = Array.isArray(profiles) && profiles.length > 0
-    ? profiles
-    : RATE_PROFILES;
-
-  if (profileId) {
-    return pool.find((profile) => profile.id === profileId) || pool[0];
-  }
-
-  const targetDate = normalizeDate(date);
-  if (!targetDate) return pool[0];
-
-  const candidates = pool
-    .filter((profile) => profile.effectiveFrom)
-    .filter((profile) => normalizeDate(profile.effectiveFrom) <= targetDate)
-    .sort((a, b) => normalizeDate(a.effectiveFrom) - normalizeDate(b.effectiveFrom));
-
-  return candidates.length ? candidates[candidates.length - 1] : pool[0];
+const perKwhItem = (key, label, rate, kwh) => {
+  const rateValue = toNumber(rate);
+  if (rateValue === 0) return null;
+  return { key, label, kind: 'perKwh', rate: rateValue, amount: roundCurrency(kwh * rateValue) };
 };
 
+const fixedItem = (key, label, amount) => {
+  const base = toNumber(amount);
+  if (base === 0) return null;
+  return { key, label, kind: 'fixed', rate: base, amount: roundCurrency(base) };
+};
+
+const sumItems = (items) => roundCurrency(items.reduce((sum, item) => sum + item.amount, 0));
+
+const resolveSupplyRates = ({ supplyRates, profileId, profiles }) => {
+  if (supplyRates) return { id: 'custom', name: 'Custom rates', rates: supplyRates };
+
+  const pool = Array.isArray(profiles) && profiles.length > 0 ? profiles : RATE_PROFILES;
+  const profile = (profileId && pool.find((entry) => entry.id === profileId)) || pool[0];
+
+  return {
+    id: profile.id,
+    name: profile.name,
+    rates: profile.supplyRates || DEFAULT_SUPPLY_RATES,
+  };
+};
+
+/**
+ * @param {number} kwh Energy for the WHOLE billing period. Rates are averaged
+ *   monthly by PELCO III and applied uniformly, so never bill per-day and sum.
+ * @param {object} options
+ * @param {object} [options.supplyRates] Block 1 rates; falls back to the profile.
+ * @param {boolean} [options.isLifeline] Zeroes the lifeline subsidy line.
+ * @param {boolean} [options.includePeriodFlats=true] Set false for a marginal
+ *   estimate (e.g. today's usage) so the once-per-period P5.00 is not counted
+ *   again on every partial view.
+ */
 export const calculatePelcoIIIBill = (
   kwh,
   {
-    rates = null,
+    supplyRates = null,
     profiles = null,
     profileId = null,
-    date = null,
-    daysInPeriod = null,
-    billingDays = null,
+    isLifeline = false,
+    includePeriodFlats = true,
+    // `date`, `daysInPeriod` and `billingDays` may still be passed by existing
+    // call sites. They are intentionally ignored: PELCO III applies one averaged
+    // rate uniformly across the period, so nothing here is prorated by days.
   } = {}
 ) => {
   const usage = Math.max(0, toNumber(kwh));
-  const resolvedProfile = resolveRateProfile({ date, profileId, profiles, rates });
-  const activeRates = resolvedProfile.rates || PELCO_III_RATES_2026_04;
-  const proration = resolveProration(daysInPeriod, billingDays);
-  const perKwh = activeRates.perKwh || {};
-  const fixed = activeRates.fixed || {};
+  const resolved = resolveSupplyRates({ supplyRates, profileId, profiles });
+  const rates = resolved.rates || DEFAULT_SUPPLY_RATES;
 
-  const generationTransmission = [];
-  const distribution = [];
-  const government = [];
-  const otherCharges = [];
+  // Block 1 - Generation & Transmission
+  const generationTransmission = SUPPLY_LINES
+    .map(([key, label]) => perKwhItem(key, label, rates[key], usage))
+    .filter(Boolean);
+  const genTransRate = SUPPLY_LINES.reduce((sum, [key]) => sum + toNumber(rates[key]), 0);
+  const genTransTotal = roundCurrency(usage * genTransRate);
 
-  const addItem = (bucket, item) => {
-    if (item) bucket.push(item);
-  };
+  // Block 2 - Distribution
+  const distribution = [
+    perKwhItem('distribution', 'Distribution', DISTRIBUTION_RATES.distribution, usage),
+    perKwhItem('supplySystem', 'Supply System', DISTRIBUTION_RATES.supplySystem, usage),
+    perKwhItem('meterSystem', 'Meter System', DISTRIBUTION_RATES.meterSystem, usage),
+    perKwhItem('rfsc', 'RFSC', DISTRIBUTION_RATES.rfsc, usage),
+    isLifeline
+      ? null
+      : perKwhItem('lifelineSubsidy', 'Lifeline Subsidy', DISTRIBUTION_RATES.lifelineSubsidy, usage),
+    includePeriodFlats ? fixedItem('meteringRate', 'Metering Rate', METERING_FLAT) : null,
+  ].filter(Boolean);
 
-  addItem(
-    generationTransmission,
-    buildPerKwhItem('generation', 'Generation', perKwh.generation, usage)
+  // Block 3 - Government charges
+  const meteringInBase = includePeriodFlats ? METERING_FLAT : 0;
+  const evatDistribution = roundCurrency(
+    ((usage * EVAT_DIST_BASE_PER_KWH) + meteringInBase) * VAT_RATE
   );
-  addItem(
-    generationTransmission,
-    buildPerKwhItem(
-      'generationRateAdj',
-      'Generation Rate Adjustment',
-      perKwh.generationRateAdj,
-      usage
-    )
-  );
-  addItem(
-    generationTransmission,
-    buildPerKwhItem('transmission', 'Transmission', perKwh.transmission, usage)
-  );
-  addItem(
-    generationTransmission,
-    buildPerKwhItem(
-      'transmissionCostAdj',
-      'Transmission Cost Adjustment',
-      perKwh.transmissionCostAdj,
-      usage
-    )
-  );
-  addItem(
-    generationTransmission,
-    buildPerKwhItem('systemLoss', 'System Loss', perKwh.systemLoss, usage)
-  );
+  const evatSupply = roundCurrency(genTransTotal * EVAT_SUPPLY_FACTOR);
 
-  addItem(
-    distribution,
-    buildPerKwhItem('distribution', 'Distribution', perKwh.distribution, usage)
-  );
-  addItem(
-    distribution,
-    buildPerKwhItem('supplySystem', 'Supply System', perKwh.supplySystem, usage)
-  );
-  addItem(
-    distribution,
-    buildPerKwhItem('meteringSystem', 'Metering System', perKwh.meteringSystem, usage)
-  );
-  addItem(distribution, buildPerKwhItem('rfs', 'RFS', perKwh.rfs, usage));
-  addItem(
-    distribution,
-    buildPerKwhItem(
-      'lifelineRateAdj',
-      'Lifeline Rate Adjustment',
-      perKwh.lifelineRateAdj,
-      usage
-    )
-  );
-  addItem(
-    distribution,
-    buildFixedItem('meteringRate', 'Metering Rate', fixed.meteringRate, proration)
-  );
-
-  addItem(
-    government,
-    buildPerKwhItem('evatGenCo', 'EVAT GenCo', perKwh.evatGenCo, usage)
-  );
-  addItem(
-    government,
-    buildPerKwhItem('evatTransCo', 'EVAT TransCo', perKwh.evatTransCo, usage)
-  );
-  addItem(
-    government,
-    buildPerKwhItem(
-      'evatDistribution',
-      'EVAT Distribution',
-      perKwh.evatDistribution,
-      usage
-    )
-  );
-  addItem(
-    government,
-    buildPerKwhItem(
-      'evatSystemGenCo',
-      'EVAT System GenCo',
-      perKwh.evatSystemGenCo,
-      usage
-    )
-  );
-  addItem(
-    government,
-    buildPerKwhItem(
-      'evatSystemTransCo',
-      'EVAT System TransCo',
-      perKwh.evatSystemTransCo,
-      usage
-    )
-  );
-  addItem(government, buildPerKwhItem('ucME', 'UC-ME', perKwh.ucME, usage));
-  addItem(government, buildPerKwhItem('ucEC', 'UC-EC', perKwh.ucEC, usage));
-  addItem(
-    government,
-    buildPerKwhItem(
-      'ucStrandedCost',
-      'UC-Stranded Cost',
-      perKwh.ucStrandedCost,
-      usage
-    )
-  );
-  addItem(government, buildPerKwhItem('fitAll', 'FIT-ALL', perKwh.fitAll, usage));
-  addItem(government, buildPerKwhItem('geAll', 'GE-ALL', perKwh.geAll, usage));
-
-  addItem(
-    otherCharges,
-    buildFixedItem(
-      'otherNonTaxable',
-      'Other Non-Taxable Charges',
-      fixed.otherNonTaxable,
-      proration
-    )
-  );
+  const government = [
+    ...UNIVERSAL_LINES
+      .map(([key, label]) => perKwhItem(key, label, UNIVERSAL_RATES[key], usage))
+      .filter(Boolean),
+    evatSupply !== 0
+      ? { key: 'evatSupply', label: 'EVAT on Gen/Trans', kind: 'derived', rate: EVAT_SUPPLY_FACTOR, amount: evatSupply }
+      : null,
+    evatDistribution !== 0
+      ? { key: 'evatDistribution', label: 'EVAT on Distribution', kind: 'derived', rate: VAT_RATE, amount: evatDistribution }
+      : null,
+  ].filter(Boolean);
 
   const totals = {
-    generationTransmission: sumItems(generationTransmission),
+    generationTransmission: genTransTotal,
     distribution: sumItems(distribution),
     government: sumItems(government),
-    other: sumItems(otherCharges),
+    other: 0,
   };
 
   totals.total = roundCurrency(
-    totals.generationTransmission + totals.distribution + totals.government + totals.other
+    totals.generationTransmission + totals.distribution + totals.government
   );
 
   return {
     kwh: usage,
-    proration,
-    rateProfileId: resolvedProfile.id,
-    rateProfileName: resolvedProfile.name,
-    rateProfileEffectiveFrom: resolvedProfile.effectiveFrom,
-    referenceRate: toNumber(activeRates.referenceRate),
+    rateProfileId: resolved.id,
+    rateProfileName: resolved.name,
+    rateEffectiveDate: RATE_EFFECTIVE_DATE,
+    supplyRatePerKwh: roundTo(genTransRate, 4),
+    isLifeline: !!isLifeline,
+    includePeriodFlats,
     items: {
       generationTransmission,
       distribution,
       government,
-      otherCharges,
+      // Retained so existing consumers of `items.otherCharges` keep working.
+      otherCharges: [],
     },
     totals,
     effectiveRate: usage > 0 ? roundTo(totals.total / usage, 4) : 0,

@@ -15,6 +15,8 @@ const {
   detectApplianceFromRunState,
 } = require('../lib/applianceDetector');
 const { dispatchDeviceCommand } = require('../lib/deviceCommandDispatcher');
+const { deriveOutletEnergy } = require('../lib/energyAccounting');
+const { evaluateSafety } = require('../lib/powerSafety');
 
 const VALID_STATUSES = new Set(['on', 'off']);
 const MAX_OUTLET_POWER_W = 500;
@@ -212,6 +214,11 @@ async function updateOutletMetrics(req, res) {
         totalLimitW: MAX_TOTAL_POWER_W,
       };
 
+      // The device reports a lifetime cumulative meter reading, so `energy` is
+      // derived here as today's usage. Everything downstream - the dashboard,
+      // the nightly rollup, budgets - reads a real per-day number.
+      const energyState = deriveOutletEnergy(previousOutletData, energy, timestampMs);
+
       const outletUpdate = {
         outletId: `outlet${number}`,
         outletNumber: number,
@@ -219,7 +226,13 @@ async function updateOutletMetrics(req, res) {
         current,
         power,
         status,
-        energy,
+        energy: energyState.energyTodayKwh,
+        energyTodayKwh: energyState.energyTodayKwh,
+        energyDateKey: energyState.energyDateKey,
+        energyMeterKwh: energyState.energyMeterKwh,
+        energyPreviousDayKwh: energyState.energyPreviousDayKwh,
+        energyPreviousDateKey: energyState.energyPreviousDateKey,
+        totalEnergy: energyState.totalEnergy,
         deviceId: normalizedDeviceId,
         detectionState: nextDetectionState,
         metricsUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -331,6 +344,38 @@ async function updateOutletMetrics(req, res) {
       }
     }
 
+    // Power safety. This is the only place with live readings and the user's
+    // configured thresholds together, so the stage is derived here; writing it
+    // is what lets handleSafetyAlerts notify and auto-cut off.
+    const safetyRef = db.doc(`users/${userId}/power_safety/settings`);
+    const safetySnapshot = await safetyRef.get();
+    const safety = evaluateSafety({
+      settings: safetySnapshot.exists ? safetySnapshot.data() : null,
+      outlets: validOutlets,
+      totalPowerW,
+      nowMs: now,
+    });
+
+    if (safety.shouldWrite) {
+      batch.set(safetyRef, {
+        currentStage: safety.stage,
+        stageReasons: safety.reasons,
+        stageUpdatedAtMs: safety.stageChanged ? now : (safetySnapshot.data()?.stageUpdatedAtMs || now),
+        lastReadingWriteMs: now,
+        ...safety.readings,
+        lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true });
+    }
+
+    if (safety.stageChanged) {
+      logger.info('Power safety stage changed', {
+        userId,
+        from: safety.previousStage,
+        to: safety.stage,
+        reasons: safety.reasons,
+      });
+    }
+
     // Keep mapping heartbeat fresh.
     batch.set(db.doc(`devices/${normalizedDeviceId}`), {
       userId,
@@ -349,13 +394,20 @@ async function updateOutletMetrics(req, res) {
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     }, { merge: true });
 
-    batch.set(userRef, {
-      deviceId: normalizedDeviceId,
-      device: {
+    // Only touch the user document when the binding actually changed. Writing a
+    // heartbeat here on every telemetry post (about once a second) made the user
+    // doc permanently hot, so any transaction that reads it - notably
+    // registerApplianceProfile - kept aborting under contention. The live
+    // heartbeat already lives on devices/{deviceId} above.
+    if (String(userData?.deviceId || '').trim() !== normalizedDeviceId) {
+      batch.set(userRef, {
         deviceId: normalizedDeviceId,
-        lastSeenAt: admin.firestore.FieldValue.serverTimestamp(),
-      },
-    }, { merge: true });
+        device: {
+          deviceId: normalizedDeviceId,
+          lastSeenAt: admin.firestore.FieldValue.serverTimestamp(),
+        },
+      }, { merge: true });
+    }
 
     // Commit batch write
     await batch.commit();

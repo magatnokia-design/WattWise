@@ -52,6 +52,28 @@ export const splitDailyDate = (dateString) => {
   };
 };
 
+// Every history_logs document carries a `source` written by the backend
+// (processOutletToggle, checkScheduledTimers, handleSafetyAlerts). It is the
+// most useful column on the row: it says whether the user pressed the button,
+// a timer fired, or the safety cutoff tripped.
+const SOURCE_LABELS = {
+  manual: { label: 'Manual', tone: 'neutral' },
+  schedule: { label: 'Schedule', tone: 'info' },
+  auto_cutoff: { label: 'Auto-cutoff', tone: 'danger' },
+  timer: { label: 'Timer', tone: 'info' },
+};
+
+export const describeLogSource = (source) => {
+  const normalized = String(source || '').trim().toLowerCase();
+  return SOURCE_LABELS[normalized] || { label: 'System', tone: 'neutral' };
+};
+
+export const formatWatts = (value) => {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) return '';
+  return `${parsed.toFixed(1)} W`;
+};
+
 export const DATE_RANGE_PRESETS = [
   { id: 'all', label: 'All time', shortLabel: 'Date' },
   { id: '7d', label: 'Last 7 days', shortLabel: '7 days' },

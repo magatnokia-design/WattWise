@@ -1,6 +1,7 @@
 const admin = require('firebase-admin');
 const logger = require('firebase-functions/logger');
 const { dispatchDeviceCommand } = require('../lib/deviceCommandDispatcher');
+const { getManilaTimeString, getManilaWeekday } = require('../lib/manilaTime');
 
 const DAY_LABEL_TO_INDEX = {
   sun: 0,
@@ -51,8 +52,11 @@ async function checkScheduledTimers() {
   try {
     const db = admin.firestore();
     const now = new Date();
-    const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-    const currentDay = now.getDay(); // 0 = Sunday, 6 = Saturday
+    // Schedules are stored as Manila wall-clock ("07:00"). The runtime clock is
+    // UTC, so these must be converted explicitly - using now.getHours() here
+    // fired every schedule 8 hours late and matched the wrong weekday.
+    const currentTime = getManilaTimeString(now);
+    const currentDay = getManilaWeekday(now); // 0 = Sunday, 6 = Saturday
 
     logger.info('Checking scheduled timers', { currentTime, currentDay });
 

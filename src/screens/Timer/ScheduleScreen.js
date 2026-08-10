@@ -48,11 +48,28 @@ const ScheduleScreen = () => {
     return result;
   }, [addSchedule]);
 
-  const handleDelete = useCallback(async (id) => {
-    const result = await deleteSchedule(id);
-    if (!result?.success) {
-      Alert.alert('Unable to delete timer', result?.error || 'Please try again.');
-    }
+  // Deleting a timer is destructive and was previously a single unguarded tap,
+  // unlike every other destructive action in the app.
+  const handleDelete = useCallback((id, description) => {
+    Alert.alert(
+      'Delete Timer',
+      description
+        ? `Delete the timer for ${description}? This cannot be undone.`
+        : 'Delete this timer? This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            const result = await deleteSchedule(id);
+            if (!result?.success) {
+              Alert.alert('Unable to delete timer', result?.error || 'Please try again.');
+            }
+          },
+        },
+      ]
+    );
   }, [deleteSchedule]);
 
   const handleToggle = useCallback(async (id, active) => {

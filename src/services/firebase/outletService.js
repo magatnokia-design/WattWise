@@ -35,9 +35,28 @@ const mapOutletDocToUiOutlet = (outletId, data = {}) => {
   };
 };
 
-const outletNumberFromId = (outletId) => {
-  const outletNumber = Number(String(outletId).replace('outlet', ''));
-  return Number.isNaN(outletNumber) ? null : outletNumber;
+// Shared so the one-shot read and the live listener always present the saved
+// signatures identically.
+// "Outlet 1"/"Outlet 2" are placeholder labels rather than appliances. Filtered
+// on read as well as on write so any already stored by an earlier build stops
+// showing up without needing a migration.
+const isPlaceholderApplianceLabel = (label) => /^outlet\s*\d+$/i.test(String(label || '').trim());
+
+const mapSavedAppliances = (userData = {}) => {
+  const rawProfiles = userData?.applianceProfiles;
+  if (!Array.isArray(rawProfiles)) return [];
+
+  return rawProfiles
+    .filter((profile) => {
+      const label = String(profile?.label || '').trim();
+      return label && !isPlaceholderApplianceLabel(label);
+    })
+    .map((profile) => ({
+      label: String(profile.label).trim(),
+      meanPower: Number(profile.meanPower) || 0,
+      peakPower: Number(profile.peakPower) || 0,
+      updatedAtMs: Number(profile.updatedAtMs) || 0,
+    }));
 };
 
 const isSupportedOutletId = (outletId) => outletId === 'outlet1' || outletId === 'outlet2';
@@ -48,12 +67,6 @@ const sortOutletsByNumber = (outlets = []) => {
     const right = Number(b?.outletNumber || 0);
     return left - right;
   });
-};
-
-const isPermissionDeniedError = (error) => {
-  const code = String(error?.code || '').toLowerCase();
-  const message = String(error?.message || '').toLowerCase();
-  return code.includes('permission-denied') || message.includes('insufficient permissions');
 };
 
 const TRANSIENT_FUNCTION_ERROR_CODES = new Set([
@@ -293,38 +306,68 @@ export const outletService = {
   // Records the outlet's current run as a learned signature for this appliance
   // name ("confirm to learn"), so later runs match the user's own hardware
   // instead of the generic power ranges.
-  registerApplianceProfile: async (userId, outletIdOrNumber, applianceName) => {
+
+  // Learned appliance signatures live on the user document.
+  getSavedAppliances: async (userId) => {
     try {
       if (!userId) {
         throw new Error('User not authenticated');
       }
 
-      const normalizedOutletId = normalizeOutletId(outletIdOrNumber);
-      const normalizedName = String(applianceName || '').trim();
+      const userDoc = await getDoc(doc(db, 'users', userId));
+      const data = userDoc.exists() ? userDoc.data() : {};
 
-      if (!normalizedName) {
-        throw new Error('applianceName is required');
+      return { success: true, data: mapSavedAppliances(data) };
+    } catch (error) {
+      console.error('Error loading saved appliances:', error);
+      return { success: false, error: error.message, data: [] };
+    }
+  },
+
+  // Live view of the learned signatures. Confirming a suggestion writes them
+  // from a Cloud Function, so without a listener the Settings list only caught
+  // up on the next app launch.
+  subscribeToSavedAppliances: (userId, onChange, onError) => {
+    if (!userId) {
+      return () => {};
+    }
+
+    return onSnapshot(
+      doc(db, 'users', userId),
+      (snapshot) => {
+        onChange(mapSavedAppliances(snapshot.exists() ? snapshot.data() : {}));
+      },
+      (error) => {
+        console.error('Saved appliances subscription error:', error);
+        if (onError) onError(error);
+      }
+    );
+  },
+
+  removeApplianceProfile: async (userId, label) => {
+    try {
+      if (!userId) {
+        throw new Error('User not authenticated');
       }
 
-      const registerApplianceProfileCallable = httpsCallable(functions, 'registerApplianceProfile');
-      const result = await registerApplianceProfileCallable({
-        outletId: normalizedOutletId,
-        applianceName: normalizedName,
-      });
+      const normalizedLabel = String(label || '').trim();
+      if (!normalizedLabel) {
+        throw new Error('label is required');
+      }
+
+      const removeApplianceProfileCallable = httpsCallable(functions, 'removeApplianceProfile');
+      const result = await removeApplianceProfileCallable({ label: normalizedLabel });
 
       if (!result?.data?.success) {
-        throw new Error(result?.data?.error || 'Failed to learn appliance signature');
+        throw new Error(result?.data?.error || 'Failed to remove saved appliance');
       }
 
       return { success: true, data: result.data };
     } catch (error) {
       const code = normalizeFunctionErrorCode(error) || error?.code;
-      const message = error?.details || error?.message || 'Failed to learn appliance signature';
+      const message = error?.details || error?.message || 'Failed to remove saved appliance';
 
-      console.error('Error registering appliance profile:', {
-        code,
-        message,
-      });
+      console.error('Error removing saved appliance:', { code, message });
 
       return { success: false, error: message, code };
     }
@@ -335,38 +378,81 @@ export const outletService = {
     return outletService.updateOutletStatus(userId, outletIdOrNumber, status);
   },
 
-  // Update appliance name.
-  // If stricter rules reject metadata fields, retry with a minimal payload.
+  // Names the appliance on an outlet and, when the run holds enough measured
+  // data, teaches the detector that signature in the same call.
   updateApplianceName: async (userId, outletIdOrNumber, name, options = {}) => {
     try {
       const normalizedOutletId = normalizeOutletId(outletIdOrNumber);
-      const outletNumber = outletNumberFromId(normalizedOutletId);
-      const resolvedOutletNumber = outletNumber || 0;
       const normalizedSource = String(options.source || 'manual').trim().toLowerCase();
       const confidence = Number(options.confidencePercent);
-      const selectionPayload = {
-        name,
+
+      // Naming goes through the callable: it writes the selection metadata that
+      // firestore.rules will not accept from the client, and records the learned
+      // signature in the same round trip.
+      const callable = httpsCallable(functions, 'registerApplianceProfile');
+      const payload = {
+        outletId: normalizedOutletId,
+        applianceName: name,
         source: normalizedSource,
-        selectedAt: new Date(),
-        acceptedSuggestion: normalizedSource === 'auto_suggestion',
       };
 
       if (Number.isFinite(confidence)) {
-        selectionPayload.confidencePercent = confidence;
+        payload.confidencePercent = confidence;
       }
 
       if (options.modelVersion) {
-        selectionPayload.modelVersion = String(options.modelVersion);
+        payload.modelVersion = String(options.modelVersion);
       }
 
-      const outletRef = doc(db, 'users', userId, 'outlets', normalizedOutletId);
-      const outletSnapshot = await getDoc(outletRef);
+      let result;
+      try {
+        result = await callable(payload);
+      } catch (callableError) {
+        // A brand-new account may not have its outlet documents yet.
+        if (normalizeFunctionErrorCode(callableError) !== 'not-found') {
+          throw callableError;
+        }
 
-      if (!outletSnapshot.exists()) {
+        await outletService.ensureOutletsExist(userId);
+        result = await callable(payload);
+      }
+
+      if (!result?.data?.success) {
+        throw new Error(result?.data?.error || 'Failed to update appliance name');
+      }
+
+      return {
+        success: true,
+        learned: !!result.data.learned,
+        learnError: result.data.learnError || null,
+      };
+    } catch (error) {
+      const code = normalizeFunctionErrorCode(error) || error?.code;
+      const message = error?.details || error?.message || 'Failed to update appliance name';
+
+      console.error('Error updating appliance name:', { code, message });
+      return { success: false, error: message, code };
+    }
+  },
+
+  // Creates only the outlet documents that are missing. Safe to call on every
+  // sign-in: initializeOutlets below overwrites without merge, which would wipe
+  // appliance names, energy totals and detection state.
+  ensureOutletsExist: async (userId) => {
+    try {
+      const created = [];
+
+      for (const outletNumber of [1, 2]) {
+        const outletId = `outlet${outletNumber}`;
+        const outletRef = doc(db, 'users', userId, 'outlets', outletId);
+        const snapshot = await getDoc(outletRef);
+
+        if (snapshot.exists()) continue;
+
         await setDoc(outletRef, {
-          outletNumber: resolvedOutletNumber,
+          outletNumber,
           status: 'off',
-          applianceName: name,
+          applianceName: `Outlet ${outletNumber}`,
           voltage: 0,
           current: 0,
           power: 0,
@@ -376,40 +462,13 @@ export const outletService = {
           autoDetectedAppliance: '',
         });
 
-        return { success: true };
+        created.push(outletId);
       }
 
-      try {
-        await setDoc(
-          outletRef,
-          {
-            outletNumber: resolvedOutletNumber,
-            applianceName: name,
-            applianceSelection: selectionPayload,
-            lastUpdated: new Date(),
-          },
-          { merge: true }
-        );
-      } catch (writeError) {
-        if (!isPermissionDeniedError(writeError)) {
-          throw writeError;
-        }
-
-        await setDoc(
-          outletRef,
-          {
-            outletNumber: resolvedOutletNumber,
-            applianceName: name,
-            lastUpdated: new Date(),
-          },
-          { merge: true }
-        );
-      }
-
-      return { success: true };
+      return { success: true, created };
     } catch (error) {
-      console.error('Error updating appliance name:', error);
-      return { success: false, error: error.message };
+      console.error('Error ensuring outlets exist:', error);
+      return { success: false, error: error.message, created: [] };
     }
   },
 
