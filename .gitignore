@@ -43,7 +43,9 @@ extensions/*.secret.local
 secrets.h
 # generated pairing QR codes embed the device token
 docs/esp32/qr/
-google-services.json
+# google-services.json is deliberately NOT ignored: expo.android.googleServicesFile
+# points at it, EAS builds from git, and an ignored file never reaches the build -
+# which silently breaks FCM registration. It holds public identifiers only.
 GoogleService-Info.plist
 *serviceAccount*.json
 *firebase-adminsdk*.json

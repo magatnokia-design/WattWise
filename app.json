@@ -40,7 +40,8 @@
         "backgroundColor": "#10B981"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.magat_nokia.WattWise"
+      "package": "com.magat_nokia.WattWise",
+      "googleServicesFile": "./google-services.json"
     },
     "web": {
       "favicon": "./assets/applogo-circle.png"

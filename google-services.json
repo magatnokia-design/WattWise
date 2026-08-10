@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "421489842338",
+    "project_id": "wattwise-fe394",
+    "storage_bucket": "wattwise-fe394.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:421489842338:android:3eb43ae01cd598133d1ffb",
+        "android_client_info": {
+          "package_name": "com.magat_nokia.WattWise"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "421489842338-c30e362j45re82uh89313j66d8bth8cr.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBqcfn_Vefw7nvfI7fz9AdQK0WEq-NXb9I"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "421489842338-c30e362j45re82uh89313j66d8bth8cr.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
