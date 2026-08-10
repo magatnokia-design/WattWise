@@ -1,7 +1,8 @@
 {
   "expo": {
     "name": "WattWise",
-    "slug": "WattWise",
+    "//": "slug must stay WiseWatt: it is fixed at EAS project creation and cannot be renamed. Changing it orphans the project ID, build history, and Android keystore. Users never see the slug - the app name and package are both WattWise.",
+    "slug": "WiseWatt",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/applogo-circle.png",
