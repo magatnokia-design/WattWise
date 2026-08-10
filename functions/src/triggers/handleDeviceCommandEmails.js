@@ -1,5 +1,6 @@
 const logger = require('firebase-functions/logger');
 const { resolveUserContact, enqueueEmail } = require('../lib/mailQueue');
+const { createNotification } = require('../lib/notifications');
 
 const NOTIFIABLE_STATUSES = new Set(['failed', 'rejected', 'timeout']);
 
@@ -27,13 +28,31 @@ async function handleDeviceCommandEmails(change, context) {
       return null;
     }
 
+    const outletId = String(after.outletId || '').trim();
+    const outletNumber = parseInt(outletId.replace('outlet', ''), 10);
+
+    // A toggle that never reached the ESP32 is the one failure the user most
+    // needs to know about immediately - they think the outlet switched and it
+    // did not. Push first, then fall through to the email.
+    await createNotification({
+      userId,
+      type: 'device',
+      title: 'Outlet command failed',
+      message: `The ${String(after.action || 'toggle').trim()} command for ${outletId || 'your outlet'} reported "${status}".`,
+      outlet: Number.isNaN(outletNumber) ? null : outletNumber,
+      metadata: {
+        commandId,
+        status,
+        action: String(after.action || '').trim(),
+        reason: String(after.reason || '').trim(),
+      },
+    });
+
     const contact = await resolveUserContact(userId);
     if (!contact?.email) {
       logger.info('Device email skipped: missing recipient', { userId, commandId });
       return null;
     }
-
-    const outletId = String(after.outletId || '').trim();
 
     await enqueueEmail({
       toEmail: contact.email,

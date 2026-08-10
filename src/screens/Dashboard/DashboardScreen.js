@@ -14,6 +14,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { COLORS } from '../../constants/colors';
 import { SIZES, FONTS } from '../../constants/theme';
 import NotificationPanel from '../Notifications/components/NotificationPanel';
+import { useNotifications } from '../Notifications/hooks/useNotifications';
 import OutletControlModal from './components/OutletControlModal';
 import ApplianceSuggestion from './components/ApplianceSuggestion';
 import { useOutletControl } from './hooks/useOutletControl';
@@ -59,6 +60,9 @@ const formatPeso = (value) => {
 export const DashboardScreen = ({ navigation }) => {
   const [notificationVisible, setNotificationVisible] = useState(false);
   const [expandedSuggestionOutlet, setExpandedSuggestionOutlet] = useState(null);
+
+  // Only the count is used here - the panel loads its own list when opened.
+  const { unreadCount } = useNotifications();
 
   // Outlet control hook
   const {
@@ -213,6 +217,13 @@ export const DashboardScreen = ({ navigation }) => {
             activeOpacity={0.7}
           >
             <Text style={styles.notificationIcon}>🔔</Text>
+            {unreadCount > 0 && (
+              <View style={styles.notificationBadge}>
+                <Text style={styles.notificationBadgeText}>
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </Text>
+              </View>
+            )}
           </TouchableOpacity>
         </View>
 
@@ -501,6 +512,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 1,
     borderColor: COLORS.border,
+  },
+  notificationBadge: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    minWidth: 18,
+    height: 18,
+    paddingHorizontal: 4,
+    borderRadius: 9,
+    backgroundColor: COLORS.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: COLORS.white,
+  },
+  notificationBadgeText: {
+    color: COLORS.white,
+    fontSize: 10,
+    fontWeight: '700',
   },
   notificationIcon: {
     fontSize: 20,

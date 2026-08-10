@@ -1,5 +1,6 @@
 const logger = require('firebase-functions/logger');
 const { resolveUserContact, enqueueEmail } = require('../lib/mailQueue');
+const { createNotification } = require('../lib/notifications');
 
 const toNumber = (value, fallback = 0) => {
   const parsed = Number(value);
@@ -30,12 +31,6 @@ async function handleDailyReceiptEmails(change, context) {
       return null;
     }
 
-    const contact = await resolveUserContact(userId);
-    if (!contact?.email) {
-      logger.info('Receipt email skipped: missing recipient', { userId, date });
-      return null;
-    }
-
     const totalEnergy = toNumber(after.totalEnergy);
     const cost = toNumber(after.cost);
     const outlet1Energy = toNumber(after.outlet1Energy);
@@ -63,6 +58,26 @@ async function handleDailyReceiptEmails(change, context) {
     const receiptDate = String(after.date || date || '').trim();
     const outlet1Name = String(after.outlet1Name || 'Outlet 1').trim();
     const outlet2Name = String(after.outlet2Name || 'Outlet 2').trim();
+
+    // The notification is written before the recipient lookup so a user with no
+    // resolvable email still gets the summary in-app and on their phone.
+    await createNotification({
+      userId,
+      type: 'receipt',
+      title: 'Daily summary ready',
+      message: `You used ${totalEnergy.toFixed(3)} kWh on ${receiptDate}, about PHP ${billTotal.toFixed(2)}.`,
+      metadata: {
+        date: receiptDate,
+        totalEnergy,
+        billTotal,
+      },
+    });
+
+    const contact = await resolveUserContact(userId);
+    if (!contact?.email) {
+      logger.info('Receipt email skipped: missing recipient', { userId, date });
+      return null;
+    }
 
     await enqueueEmail({
       toEmail: contact.email,

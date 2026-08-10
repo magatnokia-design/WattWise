@@ -3,6 +3,7 @@ const logger = require('firebase-functions/logger');
 const { buildInvoice, getBillingPeriod, previousMonth, STATUS } = require('../lib/invoice');
 const { renderInvoicePdf, formatMonthName } = require('../lib/invoicePdf');
 const { resolveUserContact, enqueueEmail } = require('../lib/mailQueue');
+const { createNotification } = require('../lib/notifications');
 const { getManilaDateKey } = require('../lib/manilaTime');
 
 const peso = (value) => `PHP ${(Number(value) || 0).toFixed(2)}`;
@@ -110,6 +111,20 @@ async function processMonthlyInvoice() {
         logger.info('Skipping statement: no usage recorded', { userId, billingMonth });
         return;
       }
+
+      await createNotification({
+        userId,
+        type: 'invoice',
+        title: `${formatMonthName(billingMonth)} statement ready`,
+        message:
+          `Your estimated bill is ${peso(invoice.totalAmountDue)} for ${invoice.totalKwh.toFixed(2)} kWh. ` +
+          'Enter the official PELCO III rate in WattWise to finalize it.',
+        metadata: {
+          billingMonth,
+          totalKwh: invoice.totalKwh,
+          totalAmountDue: invoice.totalAmountDue,
+        },
+      });
 
       const contact = await resolveUserContact(userId);
       if (!contact?.email) return;

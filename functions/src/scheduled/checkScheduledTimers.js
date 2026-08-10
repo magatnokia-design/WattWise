@@ -1,6 +1,7 @@
 const admin = require('firebase-admin');
 const logger = require('firebase-functions/logger');
 const { dispatchDeviceCommand } = require('../lib/deviceCommandDispatcher');
+const { createNotification } = require('../lib/notifications');
 const { getManilaTimeString, getManilaWeekday } = require('../lib/manilaTime');
 
 const DAY_LABEL_TO_INDEX = {
@@ -154,8 +155,21 @@ async function checkScheduledTimers() {
             },
           });
 
-          logger.info('Scheduled timer executed', { 
-            userId, 
+          await createNotification({
+            userId,
+            type: 'schedule',
+            title: `Schedule turned ${newStatus ? 'on' : 'off'} ${outletData.applianceName || `Outlet ${outletNumber}`}`,
+            message: `Your ${scheduledTime} schedule ran and switched the outlet ${newStatus ? 'on' : 'off'}.`,
+            outlet: Number.isNaN(outletNumber) ? null : outletNumber,
+            metadata: {
+              scheduleId: scheduleDoc.id,
+              scheduleType: 'scheduled',
+              action: newStatus ? 'on' : 'off',
+            },
+          });
+
+          logger.info('Scheduled timer executed', {
+            userId,
             scheduleId: scheduleDoc.id,
             commandId: commandResult.commandId,
             commandChannel: commandResult.channel,
@@ -240,6 +254,19 @@ async function checkScheduledTimers() {
             metadata: {
               scheduleId: scheduleDoc.id,
               scheduleType: 'countdown',
+            },
+          });
+
+          await createNotification({
+            userId,
+            type: 'schedule',
+            title: `Timer turned ${newStatus ? 'on' : 'off'} ${outletData.applianceName || `Outlet ${outletNumber}`}`,
+            message: `Your countdown finished and switched the outlet ${newStatus ? 'on' : 'off'}.`,
+            outlet: Number.isNaN(outletNumber) ? null : outletNumber,
+            metadata: {
+              scheduleId: scheduleDoc.id,
+              scheduleType: 'countdown',
+              action: newStatus ? 'on' : 'off',
             },
           });
 
