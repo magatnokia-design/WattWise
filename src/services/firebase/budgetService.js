@@ -142,10 +142,33 @@ export const budgetService = {
       const budgetDoc = await getDoc(budgetRef);
       
       if (budgetDoc.exists()) {
-        // Update existing
+        const nextBudget = parseFloat(amount);
+        const previousBudget = Number(budgetDoc.data()?.monthlyBudget) || 0;
+
+        // A changed budget makes the old alert flags meaningless: they record
+        // that spending crossed 50/75/90/100% of a *different* figure.
+        // handleBudgetAlerts skips any threshold whose flag is already true, so
+        // leaving them set silences every alert for the rest of the month -
+        // which is exactly what happened after the flags were burned against a
+        // budget that has since been lowered.
+        //
+        // Only on an actual change: re-saving the same amount should not
+        // re-send alerts the user has already had.
+        const budgetChanged = nextBudget !== previousBudget;
+
         await updateDoc(budgetRef, {
-          monthlyBudget: parseFloat(amount),
+          monthlyBudget: nextBudget,
           lastUpdated: new Date(),
+          ...(budgetChanged
+            ? {
+              thresholds: {
+                fifty: false,
+                seventyFive: false,
+                ninety: false,
+                hundred: false,
+              },
+            }
+            : {}),
         });
       } else {
         // Create new

@@ -90,10 +90,16 @@ const BudgetProgressCard = ({
 
           <View style={styles.separator} />
 
+          {/* The label changes with the sign, not just the colour. Showing an
+              absolute value under "Remaining" reads as money still available
+              when it is money already overspent - and colour alone is the one
+              cue a red-green colour-blind user does not get. */}
           <View style={styles.detailRow}>
-            <Text style={styles.remainingLabel}>Remaining</Text>
+            <Text style={styles.remainingLabel}>
+              {remainingBudget >= 0 ? 'Remaining' : 'Over budget'}
+            </Text>
             <Text style={[styles.remainingValue, { color: remainingBudget >= 0 ? COLORS.success : COLORS.error }]}>
-              ₱{Math.abs(remainingBudget).toFixed(2)}
+              {remainingBudget >= 0 ? '' : '+'}₱{Math.abs(remainingBudget).toFixed(2)}
             </Text>
           </View>
         </View>

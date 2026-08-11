@@ -58,7 +58,7 @@ const handleResetPassword = async () => {
       'Reset link sent',
       `Sent to ${normalizedEmail}.\n\n` +
         '• The link expires in 1 hour.\n' +
-        '• Check your spam folder — it arrives from noreply@wattwise-fe394.firebaseapp.com.\n' +
+        '• Check your spam folder — it arrives from support@wattwise.site.\n' +
         '• If you request another, only the newest link works.',
       [{ text: 'OK', onPress: () => navigation.navigate('Login') }]
     );
