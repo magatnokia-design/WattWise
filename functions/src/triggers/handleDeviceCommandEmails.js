@@ -6,7 +6,13 @@ const NOTIFIABLE_STATUSES = new Set(['failed', 'rejected', 'timeout']);
 
 const normalizeStatus = (value) => String(value || '').trim().toLowerCase();
 
-async function handleDeviceCommandEmails(change, context) {
+async function handleDeviceCommandEmails(event) {
+  // See the note in handleDailyReceiptEmails: v2 passes one event, not
+  // (change, context). This threw on `context.params` every time, which is why
+  // a failed outlet command never produced the email it promises.
+  const change = event.data;
+  const context = { params: event.params || {} };
+
   try {
     const { userId, commandId } = context.params;
     const after = change.after.exists ? change.after.data() : null;

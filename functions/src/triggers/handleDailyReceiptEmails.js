@@ -22,7 +22,17 @@ const formatLineItems = (items) => {
     .join('\n');
 };
 
-async function handleDailyReceiptEmails(change, context) {
+async function handleDailyReceiptEmails(event) {
+  // Registered with v2 `onDocumentWritten`, which calls the handler with a
+  // single event: `event.data` is the before/after pair, `event.params` the
+  // path wildcards. This was written against the v1 signature
+  // `(change, context)`, so `context` arrived undefined and `context.params`
+  // threw on the first line of the try block below - every time, since the
+  // function was deployed. The catch logged it and returned null, so the
+  // failure was silent and no daily summary has ever been sent.
+  const change = event.data;
+  const context = { params: event.params || {} };
+
   try {
     const { userId, date } = context.params;
     const after = change.after.exists ? change.after.data() : null;

@@ -9,7 +9,14 @@ const { resolveUserContact, enqueueEmail } = require('../lib/mailQueue');
  * Creates high-priority notifications
  * Auto-cutoff if stage is 'cutoff' and autoProtectionEnabled
  */
-async function handleSafetyAlerts(change, context) {
+async function handleSafetyAlerts(event) {
+  // See the note in handleDailyReceiptEmails: v2 passes one event, not
+  // (change, context). This threw on `context.params` every time - so the
+  // auto-cutoff alert, the most safety-critical message the system sends, has
+  // never reached anybody.
+  const change = event.data;
+  const context = { params: event.params || {} };
+
   try {
     const { userId } = context.params;
     

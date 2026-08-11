@@ -7,7 +7,13 @@ const { resolveUserContact, enqueueEmail } = require('../lib/mailQueue');
  * Checks if spending crosses thresholds (50%, 75%, 90%, 100%)
  * Creates notifications for threshold breaches
  */
-async function handleBudgetAlerts(change, context) {
+async function handleBudgetAlerts(event) {
+  // See the note in handleDailyReceiptEmails: v2 passes one event, not
+  // (change, context). Written against v1, this threw on `context.params`
+  // every time it fired, which is why budget alerts never arrived.
+  const change = event.data;
+  const context = { params: event.params || {} };
+
   try {
     const { userId, month } = context.params;
     
