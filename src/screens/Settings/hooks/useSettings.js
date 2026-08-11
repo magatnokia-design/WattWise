@@ -69,10 +69,18 @@ export const useSettings = () => {
 
       setSavedAppliances(savedAppliancesResult.success ? savedAppliancesResult.data : []);
 
+      // Degrades like every other read here rather than throwing. A failed
+      // preferences read used to blow up the whole load, and the catch below
+      // reset every field to defaults - so one transient failure blanked the
+      // name, email, rate, budget and device ID that four *successful* reads
+      // had just returned. The screen looked like the account had been wiped.
       if (!preferencesResult.success) {
-        throw new Error(preferencesResult.error);
+        setError(preferencesResult.error || 'Could not load your preferences.');
       }
 
+      const preferencesData = preferencesResult.success
+        ? (preferencesResult.data || {})
+        : {};
       const profileData = profileResult.success ? (profileResult.data || {}) : {};
       const budgetData = budgetResult.success ? (budgetResult.data || {}) : {};
       const outletsData = outletsResult.success ? (outletsResult.data || {}) : {};
@@ -90,12 +98,12 @@ export const useSettings = () => {
       const authUser = auth.currentUser;
 
       setSettings({
-        electricityRate: preferencesResult.data.electricityRate || 0,
-        currency: preferencesResult.data.currency || '₱',
-        rateProfileId: preferencesResult.data.rateProfileId || null,
-        supplyRates: preferencesResult.data.supplyRates || null,
-        hasSupplyRates: preferencesResult.data.hasSupplyRates === true,
-        notifications: preferencesResult.data.notificationsEnabled ?? true,
+        electricityRate: preferencesData.electricityRate || 0,
+        currency: preferencesData.currency || '₱',
+        rateProfileId: preferencesData.rateProfileId || null,
+        supplyRates: preferencesData.supplyRates || null,
+        hasSupplyRates: preferencesData.hasSupplyRates === true,
+        notifications: preferencesData.notificationsEnabled ?? true,
         monthlyBudget: Number(budgetData.monthlyBudget || profileData.monthlyBudget || 0),
         profileName: profileData.name || authUser?.displayName || 'User',
         email: profileData.email || authUser?.email || '',
@@ -116,9 +124,13 @@ export const useSettings = () => {
         esp32LastCommandTimeoutAtMs: Number(deviceHealth.lastCommandTimeoutAtMs || 0),
       });
     } catch (err) {
+      // Deliberately keeps whatever is already on screen. Blanking to defaults
+      // on a failed refresh is worse than showing slightly stale values: it
+      // reads as "your account is empty" rather than "this refresh failed",
+      // and the data was correct a second earlier. Sign-out clears state via
+      // the !currentUserId branch above, which is the only case that should.
       setError(err.message);
       console.error('Error fetching settings:', err);
-      setSettings(DEFAULT_SETTINGS);
     } finally {
       setLoading(false);
     }
