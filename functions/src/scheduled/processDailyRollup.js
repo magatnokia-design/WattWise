@@ -34,6 +34,78 @@ const upsertApplianceBreakdown = (items, applianceName, energyKwh, cost, outletN
 };
 
 /**
+ * Rewrites `budget/{month}` from that month's daily documents.
+ *
+ * Recomputed from the daily documents rather than added to a running total:
+ * accumulating made a retry or a re-run double-count, and left no way to
+ * correct a bad day once it had landed. Because it is a full recomputation,
+ * calling it again is always safe and always self-correcting - one run repairs
+ * a month however it came to be wrong.
+ *
+ * The month is priced in a single call. Summing each day's bill counted
+ * METERING_FLAT - documented in billing.js as "once per billing period, never
+ * prorated by days" - on every single day, since calculatePelcoIIIBill
+ * deliberately ignores `daysInPeriod`. A 31-day month reported PHP 173.60 of
+ * metering where the correct figure is PHP 5.60.
+ *
+ * That inflation burned the budget alert thresholds on the first rolled-up day
+ * and left this number permanently at odds with the invoice, which has always
+ * priced the month in one go. Doing the same here makes the Budget and Billing
+ * screens agree by construction rather than by coincidence.
+ *
+ * Extracted so it can be run on demand as well as nightly: a corrected month
+ * should not have to wait for the next midnight to appear.
+ */
+async function recomputeMonthlyBudget({ db, userId, monthString, userData = {} }) {
+  const monthlySnapshot = await db
+    .collection(`users/${userId}/history_daily`)
+    .where('date', '>=', `${monthString}-01`)
+    .where('date', '<=', `${monthString}-31`)
+    .get();
+
+  let monthEnergy = 0;
+  let monthOutlet1Energy = 0;
+
+  monthlySnapshot.forEach((dayDoc) => {
+    const day = dayDoc.data() || {};
+    monthEnergy += Number(day.totalEnergy) || 0;
+    monthOutlet1Energy += Number(day.outlet1Energy) || 0;
+  });
+
+  const monthBill = calculatePelcoIIIBill(monthEnergy, {
+    supplyRates: userData.supplyRates || null,
+    profileId: userData.rateProfileId || null,
+  });
+
+  const currentSpending = monthBill.totals.total;
+
+  // Split by each outlet's share of the month's energy, mirroring how the daily
+  // figures are split. Costing each outlet separately would charge the fixed
+  // component twice. Outlet 2 is the remainder so the parts sum to the total.
+  const outlet1Spending = monthEnergy > 0
+    ? Number((currentSpending * (monthOutlet1Energy / monthEnergy)).toFixed(2))
+    : 0;
+  const outlet2Spending = monthEnergy > 0
+    ? Number((currentSpending - outlet1Spending).toFixed(2))
+    : 0;
+
+  await db.doc(`users/${userId}/budget/${monthString}`).set({
+    month: monthString,
+    currentSpending: Number(currentSpending.toFixed(2)),
+    outlet1Spending: Number(outlet1Spending.toFixed(2)),
+    outlet2Spending: Number(outlet2Spending.toFixed(2)),
+    lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
+  }, { merge: true });
+
+  return {
+    monthString,
+    days: monthlySnapshot.size,
+    totalKwh: Number(monthEnergy.toFixed(3)),
+    currentSpending: Number(currentSpending.toFixed(2)),
+  };
+}
+
+/**
  * Scheduled function: Runs daily at midnight (00:00)
  * Aggregates previous day's energy usage
  * Creates history_daily document
@@ -162,33 +234,7 @@ async function processDailyRollup() {
           createdAt: admin.firestore.FieldValue.serverTimestamp(),
         });
 
-        // Recompute the month from its daily documents rather than adding to a
-        // running total. Accumulating made a retry or a re-run double-count, and
-        // there was no way to correct a bad day once it landed.
-        const monthlySnapshot = await db
-          .collection(`users/${userId}/history_daily`)
-          .where('date', '>=', `${monthString}-01`)
-          .where('date', '<=', `${monthString}-31`)
-          .get();
-
-        let currentSpending = 0;
-        let outlet1Spending = 0;
-        let outlet2Spending = 0;
-
-        monthlySnapshot.forEach((dayDoc) => {
-          const day = dayDoc.data() || {};
-          currentSpending += Number(day.cost) || 0;
-          outlet1Spending += Number(day.outlet1Cost) || 0;
-          outlet2Spending += Number(day.outlet2Cost) || 0;
-        });
-
-        await db.doc(`users/${userId}/budget/${monthString}`).set({
-          month: monthString,
-          currentSpending: Number(currentSpending.toFixed(2)),
-          outlet1Spending: Number(outlet1Spending.toFixed(2)),
-          outlet2Spending: Number(outlet2Spending.toFixed(2)),
-          lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
-        }, { merge: true });
+        await recomputeMonthlyBudget({ db, userId, monthString, userData });
 
         // The daily counters are not reset here. updateOutletMetrics rolls them
         // over on the first sample of a new Manila day, and a reset written here
@@ -235,4 +281,4 @@ async function processDailyRollup() {
   }
 }
 
-module.exports = { processDailyRollup };
+module.exports = { processDailyRollup, recomputeMonthlyBudget };

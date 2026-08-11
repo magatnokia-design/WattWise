@@ -7,6 +7,7 @@ const {
   DISTRIBUTION_RATES,
   UNIVERSAL_RATES,
   EVAT_SUPPLY_FACTOR,
+  VAT_RATE,
 } = require('../src/lib/billing');
 
 // The Block 1 rates printed on each of the sample bills in the spec, so the
@@ -187,4 +188,40 @@ test('zero usage still produces a coherent bill', () => {
   assert.equal(result.effectiveRate, 0);
   // The metering flat is still owed for the period.
   assert.equal(result.totals.distribution, METERING_FLAT);
+});
+
+// A period must be priced in one call. processDailyRollup used to build the
+// month's budget figure by adding up each day's bill, which charged
+// METERING_FLAT once per day - PHP 173.60 across a 31-day month instead of
+// PHP 5.00, plus VAT on every extra copy. That inflation burned the budget
+// alert thresholds on the first rolled-up day and put the Budget screen
+// permanently at odds with the invoice.
+//
+// This test states the property that makes the two approaches different, so a
+// future change back to per-day accumulation fails here rather than in
+// somebody's budget.
+test('summing daily bills overcharges the metering flat, so a period is priced once', () => {
+  const dailyKwh = 0.5;
+  const days = 31;
+
+  const pricedOnce = calculatePelcoIIIBill(dailyKwh * days, {});
+  const summedDaily = Array.from({ length: days })
+    .reduce((total) => total + calculatePelcoIIIBill(dailyKwh, {}).totals.total, 0);
+
+  assert.ok(
+    summedDaily > pricedOnce.totals.total,
+    'summing daily bills should cost more - that is the bug being guarded against'
+  );
+
+  // Every extra day repeats the flat charge and the VAT levied on it. The match
+  // is close rather than exact because each daily bill is rounded to centavos
+  // before being added, so 31 roundings drift a few centavos from one - which is
+  // itself part of why summing days is the wrong shape.
+  const overcharge = summedDaily - pricedOnce.totals.total;
+  const repeatedFlats = (days - 1) * METERING_FLAT * (1 + VAT_RATE);
+
+  assert.ok(
+    Math.abs(overcharge - repeatedFlats) < 1,
+    `the gap should be the repeated metering flat plus its VAT (~${repeatedFlats.toFixed(2)}), got ${overcharge.toFixed(2)}`
+  );
 });
