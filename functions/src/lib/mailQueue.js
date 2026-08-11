@@ -102,8 +102,31 @@ const visibleRows = (rows) => (Array.isArray(rows) ? rows : [])
  * Built as nested tables with inline styles rather than divs and CSS: Outlook
  * renders through Word's HTML engine, which ignores most modern layout.
  */
-const buildEmailHtml = ({ heading, intro, rows, tag }) => {
+const buildEmailHtml = ({ heading, intro, rows, tag, action }) => {
   const accent = accentFor(tag);
+
+  // Auth mail leads with a button rather than a detail table. Rendered as a
+  // bordered table cell, not a styled <a>: Outlook drops padding and background
+  // on anchors, which would leave the button as bare underlined text.
+  const actionUrl = String(action?.url || '').trim();
+  const actionLabel = String(action?.label || '').trim();
+  const actionBlock = actionUrl && actionLabel
+    ? `
+        <tr>
+          <td style="padding:2px 24px 22px;">
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+              <tr>
+                <td style="background:${accent};border-radius:8px;">
+                  <a href="${escapeHtml(actionUrl)}" style="display:inline-block;padding:12px 26px;color:${THEME.white};font-size:14px;font-weight:700;text-decoration:none;">${escapeHtml(actionLabel)}</a>
+                </td>
+              </tr>
+            </table>
+            <p style="margin:14px 0 0;color:${THEME.textFaint};font-size:11px;line-height:1.5;word-break:break-all;">
+              Or paste this into your browser:<br>${escapeHtml(actionUrl)}
+            </p>
+          </td>
+        </tr>`
+    : '';
 
   const detailRows = visibleRows(rows)
     .map(([label, value], index) => {
@@ -149,6 +172,7 @@ const buildEmailHtml = ({ heading, intro, rows, tag }) => {
             <p style="margin:0 0 20px;color:${THEME.textBody};font-size:14px;line-height:1.6;">${escapeMultiline(intro)}</p>
           </td>
         </tr>
+${actionBlock}
         <tr>
           <td style="padding:0 24px 24px;">${detailTable}</td>
         </tr>
@@ -177,7 +201,7 @@ const buildEmailHtml = ({ heading, intro, rows, tag }) => {
  * spam filters than HTML alone, and it is what watches, screen readers, and
  * text-only clients actually render.
  */
-const buildEmailText = ({ heading, intro, rows }) => {
+const buildEmailText = ({ heading, intro, rows, action }) => {
   const lines = [
     heading,
     '='.repeat(String(heading || '').length),
@@ -185,6 +209,11 @@ const buildEmailText = ({ heading, intro, rows }) => {
     intro,
     '',
   ];
+
+  // The URL has to appear in full here - a text part cannot carry a link.
+  if (action?.url) {
+    lines.push(String(action.url), '');
+  }
 
   visibleRows(rows).forEach(([label, value]) => {
     lines.push(`${label}: ${String(value).replace(/\r?\n/g, '\n  ')}`);
@@ -201,7 +230,7 @@ const buildEmailText = ({ heading, intro, rows }) => {
  * rather than throwing when there is no recipient, so callers can stay
  * best-effort the way the previous provider-backed helper was.
  */
-const enqueueEmail = async ({ toEmail, subject, heading, intro, rows, tag, attachments }) => {
+const enqueueEmail = async ({ toEmail, subject, heading, intro, rows, tag, action, attachments }) => {
   const recipientEmail = String(toEmail || '').trim();
   if (!recipientEmail) {
     logger.info('Email skipped: missing recipient', { tag });
@@ -242,8 +271,8 @@ const enqueueEmail = async ({ toEmail, subject, heading, intro, rows, tag, attac
         // Both parts, always. Nodemailer sends multipart/alternative when text
         // and html are both present, which filters treat more kindly than a
         // bare HTML body.
-        text: buildEmailText({ heading: heading || normalizedSubject, intro, rows }),
-        html: buildEmailHtml({ heading: heading || normalizedSubject, intro, rows, tag }),
+        text: buildEmailText({ heading: heading || normalizedSubject, intro, rows, action }),
+        html: buildEmailHtml({ heading: heading || normalizedSubject, intro, rows, tag, action }),
         ...(normalizedAttachments.length ? { attachments: normalizedAttachments } : {}),
       },
       // Not read by the extension; kept for our own log/debug queries.

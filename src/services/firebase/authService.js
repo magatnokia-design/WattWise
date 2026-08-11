@@ -3,8 +3,6 @@ import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   signOut,
-  sendPasswordResetEmail,
-  sendEmailVerification,
   reload,
   updateProfile
 } from "firebase/auth";
@@ -41,7 +39,7 @@ export const authService = {
       // is recoverable from the verify screen's resend button, whereas throwing
       // here would leave the account created but the caller reporting failure.
       try {
-        await sendEmailVerification(userCredential.user);
+        await httpsCallable(functions, 'sendVerificationEmail')();
       } catch (verificationError) {
         console.warn('Could not send verification email:', verificationError?.message);
       }
@@ -71,31 +69,34 @@ export const authService = {
 
   // Re-sends the verification email to the signed-in account.
   //
-  // Rate limited by Firebase rather than here: repeated taps return
-  // auth/too-many-requests, which the caller surfaces as-is.
+  // Goes through a callable rather than Firebase's own sendEmailVerification:
+  // this project cannot edit Firebase's templates or point them at WattWise's
+  // own page, so its mail is unbranded and lands on firebaseapp.com. The
+  // callable generates the same code and sends our message instead.
   sendVerificationEmail: async () => {
     try {
-      const user = auth.currentUser;
-      if (!user) {
+      if (!auth.currentUser) {
         return { success: false, error: 'Not signed in.' };
       }
 
-      if (user.emailVerified) {
-        return { success: true, alreadyVerified: true };
-      }
+      const callable = httpsCallable(functions, 'sendVerificationEmail');
+      const response = await callable();
 
-      await sendEmailVerification(user);
-      return { success: true };
+      return {
+        success: true,
+        alreadyVerified: response?.data?.alreadyVerified === true,
+      };
     } catch (error) {
-      if (error?.code === 'auth/too-many-requests') {
-        return {
-          success: false,
-          error: 'Too many requests. Wait a minute before trying again.',
-        };
+      const code = typeof error?.code === 'string'
+        ? error.code.replace('functions/', '')
+        : error?.code;
+
+      if (code === 'resource-exhausted') {
+        return { success: false, error: error?.message || 'Wait a minute before trying again.' };
       }
 
       console.error('Send verification email error:', error);
-      return { success: false, error: error.message };
+      return { success: false, error: error?.details || error?.message };
     }
   },
 
@@ -189,26 +190,26 @@ export const authService = {
         };
       }
 
-      // Enforce reset only for existing Auth users.
-      const checkUserExistsByEmail = httpsCallable(functions, 'checkUserExistsByEmail');
-      const checkResult = await checkUserExistsByEmail({ email: normalizedEmail });
+      // One call, not two. The callable generates the reset code and sends the
+      // branded email itself - Firebase's own mail cannot be edited on this
+      // project and always links to its hosted page. It reports a missing
+      // account the same way the old existence check did, so the separate
+      // checkUserExistsByEmail round trip is no longer needed.
+      const callable = httpsCallable(functions, 'sendPasswordResetEmail');
+      await callable({ email: normalizedEmail });
 
-      if (!checkResult?.data?.exists) {
-        return {
-          success: false,
-          code: 'auth/user-not-found',
-          error: 'No account found with this email',
-        };
-      }
-
-      await sendPasswordResetEmail(auth, normalizedEmail);
       return { success: true };
     } catch (error) {
-      const code = typeof error?.code === 'string'
+      const rawCode = typeof error?.code === 'string'
         ? error.code.replace('functions/', '')
         : error?.code;
 
-      if (!isExpectedAuthError(code)) {
+      // Presented as the Firebase code both clients already handle. The
+      // callable reports a missing account as `not-found`, which every existing
+      // error map would have fallen through to a generic message.
+      const code = rawCode === 'not-found' ? 'auth/user-not-found' : rawCode;
+
+      if (!isExpectedAuthError(code) && code !== 'resource-exhausted') {
         console.error('Password reset error:', error);
       }
 

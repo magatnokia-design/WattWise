@@ -1,0 +1,22 @@
+[debug] [2026-08-11T07:47:21.926Z] ----------------------------------------------------------------------
+[debug] [2026-08-11T07:47:21.932Z] Command:       C:\Program Files\nodejs\node.exe C:\Users\IDEAPAD\AppData\Roaming\npm\node_modules\firebase-tools\lib\bin\firebase.js deploy --only functions
+[debug] [2026-08-11T07:47:21.932Z] CLI Version:   15.14.0
+[debug] [2026-08-11T07:47:21.933Z] Platform:      win32
+[debug] [2026-08-11T07:47:21.933Z] Node Version:  v24.14.1
+[debug] [2026-08-11T07:47:21.933Z] Time:          Tue Aug 11 2026 15:47:21 GMT+0800 (Philippine Standard Time)
+[debug] [2026-08-11T07:47:21.933Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2026-08-11T07:47:25.389Z] Object "/extensions" in "firebase.json" has unknown property: {"additionalProperty":"firestore-send-email"}
+[debug] [2026-08-11T07:47:25.394Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-08-11T07:47:25.394Z] > authorizing via signed-in user (magatnokia@gmail.com)
+[debug] [2026-08-11T07:47:25.394Z] [iam] checking project wattwise-fe394 for permissions ["cloudfunctions.functions.create","cloudfunctions.functions.delete","cloudfunctions.functions.get","cloudfunctions.functions.list","cloudfunctions.functions.update","cloudfunctions.operations.get","firebase.projects.get"]
+[debug] [2026-08-11T07:47:25.396Z] Checked if tokens are valid: false, expires at: 1786420474315
+[debug] [2026-08-11T07:47:25.396Z] Checked if tokens are valid: false, expires at: 1786420474315
+[debug] [2026-08-11T07:47:25.396Z] > refreshing access token with scopes: []
+[debug] [2026-08-11T07:47:25.399Z] >>> [apiv2][query] POST https://www.googleapis.com/oauth2/v3/token [none]
+[debug] [2026-08-11T07:47:25.399Z] >>> [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[debug] [2026-08-11T07:47:25.575Z] <<< [apiv2][status] POST https://www.googleapis.com/oauth2/v3/token 200
+[debug] [2026-08-11T07:47:25.576Z] <<< [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[debug] [2026-08-11T07:47:25.593Z] >>> [apiv2][query] POST https://cloudresourcemanager.googleapis.com/v1/projects/wattwise-fe394:testIamPermissions [none]
+[debug] [2026-08-11T07:47:25.593Z] >>> [apiv2][(partial)header] POST https://cloudresourcemanager.googleapis.com/v1/projects/wattwise-fe394:testIamPermissions  x-goog-user-project=wattwise-fe394
+[debug] [2026-08-11T07:47:25.593Z] >>> [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/wattwise-fe394:testIamPermissions {"permissions":["cloudfunctions.functions.create","cloudfunctions.functions.delete","cloudfunctions.functions.get","cloudfunctions.functions.list","cloudfunctions.functions.update","cloudfunctions.operations.get","firebase.projects.get"]}

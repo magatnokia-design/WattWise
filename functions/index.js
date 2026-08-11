@@ -26,6 +26,8 @@ const { registerApplianceProfile } = require('./src/http/registerApplianceProfil
 const { removeApplianceProfile } = require('./src/http/removeApplianceProfile');
 const { linkDeviceToAccount } = require('./src/http/linkDeviceToAccount');
 const { checkUserExistsByEmail } = require('./src/http/checkUserExistsByEmail');
+const { sendPasswordResetEmail } = require('./src/http/sendPasswordResetEmail');
+const { sendVerificationEmail } = require('./src/http/sendVerificationEmail');
 const { processDailyRollup } = require('./src/scheduled/processDailyRollup');
 const { processMonthlyInvoice } = require('./src/scheduled/processMonthlyInvoice');
 const { finalizeInvoice } = require('./src/http/finalizeInvoice');
@@ -165,6 +167,31 @@ exports.checkUserExistsByEmail = onCall(
     maxInstances: 10,
   },
   checkUserExistsByEmail
+);
+
+/**
+ * Callable function to send the branded password reset email
+ * Called from: Forgot password flow, on both the app and the web client
+ *
+ * Deliberately callable without a session - a user who has forgotten their
+ * password cannot sign in first. Throttled per address in authEmails.js.
+ */
+exports.sendPasswordResetEmail = onCall(
+  {
+    maxInstances: 10,
+  },
+  sendPasswordResetEmail
+);
+
+/**
+ * Callable function to send the branded address-confirmation email
+ * Called from: registration, and the verify-email screen's resend button
+ */
+exports.sendVerificationEmail = onCall(
+  {
+    maxInstances: 10,
+  },
+  sendVerificationEmail
 );
 
 // ===========================
