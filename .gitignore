@@ -56,3 +56,8 @@ GoogleService-Info.plist
 # generated native folders
 /ios
 /android
+
+# Firebase CLI debug output
+firebase-debug.log
+firebase-debug.*.log
+functions/firebase-debug.log

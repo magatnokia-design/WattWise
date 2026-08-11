@@ -73,6 +73,20 @@
           "order": "ASCENDING"
         }
       ]
+    },
+    {
+      "collectionGroup": "invoices",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "billingMonth",
+          "order": "DESCENDING"
+        }
+      ]
     }
   ],
   "fieldOverrides": []

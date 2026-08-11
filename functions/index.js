@@ -28,6 +28,7 @@ const { linkDeviceToAccount } = require('./src/http/linkDeviceToAccount');
 const { checkUserExistsByEmail } = require('./src/http/checkUserExistsByEmail');
 const { sendPasswordResetEmail } = require('./src/http/sendPasswordResetEmail');
 const { sendVerificationEmail } = require('./src/http/sendVerificationEmail');
+const { sendInvoiceEmail } = require('./src/http/sendInvoiceEmail');
 const { processDailyRollup } = require('./src/scheduled/processDailyRollup');
 const { processMonthlyInvoice } = require('./src/scheduled/processMonthlyInvoice');
 const { finalizeInvoice } = require('./src/http/finalizeInvoice');
@@ -192,6 +193,25 @@ exports.sendVerificationEmail = onCall(
     maxInstances: 10,
   },
   sendVerificationEmail
+);
+
+/**
+ * Callable function to re-send a monthly statement with its PDF attachment
+ * Called from: a user asking for another copy, and to rehearse the attachment
+ * path that processMonthlyInvoice otherwise only exercises once a month
+ *
+ * memory matches processMonthlyInvoice deliberately: PDF rendering is what
+ * could exhaust it, and a rehearsal with more headroom than the real job would
+ * hide exactly the failure it exists to catch. The shorter timeout is safe -
+ * this handles one account where the scheduled job walks every user.
+ */
+exports.sendInvoiceEmail = onCall(
+  {
+    maxInstances: 10,
+    memory: '512MiB',
+    timeoutSeconds: 120,
+  },
+  sendInvoiceEmail
 );
 
 // ===========================

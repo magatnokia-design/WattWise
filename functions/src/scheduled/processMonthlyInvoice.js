@@ -78,6 +78,99 @@ const upsertInvoice = async ({ db, userId, billingMonth, todayKey, isLifeline, u
  * month's rate only after the period closes, so the user finalizes later by
  * entering the official rate.
  */
+/**
+ * Everything the monthly job does for a single user: closes the invoice,
+ * records the notification, and emails the PDF statement.
+ *
+ * Extracted so the `sendInvoiceEmail` callable runs this exact path rather than
+ * a parallel copy of it. A rehearsal that exercised different code would prove
+ * nothing about the scheduled job it stands in for - and the PDF attachment is
+ * the one part of the mail pipeline that has never run against the live SMTP
+ * transport.
+ *
+ * Returns why it declined rather than throwing, so the caller can tell "nothing
+ * to bill" apart from a genuine failure.
+ */
+async function processInvoiceForUser({
+  db,
+  userId,
+  billingMonth,
+  todayKey,
+  isLifeline,
+  userRates,
+}) {
+  const invoice = await upsertInvoice({
+    db,
+    userId,
+    billingMonth,
+    todayKey,
+    isLifeline,
+    userRates,
+  });
+
+  if (!invoice) return { sent: false, reason: 'no_invoice' };
+
+  // Nothing measured: no statement worth sending.
+  if (!(invoice.totalKwh > 0)) {
+    logger.info('Skipping statement: no usage recorded', { userId, billingMonth });
+    return { sent: false, reason: 'no_usage' };
+  }
+
+  await createNotification({
+    userId,
+    type: 'invoice',
+    title: `${formatMonthName(billingMonth)} statement ready`,
+    message:
+      `Your estimated bill is ${peso(invoice.totalAmountDue)} for ${invoice.totalKwh.toFixed(2)} kWh. ` +
+      'Enter the official PELCO III rate in WattWise to finalize it.',
+    metadata: {
+      billingMonth,
+      totalKwh: invoice.totalKwh,
+      totalAmountDue: invoice.totalAmountDue,
+    },
+  });
+
+  const contact = await resolveUserContact(userId);
+  if (!contact?.email) return { sent: false, reason: 'no_email' };
+
+  const pdf = await renderInvoicePdf({
+    invoice,
+    account: { name: contact.name, email: contact.email },
+  });
+
+  await enqueueEmail({
+    toEmail: contact.email,
+    subject: `Your WattWise statement for ${formatMonthName(billingMonth)}`,
+    heading: `${formatMonthName(billingMonth)} statement`,
+    intro:
+      `Your billing period has closed. This statement is an estimate of ${peso(invoice.totalAmountDue)} ` +
+      'based on the most recent published rate - PELCO III releases each month\'s official rate after the ' +
+      'period ends. Open WattWise and enter the official rate to finalize it.',
+    rows: [
+      ['Billing month', formatMonthName(billingMonth)],
+      ['Reading period', `${invoice.readingDateFrom} to ${invoice.readingDateTo}`],
+      ['Billing days', String(invoice.billingDays)],
+      ['Total kWh used', `${invoice.totalKwh.toFixed(2)} kWh`],
+      ['Estimated amount due', peso(invoice.totalAmountDue)],
+      ['Effective rate', `${peso(invoice.effectiveRate)} / kWh`],
+    ],
+    attachments: [{
+      filename: `WattWise-${billingMonth}.pdf`,
+      content: pdf.toString('base64'),
+      encoding: 'base64',
+      contentType: 'application/pdf',
+    }],
+    note:
+      'PELCO III publishes the official generation rate a few days after the period closes. '
+      + 'Open Settings, enter the generation rate printed on your paper bill, then tap '
+      + '"Update to actual rate" here to lock this statement to the real figure. Until you do, '
+      + 'this total is an estimate. Rates at pelco3.org/rates.php.',
+    tag: 'invoice',
+  });
+
+  return { sent: true, invoice, pdfBytes: pdf.length };
+}
+
 async function processMonthlyInvoice() {
   const db = admin.firestore();
   const todayKey = getManilaDateKey(new Date());
@@ -97,7 +190,7 @@ async function processMonthlyInvoice() {
     const userId = userDoc.id;
 
     try {
-      const invoice = await upsertInvoice({
+      const result = await processInvoiceForUser({
         db,
         userId,
         billingMonth,
@@ -106,67 +199,7 @@ async function processMonthlyInvoice() {
         userRates: userDoc.data()?.supplyRates || null,
       });
 
-      if (!invoice) return;
-
-      // Nothing measured: no statement worth sending.
-      if (!(invoice.totalKwh > 0)) {
-        logger.info('Skipping statement: no usage recorded', { userId, billingMonth });
-        return;
-      }
-
-      await createNotification({
-        userId,
-        type: 'invoice',
-        title: `${formatMonthName(billingMonth)} statement ready`,
-        message:
-          `Your estimated bill is ${peso(invoice.totalAmountDue)} for ${invoice.totalKwh.toFixed(2)} kWh. ` +
-          'Enter the official PELCO III rate in WattWise to finalize it.',
-        metadata: {
-          billingMonth,
-          totalKwh: invoice.totalKwh,
-          totalAmountDue: invoice.totalAmountDue,
-        },
-      });
-
-      const contact = await resolveUserContact(userId);
-      if (!contact?.email) return;
-
-      const pdf = await renderInvoicePdf({
-        invoice,
-        account: { name: contact.name, email: contact.email },
-      });
-
-      await enqueueEmail({
-        toEmail: contact.email,
-        subject: `Your WattWise statement for ${formatMonthName(billingMonth)}`,
-        heading: `${formatMonthName(billingMonth)} statement`,
-        intro:
-          `Your billing period has closed. This statement is an estimate of ${peso(invoice.totalAmountDue)} ` +
-          'based on the most recent published rate - PELCO III releases each month\'s official rate after the ' +
-          'period ends. Open WattWise and enter the official rate to finalize it.',
-        rows: [
-          ['Billing month', formatMonthName(billingMonth)],
-          ['Reading period', `${invoice.readingDateFrom} to ${invoice.readingDateTo}`],
-          ['Billing days', String(invoice.billingDays)],
-          ['Total kWh used', `${invoice.totalKwh.toFixed(2)} kWh`],
-          ['Estimated amount due', peso(invoice.totalAmountDue)],
-          ['Effective rate', `${peso(invoice.effectiveRate)} / kWh`],
-        ],
-        attachments: [{
-          filename: `WattWise-${billingMonth}.pdf`,
-          content: pdf.toString('base64'),
-          encoding: 'base64',
-          contentType: 'application/pdf',
-        }],
-        note:
-          'PELCO III publishes the official generation rate a few days after the period closes. '
-          + 'Open Settings, enter the generation rate printed on your paper bill, then tap '
-          + '"Update to actual rate" here to lock this statement to the real figure. Until you do, '
-          + 'this total is an estimate. Rates at pelco3.org/rates.php.',
-        tag: 'invoice',
-      });
-
-      sent += 1;
+      if (result.sent) sent += 1;
     } catch (userError) {
       logger.error('Monthly invoice failed for user', {
         userId,
@@ -180,4 +213,4 @@ async function processMonthlyInvoice() {
   return { success: true, billingMonth, sent };
 }
 
-module.exports = { processMonthlyInvoice, upsertInvoice };
+module.exports = { processMonthlyInvoice, processInvoiceForUser, upsertInvoice };
