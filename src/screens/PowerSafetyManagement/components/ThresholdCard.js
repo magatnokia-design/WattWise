@@ -4,10 +4,16 @@ import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../../../constants/colors';
 import { getStatusColor } from '../utils/safetyHelpers';
 
-const ThresholdCard = ({ outletName, status, thresholds }) => {
+const ThresholdCard = ({ outletName, status, thresholds, isStale = false }) => {
   const voltageStatus = getStatusColor(status.voltage, thresholds.voltage);
   const currentStatus = getStatusColor(status.current, thresholds.current);
   const powerStatus = getStatusColor(status.power, thresholds.power);
+
+  // Nothing recent enough to grade. Showing the last values received would
+  // claim the hardware is in a state nobody has confirmed, and grading them
+  // is worse still: 0.0 V sits below every voltage minimum, so an unplugged
+  // device reads as Critical rather than as absent.
+  const showValue = (formatted) => (isStale ? '--' : formatted);
 
   return (
     <View style={styles.container}>
@@ -16,9 +22,15 @@ const ThresholdCard = ({ outletName, status, thresholds }) => {
           <Ionicons name="flash" size={20} color={COLORS.primary} />
           <Text style={styles.outletName}>{outletName}</Text>
         </View>
-        <View style={[styles.statusBadge, { backgroundColor: voltageStatus.bg }]}>
-          <Text style={[styles.statusText, { color: voltageStatus.color }]}>
-            {voltageStatus.label}
+        <View style={[
+          styles.statusBadge,
+          { backgroundColor: isStale ? COLORS.border : voltageStatus.bg },
+        ]}>
+          <Text style={[
+            styles.statusText,
+            { color: isStale ? COLORS.textLight : voltageStatus.color },
+          ]}>
+            {isStale ? 'No reading' : voltageStatus.label}
           </Text>
         </View>
       </View>
@@ -29,7 +41,7 @@ const ThresholdCard = ({ outletName, status, thresholds }) => {
           <View style={styles.metricInfo}>
             <Text style={styles.metricLabel}>Voltage</Text>
             <Text style={styles.metricValue}>
-              {status.voltage.toFixed(1)} V
+              {showValue(`${status.voltage.toFixed(1)} V`)}
             </Text>
           </View>
           <View style={styles.thresholdInfo}>
@@ -45,7 +57,7 @@ const ThresholdCard = ({ outletName, status, thresholds }) => {
           <View style={styles.metricInfo}>
             <Text style={styles.metricLabel}>Current</Text>
             <Text style={styles.metricValue}>
-              {status.current.toFixed(2)} A
+              {showValue(`${status.current.toFixed(2)} A`)}
             </Text>
           </View>
           <View style={styles.thresholdInfo}>
@@ -61,7 +73,7 @@ const ThresholdCard = ({ outletName, status, thresholds }) => {
           <View style={styles.metricInfo}>
             <Text style={styles.metricLabel}>Power</Text>
             <Text style={styles.metricValue}>
-              {status.power.toFixed(1)} W
+              {showValue(`${status.power.toFixed(1)} W`)}
             </Text>
           </View>
           <View style={styles.thresholdInfo}>

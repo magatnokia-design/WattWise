@@ -41,7 +41,25 @@ export const useSettings = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  const fetchSettings = useCallback(async (currentUserId) => {
+  const fetchSettings = useCallback(async (requestedUserId) => {
+    // Called two ways, and they pass different things:
+    //
+    //   the auth listener  -> fetchSettings(user?.uid || null)
+    //   the screen's focus -> fetchSettings()
+    //
+    // Treating both as "no user" made every return to the Settings tab reset
+    // the screen to defaults. Real data loaded on first open, then navigating
+    // to any other tab and back blanked the name, email, rate, budget and
+    // device into "--" and "Not linked" - the account looked wiped, while
+    // Firestore still held all of it.
+    //
+    // `undefined` means the caller did not say, so resolve the signed-in user.
+    // An explicit `null` still means signed out, which is the only case that
+    // should clear the screen.
+    const currentUserId = requestedUserId === undefined
+      ? (auth.currentUser?.uid || null)
+      : requestedUserId;
+
     if (!currentUserId) {
       setSettings(DEFAULT_SETTINGS);
       setSavedAppliances([]);

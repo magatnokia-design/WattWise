@@ -19,6 +19,7 @@ import usePowerSafety from './hooks/usePowerSafety';
 const PowerSafetyScreen = ({ navigation }) => {
   const {
     safetyStage,
+    readingsAreStale,
     outlet1Status,
     outlet2Status,
     thresholds,
@@ -76,11 +77,13 @@ const PowerSafetyScreen = ({ navigation }) => {
               outletName="Outlet 1"
               status={outlet1Status}
               thresholds={thresholds}
+              isStale={readingsAreStale}
             />
             <ThresholdCard
               outletName="Outlet 2"
               status={outlet2Status}
               thresholds={thresholds}
+              isStale={readingsAreStale}
             />
           </View>
         </View>

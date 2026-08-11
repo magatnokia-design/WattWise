@@ -3,8 +3,14 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { safetyService } from '../../../services/firebase';
 import { auth } from '../../../services/firebase/config';
 
+// Two of the backend's 15s reading-write intervals, plus room for a slow
+// round trip. Long enough that a healthy device is never called stale between
+// writes, short enough that an unplugged one is obvious within a minute.
+const READINGS_STALE_AFTER_MS = 40000;
+
 const usePowerSafety = () => {
   const [userId, setUserId] = useState(null);
+  const [readingsAreStale, setReadingsAreStale] = useState(true);
   const [safetyStage, setSafetyStage] = useState('normal');
   const [outlet1Status, setOutlet1Status] = useState({
     voltage: 0,
@@ -26,6 +32,21 @@ const usePowerSafety = () => {
   const [loading, setLoading] = useState(false);
 
   const applySafetyData = useCallback((safetyData) => {
+    // Readings are only meaningful if the hardware wrote them recently.
+    // Without this the last values received sat on screen indefinitely, so an
+    // ESP32 that had been unplugged for hours still showed 242.7 V and a
+    // "Safe" verdict - the screen asserting the state of a device it had not
+    // heard from. Worse in the other direction: 0.0 V is below every voltage
+    // minimum, so a disconnected device could be graded Critical.
+    //
+    // updateOutletMetrics writes these at most every 15s
+    // (READING_WRITE_INTERVAL_MS), so the threshold has to clear two intervals
+    // to avoid calling a healthy device stale between writes. It still notices
+    // an unplugged one inside a minute.
+    const lastWriteMs = Number(safetyData.lastReadingWriteMs || 0);
+    const stale = !(lastWriteMs > 0 && Date.now() - lastWriteMs < READINGS_STALE_AFTER_MS);
+
+    setReadingsAreStale(stale);
     setSafetyStage(safetyData.currentStage);
     setOutlet1Status({
       voltage: safetyData.outlet1?.voltage || 0,
@@ -155,6 +176,7 @@ const usePowerSafety = () => {
 
   return {
     safetyStage,
+    readingsAreStale,
     outlet1Status,
     outlet2Status,
     thresholds,
