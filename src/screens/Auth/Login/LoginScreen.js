@@ -21,6 +21,16 @@ export const LoginScreen = ({ navigation }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [errors, setErrors] = useState({});
+
+  // Clears a field's validation message as soon as the user edits it.
+  //
+  // Without this the message outlives the mistake: "Password must be at least 6
+  // characters" stayed on screen while the user typed a longer one, so the form
+  // sat there contradicting its own contents. `RegisterScreen` and
+  // `ForgotPasswordScreen` already did this; only this screen was missed.
+  const clearFieldError = (field) => {
+    setErrors((previous) => (previous[field] ? { ...previous, [field]: '' } : previous));
+  };
   const [loading, setLoading] = useState(false);
 
   const validate = () => {
@@ -103,7 +113,10 @@ const handleLogin = async () => {
             <Input
               label="Email"
               value={email}
-              onChangeText={setEmail}
+              onChangeText={(text) => {
+                setEmail(text);
+                clearFieldError('email');
+              }}
               placeholder="Enter your email"
               keyboardType="email-address"
               error={errors.email}
@@ -112,7 +125,10 @@ const handleLogin = async () => {
             <Input
               label="Password"
               value={password}
-              onChangeText={setPassword}
+              onChangeText={(text) => {
+                setPassword(text);
+                clearFieldError('password');
+              }}
               placeholder="Enter your password"
               secureTextEntry
               showPasswordToggle
