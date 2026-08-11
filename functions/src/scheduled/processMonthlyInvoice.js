@@ -158,6 +158,11 @@ async function processMonthlyInvoice() {
           encoding: 'base64',
           contentType: 'application/pdf',
         }],
+        note:
+          'PELCO III publishes the official generation rate a few days after the period closes. '
+          + 'Open Settings, enter the generation rate printed on your paper bill, then tap '
+          + '"Update to actual rate" here to lock this statement to the real figure. Until you do, '
+          + 'this total is an estimate. Rates at pelco3.org/rates.php.',
         tag: 'invoice',
       });
 

@@ -104,6 +104,11 @@ async function handleSafetyAlerts(change, context) {
           ['Outlet 1', `${outlet1?.voltage || 0} V / ${outlet1?.current || 0} A / ${outlet1?.power || 0} W`],
           ['Outlet 2', `${outlet2?.voltage || 0} V / ${outlet2?.current || 0} A / ${outlet2?.power || 0} W`],
         ],
+        note:
+          'Unplug whatever is on that outlet before switching it back on. If this keeps happening '
+          + 'at normal load, your thresholds may be set tighter than your mains actually runs - '
+          + 'Power Safety shows live readings against each limit. The firmware enforces 500 W per '
+          + 'outlet regardless of what is configured.',
         tag: 'safety',
       });
     }

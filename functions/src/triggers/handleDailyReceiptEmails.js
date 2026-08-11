@@ -97,6 +97,10 @@ async function handleDailyReceiptEmails(change, context) {
         ['Bill sections', billSectionTotals],
         ['Line items', billLineItems],
       ],
+      note:
+        'Compare Months on the web shows this day against the same day last month, so you can see '
+        + 'whether a habit actually changed anything. If your peso figures look off, the generation '
+        + 'rate in Settings is the one number that drives them all.',
       tag: 'receipt',
     });
 

@@ -105,6 +105,10 @@ async function handleBudgetAlerts(change, context) {
               ['Current spending', `PHP ${formattedCurrent}`],
               ['Monthly budget', `PHP ${formattedBudget}`],
             ],
+            note:
+              'Analytics breaks this down by outlet, so you can see which one is driving it. '
+              + 'If the budget itself no longer reflects what you expect to spend, change it in '
+              + 'Settings - alerts reset to match the new figure.',
             tag: 'budget',
           }));
         }

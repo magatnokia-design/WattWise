@@ -68,6 +68,10 @@ async function handleDeviceCommandEmails(change, context) {
         ['Device', String(after.deviceId || '').trim()],
         ['Command ID', commandId],
       ],
+      note:
+        'The outlet did not change state. Check the ESP32 has power and wi-fi, then try again - '
+        + 'the app shows a live device status in Settings. Nothing was switched, so the outlet is '
+        + 'still in whatever state it was already in.',
       tag: 'device',
     });
 

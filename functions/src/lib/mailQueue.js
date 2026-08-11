@@ -87,6 +87,16 @@ const ACCENTS = {
 
 const accentFor = (tag) => ACCENTS[tag] || THEME.primary;
 
+// Where the footer points people. The web client shows the same data with room
+// to read it, which is the thing most worth saying in a footer.
+const APP_WEB_URL = (process.env.APP_WEB_URL || 'https://www.wattwise.site').trim();
+
+// Password reset and address confirmation get none of the footer link, the
+// advisory note, or anything else optional. A security email that also markets
+// is the exact shape of a phishing message, and every extra link in one is
+// another thing the reader has to decide whether to trust.
+const isAuthMail = (tag) => tag === 'auth';
+
 // Several rows carry multi-line values - the receipt's bill sections and line
 // items are newline-joined. HTML collapses those to a single run-on line, so
 // they have to become <br> after escaping.
@@ -102,8 +112,33 @@ const visibleRows = (rows) => (Array.isArray(rows) ? rows : [])
  * Built as nested tables with inline styles rather than divs and CSS: Outlook
  * renders through Word's HTML engine, which ignores most modern layout.
  */
-const buildEmailHtml = ({ heading, intro, rows, tag, action }) => {
+const buildEmailHtml = ({ heading, intro, rows, tag, action, note }) => {
   const accent = accentFor(tag);
+  const authMail = isAuthMail(tag);
+
+  // One line of advice under the figures - what to do about what was just read.
+  // Tinted rather than bordered so it reads as guidance, not another alert.
+  const noteText = authMail ? '' : String(note || '').trim();
+  const noteBlock = noteText
+    ? `
+        <tr>
+          <td style="padding:0 24px 24px;">
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:separate;width:100%;background:${THEME.rowTint};border-left:3px solid ${accent};border-radius:6px;">
+              <tr>
+                <td style="padding:12px 14px;color:${THEME.textBody};font-size:12.5px;line-height:1.6;">${escapeMultiline(noteText)}</td>
+              </tr>
+            </table>
+          </td>
+        </tr>`
+    : '';
+
+  const footerLink = authMail
+    ? ''
+    : `
+            <p style="margin:0 0 8px;font-size:12px;line-height:1.5;">
+              <a href="${escapeHtml(APP_WEB_URL)}" style="color:${THEME.primaryDark};font-weight:600;text-decoration:none;">Open WattWise on the web &rarr;</a>
+              <span style="color:${THEME.textFaint};"> &nbsp;Every screen the phone app has, with room to read it.</span>
+            </p>`;
 
   // Auth mail leads with a button rather than a detail table. Rendered as a
   // bordered table cell, not a styled <a>: Outlook drops padding and background
@@ -176,8 +211,10 @@ ${actionBlock}
         <tr>
           <td style="padding:0 24px 24px;">${detailTable}</td>
         </tr>
+${noteBlock}
         <tr>
           <td style="padding:16px 24px 22px;border-top:1px solid ${THEME.border};">
+${footerLink}
             <p style="margin:0 0 4px;color:${THEME.textLight};font-size:12px;line-height:1.5;">
               Sent automatically by WattWise. Energy figures are measured at your outlets; peso amounts follow the PELCO III residential tariff.
             </p>
@@ -201,7 +238,7 @@ ${actionBlock}
  * spam filters than HTML alone, and it is what watches, screen readers, and
  * text-only clients actually render.
  */
-const buildEmailText = ({ heading, intro, rows, action }) => {
+const buildEmailText = ({ heading, intro, rows, action, tag, note }) => {
   const lines = [
     heading,
     '='.repeat(String(heading || '').length),
@@ -219,8 +256,17 @@ const buildEmailText = ({ heading, intro, rows, action }) => {
     lines.push(`${label}: ${String(value).replace(/\r?\n/g, '\n  ')}`);
   });
 
+  const noteText = isAuthMail(tag) ? '' : String(note || '').trim();
+  if (noteText) {
+    lines.push('', noteText);
+  }
+
   lines.push('', '--', 'Sent automatically by WattWise.');
   lines.push('Peso amounts follow the PELCO III residential tariff.');
+
+  if (!isAuthMail(tag)) {
+    lines.push(`Open WattWise on the web: ${APP_WEB_URL}`);
+  }
 
   return lines.join('\n');
 };
@@ -230,7 +276,7 @@ const buildEmailText = ({ heading, intro, rows, action }) => {
  * rather than throwing when there is no recipient, so callers can stay
  * best-effort the way the previous provider-backed helper was.
  */
-const enqueueEmail = async ({ toEmail, subject, heading, intro, rows, tag, action, attachments }) => {
+const enqueueEmail = async ({ toEmail, subject, heading, intro, rows, tag, action, note, attachments }) => {
   const recipientEmail = String(toEmail || '').trim();
   if (!recipientEmail) {
     logger.info('Email skipped: missing recipient', { tag });
@@ -271,8 +317,8 @@ const enqueueEmail = async ({ toEmail, subject, heading, intro, rows, tag, actio
         // Both parts, always. Nodemailer sends multipart/alternative when text
         // and html are both present, which filters treat more kindly than a
         // bare HTML body.
-        text: buildEmailText({ heading: heading || normalizedSubject, intro, rows, action }),
-        html: buildEmailHtml({ heading: heading || normalizedSubject, intro, rows, tag, action }),
+        text: buildEmailText({ heading: heading || normalizedSubject, intro, rows, action, tag, note }),
+        html: buildEmailHtml({ heading: heading || normalizedSubject, intro, rows, tag, action, note }),
         ...(normalizedAttachments.length ? { attachments: normalizedAttachments } : {}),
       },
       // Not read by the extension; kept for our own log/debug queries.
