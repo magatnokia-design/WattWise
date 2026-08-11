@@ -7,6 +7,7 @@ const {
   chunkTokens,
   buildMessage,
   sendPushNotifications,
+  fetchPushReceipts,
 } = require('../src/lib/pushSender');
 
 const { arePushNotificationsEnabled } = require('../src/triggers/handlePushNotifications');
@@ -183,4 +184,72 @@ test('the settings toggle gates push the same way the client reads it', () => {
     }),
     true
   );
+});
+
+// --- Receipts -------------------------------------------------------------
+// The send endpoint returns tickets, not receipts. Treating acceptance as
+// delivery is what let two pushes vanish while the logs said sent: 1.
+
+test('a ticket id is kept for every accepted message', async () => {
+  const result = await sendPushNotifications({
+    tokens: ['ExponentPushToken[aaa]', 'ExponentPushToken[bbb]'],
+    title: 'x',
+    body: 'y',
+    fetchImpl: async () => ({
+      ok: true,
+      json: async () => ({ data: [
+        { status: 'ok', id: 'ticket-1' },
+        { status: 'ok', id: 'ticket-2' },
+      ] }),
+    }),
+  });
+
+  assert.equal(result.sent, 2);
+  assert.deepEqual(result.ticketIds, {
+    'ticket-1': 'ExponentPushToken[aaa]',
+    'ticket-2': 'ExponentPushToken[bbb]',
+  });
+});
+
+test('a receipt reporting a delivery failure is reported, not swallowed', async () => {
+  const result = await fetchPushReceipts({
+    ticketIds: ['ticket-1', 'ticket-2'],
+    fetchImpl: async () => ({
+      ok: true,
+      json: async () => ({ data: {
+        'ticket-1': { status: 'ok' },
+        'ticket-2': { status: 'error', details: { error: 'MismatchSenderId' } },
+      } }),
+    }),
+  });
+
+  assert.deepEqual(result.delivered, ['ticket-1']);
+  assert.equal(result.failedIds['ticket-2'], 'MismatchSenderId');
+  assert.deepEqual(result.pending, []);
+});
+
+// Expo omits ids it cannot answer yet. Reading that as success would put the
+// original blind spot straight back.
+test('an unanswered receipt stays pending rather than counting as delivered', async () => {
+  const result = await fetchPushReceipts({
+    ticketIds: ['ticket-1', 'ticket-2'],
+    fetchImpl: async () => ({
+      ok: true,
+      json: async () => ({ data: { 'ticket-1': { status: 'ok' } } }),
+    }),
+  });
+
+  assert.deepEqual(result.delivered, ['ticket-1']);
+  assert.deepEqual(result.pending, ['ticket-2']);
+  assert.deepEqual(result.failedIds, {});
+});
+
+test('a receipt request that fails leaves every id pending', async () => {
+  const result = await fetchPushReceipts({
+    ticketIds: ['ticket-1'],
+    fetchImpl: async () => { throw new Error('network down'); },
+  });
+
+  assert.deepEqual(result.pending, ['ticket-1']);
+  assert.equal(result.errored, true);
 });

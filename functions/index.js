@@ -34,6 +34,7 @@ const { processMonthlyInvoice } = require('./src/scheduled/processMonthlyInvoice
 const { finalizeInvoice } = require('./src/http/finalizeInvoice');
 const { checkScheduledTimers } = require('./src/scheduled/checkScheduledTimers');
 const { markStaleDeviceCommands } = require('./src/scheduled/markStaleDeviceCommands');
+const { checkPushReceipts } = require('./src/scheduled/checkPushReceipts');
 const { normalizePowerSafetyThresholds } = require('./src/scheduled/normalizePowerSafetyThresholds');
 const { handleBudgetAlerts } = require('./src/triggers/handleBudgetAlerts');
 const { handleSafetyAlerts } = require('./src/triggers/handleSafetyAlerts');
@@ -271,6 +272,20 @@ exports.markStaleDeviceCommands = onSchedule(
     maxInstances: 1,
   },
   markStaleDeviceCommands
+);
+
+/**
+ * Runs every 10 minutes to read the delivery outcome of pushes already sent
+ * Expo only reports acceptance at send time; the receipt says whether FCM took
+ * it, and is not available for several minutes
+ */
+exports.checkPushReceipts = onSchedule(
+  {
+    schedule: '*/10 * * * *',
+    timeZone: 'Asia/Manila',
+    maxInstances: 1,
+  },
+  checkPushReceipts
 );
 
 /**

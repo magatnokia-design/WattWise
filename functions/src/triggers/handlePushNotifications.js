@@ -72,10 +72,28 @@ const handlePushNotifications = async (event) => {
       });
     }
 
-    logger.info('Push notification dispatched', {
+    // Park the tickets for `checkPushReceipts` to follow up.
+    //
+    // `sent` below counts tickets Expo accepted, which is not the same as
+    // messages that arrived - two pushes logged here as sent: 1 never reached
+    // the phone. Only the receipt says whether FCM took it, and that is not
+    // available for several minutes, so it cannot be read from inside this
+    // trigger.
+    const ticketIds = Object.keys(result.ticketIds || {});
+    if (ticketIds.length) {
+      await admin.firestore().collection('push_tickets').add({
+        userId,
+        ticketTokens: result.ticketIds,
+        createdAtMs: Date.now(),
+        attempts: 0,
+      });
+    }
+
+    logger.info('Push notification accepted by Expo', {
       userId,
-      sent: result.sent,
-      failed: result.failed,
+      accepted: result.sent,
+      rejected: result.failed,
+      awaitingReceipt: ticketIds.length,
     });
   } catch (error) {
     // Best-effort: the in-app notification and its email have already landed,
