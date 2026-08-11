@@ -1,9 +1,11 @@
 // Firebase Authentication Service
-import { 
+import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   signOut,
   sendPasswordResetEmail,
+  sendEmailVerification,
+  reload,
   updateProfile
 } from "firebase/auth";
 import { httpsCallable } from 'firebase/functions';
@@ -34,6 +36,16 @@ export const authService = {
       const normalizedEmail = normalizeEmail(email);
       const userCredential = await createUserWithEmailAndPassword(auth, normalizedEmail, password);
       await updateProfile(userCredential.user, { displayName });
+
+      // Best-effort: an account that exists but never got its verification mail
+      // is recoverable from the verify screen's resend button, whereas throwing
+      // here would leave the account created but the caller reporting failure.
+      try {
+        await sendEmailVerification(userCredential.user);
+      } catch (verificationError) {
+        console.warn('Could not send verification email:', verificationError?.message);
+      }
+
       return { success: true, user: userCredential.user };
     } catch (error) {
       if (!isExpectedAuthError(error?.code)) {
@@ -54,6 +66,57 @@ export const authService = {
         console.error('Login error:', error);
       }
       return { success: false, error: error.message, code: error.code };
+    }
+  },
+
+  // Re-sends the verification email to the signed-in account.
+  //
+  // Rate limited by Firebase rather than here: repeated taps return
+  // auth/too-many-requests, which the caller surfaces as-is.
+  sendVerificationEmail: async () => {
+    try {
+      const user = auth.currentUser;
+      if (!user) {
+        return { success: false, error: 'Not signed in.' };
+      }
+
+      if (user.emailVerified) {
+        return { success: true, alreadyVerified: true };
+      }
+
+      await sendEmailVerification(user);
+      return { success: true };
+    } catch (error) {
+      if (error?.code === 'auth/too-many-requests') {
+        return {
+          success: false,
+          error: 'Too many requests. Wait a minute before trying again.',
+        };
+      }
+
+      console.error('Send verification email error:', error);
+      return { success: false, error: error.message };
+    }
+  },
+
+  // Re-reads the account from Firebase to pick up a verification that happened
+  // in the mail app.
+  //
+  // Necessary because onAuthStateChanged does not fire when the email is
+  // verified elsewhere - the local user object keeps saying emailVerified:false
+  // until something reloads it.
+  refreshEmailVerified: async () => {
+    try {
+      const user = auth.currentUser;
+      if (!user) {
+        return { success: false, error: 'Not signed in.' };
+      }
+
+      await reload(user);
+      return { success: true, emailVerified: auth.currentUser?.emailVerified === true };
+    } catch (error) {
+      console.error('Reload user error:', error);
+      return { success: false, error: error.message };
     }
   },
 
