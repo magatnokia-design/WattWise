@@ -15,6 +15,9 @@ import CompareMetric from './components/CompareMetric';
 import AddPreviousBillModal from './components/AddPreviousBillModal';
 import useReferenceComparison from './hooks/useReferenceComparison';
 import { buildVerdict, formatMonthShort } from './utils/comparisonHelpers';
+import { WebAppNotice } from '../../components/common/WebAppNotice';
+import { WEB_APP_LINKS } from '../../constants/webApp';
+import { useDismissibleNotice } from '../../hooks/useDismissibleNotice';
 
 const formatKwh = (value) => `${(Number(value) || 0).toFixed(2)} kWh`;
 const formatPeso = (value) => `₱${(Number(value) || 0).toFixed(2)}`;
@@ -38,6 +41,7 @@ const ReferenceComparisonScreen = ({ navigation }) => {
 
   const [refreshing, setRefreshing] = useState(false);
   const [showBillModal, setShowBillModal] = useState(false);
+  const webNotice = useDismissibleNotice('comparison-web-app');
 
   const labelA = formatMonthShort(monthA);
   const labelB = formatMonthShort(monthB);
@@ -85,6 +89,17 @@ const ReferenceComparisonScreen = ({ navigation }) => {
         <Text style={styles.intro}>
           Pick any two months to see how your energy use changed.
         </Text>
+
+        {/* Adding a past bill means copying peso figures off paper, which is
+            markedly easier with a keyboard. Entry still works here in full. */}
+        {webNotice.visible && (
+          <WebAppNotice
+            title="Typing in an old bill?"
+            body="Copying figures off a paper bill is quicker on a laptop, where you can see every month at once."
+            url={WEB_APP_LINKS.comparison}
+            onDismiss={webNotice.dismiss}
+          />
+        )}
 
         <MonthComparePicker
           monthOptions={monthOptions}

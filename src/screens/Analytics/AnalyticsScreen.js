@@ -23,6 +23,8 @@ import { formatCurrency } from '../BudgetTracking/utils/budgetHelpers';
 import LiveUsagePanel from './components/LiveUsagePanel';
 import InsightsCard from './components/InsightsCard';
 import { RateNotice } from '../../components/common/RateNotice';
+import { WebAppNotice } from '../../components/common/WebAppNotice';
+import { WEB_APP_LINKS } from '../../constants/webApp';
 import { useDismissibleNotice } from '../../hooks/useDismissibleNotice';
 
 const { width } = Dimensions.get('window');
@@ -394,6 +396,8 @@ export const AnalyticsScreen = ({ navigation }) => {
   const [supplyRates, setSupplyRates] = useState(null);
   const [hasSupplyRates, setHasSupplyRates] = useState(true);
   const rateNotice = useDismissibleNotice('rate-notice');
+  const webNotice = useDismissibleNotice('analytics-web-app');
+  const showRateNotice = !hasSupplyRates && rateNotice.visible;
   const [budget, setBudget] = useState({ monthlyBudget: 0, currentSpending: 0 });
   const [loading, setLoading] = useState(false);
   const [outlets, setOutlets] = useState([]);
@@ -690,10 +694,21 @@ export const AnalyticsScreen = ({ navigation }) => {
           </Text>
         </View>
 
-        {!hasSupplyRates && rateNotice.visible && (
+        {showRateNotice && (
           <RateNotice
             onPress={() => navigation?.navigate?.('Settings')}
             onDismiss={rateNotice.dismiss}
+          />
+        )}
+
+        {/* Only ever one banner at a time, and the rate warning outranks this:
+            wrong peso figures matter more than a nicer place to read charts. */}
+        {!showRateNotice && webNotice.visible && (
+          <WebAppNotice
+            title="Easier on a bigger screen"
+            body="These charts open up on a laptop or desktop - the same data, with room to compare outlets side by side."
+            url={WEB_APP_LINKS.analytics}
+            onDismiss={webNotice.dismiss}
           />
         )}
 

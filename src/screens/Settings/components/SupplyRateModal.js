@@ -13,6 +13,7 @@ import {
   Platform,
 } from 'react-native';
 import { COLORS } from '../../../constants/colors';
+import { WEB_APP_LINKS } from '../../../constants/webApp';
 import {
   SUPPLY_RATE_FIELDS,
   RATE_EFFECTIVE_DATE,
@@ -93,6 +94,12 @@ const SupplyRateModal = ({ visible, currentRates, onClose, onSave }) => {
   const handleOpenPelco = useCallback(() => {
     Linking.openURL(PELCO3_RATES_URL).catch(() => {
       setError('Could not open the PELCO III website.');
+    });
+  }, []);
+
+  const handleOpenWeb = useCallback(() => {
+    Linking.openURL(WEB_APP_LINKS.settings).catch(() => {
+      setError('Could not open wattwise.site.');
     });
   }, []);
 
@@ -198,6 +205,16 @@ const SupplyRateModal = ({ visible, currentRates, onClose, onSave }) => {
                     Leave blank to use the default. Negative values are credits.
                   </Text>
                   {ADVANCED_FIELDS.map(renderField)}
+
+                  {/* One line, not a banner: this only appears once the user has
+                      opened several decimal fields, which is the point where a
+                      keyboard genuinely helps. Every field still works here. */}
+                  <TouchableOpacity onPress={handleOpenWeb} activeOpacity={0.7}>
+                    <Text style={styles.webHint}>
+                      Lots to type? Enter these on wattwise.site with your bill in
+                      hand →
+                    </Text>
+                  </TouchableOpacity>
                 </View>
               )}
 
@@ -381,6 +398,13 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: COLORS.textLight,
     marginBottom: 10,
+  },
+  webHint: {
+    fontSize: 11,
+    color: COLORS.primaryDark,
+    fontWeight: '600',
+    marginTop: 6,
+    lineHeight: 16,
   },
   fieldRow: {
     flexDirection: 'row',
