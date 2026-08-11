@@ -46,9 +46,20 @@ const handleResetPassword = async () => {
       throw { code: result.code, message: result.error };
     }
 
+    // Three things the plain "check your inbox" message left out, each of which
+    // produces the same dead end - the handler reporting the link as expired or
+    // already used, with no clue which:
+    //   - Firebase reset links last one hour.
+    //   - Sending a new one invalidates every earlier link for the account, so
+    //     hunting through older emails after re-requesting always fails.
+    //   - The sender has a poor reputation and routinely lands in spam, which is
+    //     what makes people re-request in the first place.
     Alert.alert(
-      'Success',
-      'Password reset email sent! Check your inbox.',
+      'Reset link sent',
+      `Sent to ${normalizedEmail}.\n\n` +
+        '• The link expires in 1 hour.\n' +
+        '• Check your spam folder — it arrives from noreply@wattwise-fe394.firebaseapp.com.\n' +
+        '• If you request another, only the newest link works.',
       [{ text: 'OK', onPress: () => navigation.navigate('Login') }]
     );
   } catch (error) {

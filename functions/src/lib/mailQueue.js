@@ -12,6 +12,25 @@ const MAIL_COLLECTION = 'mail';
 // delivery. Override with the MAIL_SENDER env var if the sending domain changes.
 const DEFAULT_FROM = 'WattWise <magatnokia@gmail.com>';
 
+// Two senders, both opt-in through the environment.
+//
+// The domain addresses only work once they exist as verified "Send mail as"
+// aliases on the Gmail account behind SMTP_CONNECTION_URI - Gmail silently
+// rewrites or drops anything else, which is how delivery broke last time. So
+// both fall back to the address that is known to work, and setting the env vars
+// is the switch that turns the domain senders on. Until then this changes
+// nothing about what goes out.
+const NOTIFICATION_FROM = process.env.MAIL_SENDER || DEFAULT_FROM;
+const SUPPORT_FROM = process.env.MAIL_SENDER_SUPPORT || NOTIFICATION_FROM;
+const REPLY_TO = process.env.MAIL_REPLY_TO || null;
+
+// Mail about something going wrong is mail someone may want to reply to, so it
+// comes from support. Routine billing and usage mail comes from the main
+// address. Keyed on the tag each caller already passes, so no call site changes.
+const SUPPORT_TAGS = new Set(['device', 'safety']);
+
+const resolveSender = (tag) => (SUPPORT_TAGS.has(tag) ? SUPPORT_FROM : NOTIFICATION_FROM);
+
 const escapeHtml = (value) => String(value ?? '')
   .replace(/&/g, '&amp;')
   .replace(/</g, '&lt;')
@@ -41,26 +60,140 @@ const resolveUserContact = async (userId) => {
   }
 };
 
+// Theme tokens, mirroring src/constants/colors.js. Repeated as literals because
+// email clients strip <style> blocks and class attributes - every rule has to be
+// inline on the element that uses it.
+const THEME = {
+  primary: '#10B981',
+  primaryDark: '#059669',
+  text: '#111827',
+  textBody: '#374151',
+  textLight: '#6B7280',
+  textFaint: '#9CA3AF',
+  border: '#E5E7EB',
+  rowTint: '#F9FAFB',
+  page: '#F3F4F6',
+  white: '#FFFFFF',
+  warning: '#F59E0B',
+  error: '#EF4444',
+};
+
+// Mail that reports a problem gets a different accent so it reads as urgent at a
+// glance. Keyed on the same tag that decides the sender, so the two always agree.
+const ACCENTS = {
+  safety: THEME.error,
+  device: THEME.warning,
+};
+
+const accentFor = (tag) => ACCENTS[tag] || THEME.primary;
+
+// Several rows carry multi-line values - the receipt's bill sections and line
+// items are newline-joined. HTML collapses those to a single run-on line, so
+// they have to become <br> after escaping.
+const escapeMultiline = (value) => escapeHtml(value).replace(/\r?\n/g, '<br>');
+
+const visibleRows = (rows) => (Array.isArray(rows) ? rows : [])
+  .filter(([, value]) => value !== null && value !== undefined && value !== '');
+
 /**
  * Renders the shared WattWise email shell. `rows` is a list of
- * [label, value] pairs rendered as a simple detail table.
+ * [label, value] pairs rendered as a detail table.
+ *
+ * Built as nested tables with inline styles rather than divs and CSS: Outlook
+ * renders through Word's HTML engine, which ignores most modern layout.
  */
-const buildEmailHtml = ({ heading, intro, rows }) => {
-  const detailRows = (Array.isArray(rows) ? rows : [])
-    .filter(([, value]) => value !== null && value !== undefined && value !== '')
-    .map(([label, value]) => `
-      <tr>
-        <td style="padding:6px 12px 6px 0;color:#6B7280;font-size:14px;">${escapeHtml(label)}</td>
-        <td style="padding:6px 0;color:#111827;font-size:14px;font-weight:600;">${escapeHtml(value)}</td>
-      </tr>`)
+const buildEmailHtml = ({ heading, intro, rows, tag }) => {
+  const accent = accentFor(tag);
+
+  const detailRows = visibleRows(rows)
+    .map(([label, value], index) => {
+      const tint = index % 2 ? THEME.white : THEME.rowTint;
+      return `
+              <tr>
+                <td style="padding:11px 16px;background:${tint};color:${THEME.textLight};font-size:13px;line-height:1.45;border-bottom:1px solid ${THEME.border};vertical-align:top;width:42%;">${escapeHtml(label)}</td>
+                <td style="padding:11px 16px;background:${tint};color:${THEME.text};font-size:13px;line-height:1.45;font-weight:600;border-bottom:1px solid ${THEME.border};vertical-align:top;">${escapeMultiline(value)}</td>
+              </tr>`;
+    })
     .join('');
 
-  return `<div style="font-family:Arial,Helvetica,sans-serif;max-width:520px;margin:0 auto;padding:24px;">
-  <h2 style="color:#10B981;margin:0 0 12px;font-size:20px;">${escapeHtml(heading)}</h2>
-  <p style="color:#374151;font-size:15px;line-height:1.5;margin:0 0 16px;">${escapeHtml(intro)}</p>
-  <table style="border-collapse:collapse;width:100%;">${detailRows}</table>
-  <p style="color:#9CA3AF;font-size:12px;margin-top:24px;">Sent automatically by WattWise.</p>
-</div>`;
+  const detailTable = detailRows
+    ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:separate;border-spacing:0;width:100%;border:1px solid ${THEME.border};border-radius:8px;overflow:hidden;">${detailRows}</table>`
+    : '';
+
+  // Shown in the inbox list next to the subject. Without it clients pull the
+  // first text they find, which would be the wordmark.
+  const preheader = String(intro || '').slice(0, 140);
+
+  return `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light only">
+<title>${escapeHtml(heading)}</title>
+</head>
+<body style="margin:0;padding:0;background:${THEME.page};">
+<div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">${escapeHtml(preheader)}</div>
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:${THEME.page};padding:24px 12px;">
+  <tr>
+    <td align="center">
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" style="width:100%;max-width:600px;background:${THEME.white};border:1px solid ${THEME.border};border-radius:12px;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,Helvetica,sans-serif;">
+        <tr>
+          <td style="background:${accent};padding:18px 24px;">
+            <span style="color:${THEME.white};font-size:17px;font-weight:700;letter-spacing:-0.2px;">&#9889; WattWise</span>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:26px 24px 0;">
+            <h1 style="margin:0 0 10px;color:${THEME.text};font-size:20px;line-height:1.3;font-weight:700;">${escapeHtml(heading)}</h1>
+            <p style="margin:0 0 20px;color:${THEME.textBody};font-size:14px;line-height:1.6;">${escapeMultiline(intro)}</p>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:0 24px 24px;">${detailTable}</td>
+        </tr>
+        <tr>
+          <td style="padding:16px 24px 22px;border-top:1px solid ${THEME.border};">
+            <p style="margin:0 0 4px;color:${THEME.textLight};font-size:12px;line-height:1.5;">
+              Sent automatically by WattWise. Energy figures are measured at your outlets; peso amounts follow the PELCO III residential tariff.
+            </p>
+            <p style="margin:0;color:${THEME.textFaint};font-size:11px;line-height:1.5;">
+              Reply to this email if something looks wrong.
+            </p>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
+</body>
+</html>`;
+};
+
+/**
+ * Plain-text twin of the HTML body.
+ *
+ * Sent alongside rather than instead: a multipart message scores better with
+ * spam filters than HTML alone, and it is what watches, screen readers, and
+ * text-only clients actually render.
+ */
+const buildEmailText = ({ heading, intro, rows }) => {
+  const lines = [
+    heading,
+    '='.repeat(String(heading || '').length),
+    '',
+    intro,
+    '',
+  ];
+
+  visibleRows(rows).forEach(([label, value]) => {
+    lines.push(`${label}: ${String(value).replace(/\r?\n/g, '\n  ')}`);
+  });
+
+  lines.push('', '--', 'Sent automatically by WattWise.');
+  lines.push('Peso amounts follow the PELCO III residential tariff.');
+
+  return lines.join('\n');
 };
 
 /**
@@ -100,10 +233,17 @@ const enqueueEmail = async ({ toEmail, subject, heading, intro, rows, tag, attac
   try {
     const doc = await admin.firestore().collection(MAIL_COLLECTION).add({
       to: [recipientEmail],
-      from: process.env.MAIL_SENDER || DEFAULT_FROM,
+      from: resolveSender(tag),
+      // Replies to an automated address go nowhere. When a support address is
+      // configured, point them at it instead.
+      ...(REPLY_TO ? { replyTo: REPLY_TO } : {}),
       message: {
         subject: normalizedSubject,
-        html: buildEmailHtml({ heading: heading || normalizedSubject, intro, rows }),
+        // Both parts, always. Nodemailer sends multipart/alternative when text
+        // and html are both present, which filters treat more kindly than a
+        // bare HTML body.
+        text: buildEmailText({ heading: heading || normalizedSubject, intro, rows }),
+        html: buildEmailHtml({ heading: heading || normalizedSubject, intro, rows, tag }),
         ...(normalizedAttachments.length ? { attachments: normalizedAttachments } : {}),
       },
       // Not read by the extension; kept for our own log/debug queries.
@@ -126,5 +266,8 @@ const enqueueEmail = async ({ toEmail, subject, heading, intro, rows, tag, attac
 module.exports = {
   MAIL_COLLECTION,
   resolveUserContact,
+  resolveSender,
+  buildEmailHtml,
+  buildEmailText,
   enqueueEmail,
 };
