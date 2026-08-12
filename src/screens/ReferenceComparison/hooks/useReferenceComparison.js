@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
-import { comparisonService, historyService } from '../../../services/firebase';
+import { comparisonService, historyService, userService } from '../../../services/firebase';
 import { auth } from '../../../services/firebase/config';
 import {
   MONTH_OPTION_COUNT,
@@ -54,14 +54,14 @@ const useReferenceComparison = () => {
     return unsubscribe;
   }, []);
 
-  const loadMonthTotals = useCallback(async (uid, monthKey) => {
+  const loadMonthTotals = useCallback(async (uid, monthKey, rates) => {
     const result = await historyService.getUsageByDateRange(
       uid,
       `${monthKey}-01`,
       `${monthKey}-31`
     );
 
-    return result.success ? summarizeDailyEntries(result.data) : emptyMonthTotals;
+    return result.success ? summarizeDailyEntries(result.data, rates) : emptyMonthTotals;
   }, []);
 
   const fetchComparison = useCallback(async () => {
@@ -74,9 +74,21 @@ const useReferenceComparison = () => {
     setError(null);
 
     try {
+      // Both months are priced from their own total energy, so they need the
+      // user's own rates - without them a month is costed at the seeded
+      // defaults while every other screen uses what the user configured, and
+      // the accuracy check would grade the tariff against the wrong tariff.
+      const preferences = await userService.getUserPreferences(userId);
+      const rates = preferences?.success
+        ? {
+          supplyRates: preferences.data?.supplyRates || null,
+          profileId: preferences.data?.rateProfileId || null,
+        }
+        : {};
+
       const [nextA, nextB, billResult] = await Promise.all([
-        loadMonthTotals(userId, monthA),
-        loadMonthTotals(userId, monthB),
+        loadMonthTotals(userId, monthA, rates),
+        loadMonthTotals(userId, monthB, rates),
         comparisonService.getMonthData(userId, monthA),
       ]);
 

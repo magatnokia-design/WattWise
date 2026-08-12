@@ -1,3 +1,5 @@
+import { calculatePelcoIIIBill } from '../../../utils/billing';
+
 // How many months back the pickers offer. A year covers a full seasonal cycle,
 // which is the comparison that actually explains a bill jump.
 export const MONTH_OPTION_COUNT = 12;
@@ -70,24 +72,39 @@ export const buildMonthOptions = (count = MONTH_OPTION_COUNT, from = new Date())
 /**
  * Rolls a month of `history_daily` documents into one total.
  *
+ * The month's cost is priced from its total energy in a single call, never by
+ * adding up the stored daily costs. Those are deliberately marginal - a day is
+ * not a billing period, so `processDailyRollup` leaves the once-a-month P5.00
+ * metering charge out of them - and summing them would drop that charge from
+ * the month entirely. Summing them back when they *did* include it was the
+ * original bug: the fee landed once per day, and three days of near-zero usage
+ * came to P19.58 instead of P8.69.
+ *
+ * Both mistakes come from treating a sum of days as a bill. Nothing should.
+ *
  * Appliance names come from the most recent day that carries them, so an outlet
  * renamed mid-month shows its current name rather than a stale one.
+ *
+ * @param {Array} entries `history_daily` documents for the month.
+ * @param {object} [rates] `supplyRates` and `profileId` from user preferences.
+ *   Omitted, the seeded profile is used - which prices a month at the default
+ *   tariff rather than the user's own.
  */
-export const summarizeDailyEntries = (entries) => {
+export const summarizeDailyEntries = (entries, { supplyRates = null, profileId = null } = {}) => {
   const rows = Array.isArray(entries) ? entries : [];
   if (rows.length === 0) return emptyMonthTotals;
 
   const totals = rows.reduce((accumulator, entry) => ({
     kWh: accumulator.kWh + toNumber(entry.totalEnergy),
-    cost: accumulator.cost + toNumber(entry.cost),
     outlet1: accumulator.outlet1 + toNumber(entry.outlet1Energy),
     outlet2: accumulator.outlet2 + toNumber(entry.outlet2Energy),
-  }), { kWh: 0, cost: 0, outlet1: 0, outlet2: 0 });
+  }), { kWh: 0, outlet1: 0, outlet2: 0 });
 
   const latest = rows[rows.length - 1] || {};
 
   return {
     ...totals,
+    cost: calculatePelcoIIIBill(totals.kWh, { supplyRates, profileId }).totals.total,
     outlet1Name: String(latest.outlet1Name || '').trim() || 'Outlet 1',
     outlet2Name: String(latest.outlet2Name || '').trim() || 'Outlet 2',
     daysRecorded: rows.length,
