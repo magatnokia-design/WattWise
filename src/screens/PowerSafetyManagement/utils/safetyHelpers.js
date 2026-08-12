@@ -82,8 +82,45 @@ export const getStatusColor = (value, threshold) => {
   };
 };
 
+/**
+ * Icon and colour for one row of alert history.
+ *
+ * Keyed on the `type` handleSafetyAlerts actually writes - `warning`,
+ * `high_usage`, `cutoff`, `device` - which is the same taxonomy
+ * getNotificationIcon uses. The map was previously keyed on `voltage`,
+ * `current` and `power`, none of which are ever emitted, so every row fell
+ * through to the default. That default was the red error triangle, which is
+ * how "Back to Normal" came to be displayed as a fault. Found from the web
+ * repo, where the same mapping is used.
+ *
+ * The legacy keys are kept because rows written before this fix still carry
+ * them, and a stored alert should not change appearance retroactively.
+ */
 export const getAlertIcon = (type) => {
   const icons = {
+    // Written by handleSafetyAlerts.
+    device: {
+      name: 'checkmark-circle',
+      color: COLORS.success,
+      bg: '#ECFDF5',
+    },
+    warning: {
+      name: 'warning',
+      color: '#F59E0B',
+      bg: '#FFFBEB',
+    },
+    high_usage: {
+      name: 'alert-circle',
+      color: '#F97316',
+      bg: '#FFF7ED',
+    },
+    cutoff: {
+      name: 'flash-off',
+      color: COLORS.error,
+      bg: '#FEF2F2',
+    },
+
+    // Older rows.
     voltage: {
       name: 'flash',
       color: '#F59E0B',
@@ -99,14 +136,16 @@ export const getAlertIcon = (type) => {
       color: COLORS.error,
       bg: '#FEF2F2',
     },
-    cutoff: {
-      name: 'flash-off',
-      color: COLORS.error,
-      bg: '#FEF2F2',
-    },
   };
 
-  return icons[type] || icons.power;
+  // Neutral rather than the error triangle: an unrecognised type is an unknown
+  // alert, not a severe one, and claiming severity the data does not support is
+  // what the old default did.
+  return icons[type] || {
+    name: 'notifications',
+    color: COLORS.textLight,
+    bg: '#F3F4F6',
+  };
 };
 
 export const formatAlertTime = (timestamp) => formatRelativeTime(timestamp);
