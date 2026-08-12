@@ -5,13 +5,13 @@
     "slug": "WiseWatt",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/applogo-circle.png",
+    "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/applogo-circle.png",
+      "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#10B981"
+      "backgroundColor": "#FFFFFF"
     },
     "ios": {
       "supportsTablet": true,
@@ -29,6 +29,7 @@
       [
         "expo-notifications",
         {
+          "icon": "./assets/notification-icon.png",
           "color": "#10B981",
           "defaultChannel": "default"
         }
@@ -36,7 +37,7 @@
     ],
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/applogo-circle.png",
+        "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#10B981"
       },
       "edgeToEdgeEnabled": true,
@@ -44,7 +45,7 @@
       "googleServicesFile": "./google-services.json"
     },
     "web": {
-      "favicon": "./assets/applogo-circle.png"
+      "favicon": "./assets/favicon.png"
     },
     "extra": {
       "eas": {
