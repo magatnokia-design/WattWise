@@ -195,6 +195,19 @@ async function processDailyRollup() {
           // spending and the live cost estimate disagreed.
           supplyRates: userData.supplyRates || null,
           profileId: userData.rateProfileId || null,
+          // A day is not a billing period. The P5.00 metering charge is levied
+          // once a month, and including it here billed it again every single
+          // day: a day with 0.07 kWh of actual usage cost P6.36, of which P5.60
+          // was the fee and 76 centavos was the electricity. Summed over three
+          // days, History showed P19.58 against a true P8.69 - and a day with
+          // nothing plugged in still produced a bill, which is what made it
+          // visible.
+          //
+          // Marginal cost is what a per-day figure can honestly mean. Whoever
+          // needs the real monthly total computes it from the month's total
+          // energy, the way recomputeMonthlyBudget already does - never by
+          // summing these.
+          includePeriodFlats: false,
           daysInPeriod,
           billingDays,
         });

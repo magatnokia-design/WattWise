@@ -248,6 +248,10 @@ export const useHistory = () => {
     loading,
     error,
     hasMore,
+    // The screen prices its header total from the range's total energy rather
+    // than by summing per-day costs, so it needs the same profile the rows
+    // were priced with.
+    rateProfileId,
     fetchActivityLogs,
     subscribeActivityLogs,
     fetchUsageHistory,

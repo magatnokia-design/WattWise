@@ -14,6 +14,7 @@ import UsageHistory from './components/UsageHistory';
 import DateRangeModal from './components/DateRangeModal';
 import { useHistory } from './hooks/useHistory';
 import { useAuth } from '../../hooks/useAuth';
+import { calculatePelcoIIIBill } from '../../utils/billing';
 import {
   DATE_RANGE_PRESETS,
   resolveDateRange,
@@ -48,7 +49,7 @@ const HistoryScreen = () => {
   // a separate paginated fetch would fight with.
   const [logLimit, setLogLimit] = useState(ACTIVITY_PAGE_SIZE);
 
- const { activityLogs, usageHistory, loading, hasMore, subscribeActivityLogs, fetchUsageHistory } = useHistory();
+ const { activityLogs, usageHistory, loading, hasMore, rateProfileId, subscribeActivityLogs, fetchUsageHistory } = useHistory();
 
  const filterToOutletValue = useMemo(() => ({
    All: 'all',
@@ -121,14 +122,21 @@ useEffect(() => {
 
   const summaryData = useMemo(() => {
     const totalKwh = usageHistory.reduce((sum, item) => sum + (item.totalKwh || 0), 0);
-    const totalCost = usageHistory.reduce((sum, item) => sum + (item.totalCost || 0), 0);
+
+    // Priced from the total, not by adding up the days.
+    //
+    // Each day's stored cost is a marginal figure that deliberately excludes
+    // the once-a-month P5.00 metering charge, so summing them would leave the
+    // fee out entirely - just as summing days that each included it charged
+    // the fee once per day, which is what this header used to show.
+    const totalCost = calculatePelcoIIIBill(totalKwh, { profileId: rateProfileId }).totals.total;
 
     return {
       totalRecords: activeTab === 0 ? visibleActivityLogs.length : usageHistory.length,
       totalKwh: totalKwh.toFixed(2),
       totalCost: formatCost(totalCost),
     };
-  }, [usageHistory, visibleActivityLogs.length, activeTab]);
+  }, [usageHistory, visibleActivityLogs.length, activeTab, rateProfileId]);
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
