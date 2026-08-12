@@ -4,6 +4,20 @@ const { dispatchDeviceCommand } = require('../lib/deviceCommandDispatcher');
 const { resolveUserContact, enqueueEmail } = require('../lib/mailQueue');
 
 /**
+ * Formats one outlet's readings for the alert email.
+ *
+ * The PZEM reports floats, and interpolating them raw printed
+ * "234.1000061 V / 0 A / 0 W" in a safety email - which reads as a bug in the
+ * measurement rather than an artefact of binary floating point. Rounded to the
+ * precision the sensor actually resolves.
+ */
+const formatReading = (outlet) => {
+  const value = (raw, places) => Number(raw || 0).toFixed(places);
+  return `${value(outlet?.voltage, 1)} V / ${value(outlet?.current, 2)} A / `
+    + `${value(outlet?.power, 1)} W`;
+};
+
+/**
  * Firestore trigger: Fires when power_safety document is written
  * Checks if safety stage changed
  * Creates high-priority notifications
@@ -108,8 +122,8 @@ async function handleSafetyAlerts(event) {
         rows: [
           ['Stage', currentStage],
           ['Type', type],
-          ['Outlet 1', `${outlet1?.voltage || 0} V / ${outlet1?.current || 0} A / ${outlet1?.power || 0} W`],
-          ['Outlet 2', `${outlet2?.voltage || 0} V / ${outlet2?.current || 0} A / ${outlet2?.power || 0} W`],
+          ['Outlet 1', formatReading(outlet1)],
+          ['Outlet 2', formatReading(outlet2)],
         ],
         note:
           'Unplug whatever is on that outlet before switching it back on. If this keeps happening '
