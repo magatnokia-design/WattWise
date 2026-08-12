@@ -1,13 +1,12 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
-  Alert,
-  useWindowDimensions,
 } from 'react-native';
 import { COLORS } from '../../../constants/colors';
+import NotificationDetailModal from './NotificationDetailModal';
 import {
   getNotificationIcon,
   getNotificationColor,
@@ -16,22 +15,12 @@ import {
 } from '../utils/notificationHelpers';
 
 const NotificationItem = ({ item, onPress }) => {
-  const { width } = useWindowDimensions();
-
-  const detailLines = [
-    `Type: ${item.type || 'general'}`,
-    `Date: ${formatNotificationDate(item.timestamp)}`,
-    `Time: ${formatNotificationTime(item.timestamp)}`,
-    item.outlet ? `Outlet: ${item.outlet}` : null,
-    item.metadata && Object.keys(item.metadata).length > 0
-      ? `Details: ${JSON.stringify(item.metadata)}`
-      : null,
-  ].filter(Boolean);
+  const [showDetail, setShowDetail] = useState(false);
 
   const handlePress = useCallback(() => {
-    Alert.alert(item.title || 'Notification', [item.message || '--', ...detailLines].join('\n'));
+    setShowDetail(true);
     if (onPress) onPress(item.id);
-  }, [item, onPress, detailLines]);
+  }, [item.id, onPress]);
 
   const iconColor = getNotificationColor(item.type);
   const icon = getNotificationIcon(item.type);
@@ -64,6 +53,12 @@ const NotificationItem = ({ item, onPress }) => {
       {!item.read && (
         <View style={[styles.unreadDot, { backgroundColor: iconColor }]} />
       )}
+
+      <NotificationDetailModal
+        visible={showDetail}
+        notification={item}
+        onClose={() => setShowDetail(false)}
+      />
     </TouchableOpacity>
   );
 };
