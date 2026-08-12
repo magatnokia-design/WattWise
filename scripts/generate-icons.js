@@ -131,13 +131,30 @@ const main = async () => {
   for (const target of TARGETS) {
     const outputPath = path.join(ASSETS_DIR, target.file);
 
-    let pipeline = sharp(target.svg(), { density: 384 });
+    // The density renders the vector at roughly 5x the target and `resize`
+    // brings it back down, which supersamples the diagonals instead of
+    // aliasing them. Without the resize the density silently becomes the
+    // output size - every icon shipped 5.33x too large that way, and it went
+    // unnoticed because this loop used to print the size it meant to write
+    // rather than the one it did.
+    let pipeline = sharp(target.svg(), { density: 384 }).resize(target.size, target.size);
     if (target.flatten) pipeline = pipeline.flatten({ background: target.flatten });
 
     await pipeline.png({ compressionLevel: 9 }).toFile(outputPath);
 
-    const { size } = fs.statSync(outputPath);
-    console.log(`${target.file.padEnd(22)} ${String(target.size).padStart(4)}px  ${(size / 1024).toFixed(1).padStart(6)} KB`);
+    // Read back from disk. An assertion against what was asked for is the only
+    // thing that would have caught the above.
+    const written = fs.readFileSync(outputPath);
+    const width = written.readUInt32BE(16);
+    const height = written.readUInt32BE(20);
+
+    if (width !== target.size || height !== target.size) {
+      throw new Error(
+        `${target.file} was written at ${width}x${height}, expected ${target.size}x${target.size}`
+      );
+    }
+
+    console.log(`${target.file.padEnd(22)} ${`${width}x${height}`.padStart(9)}  ${(written.length / 1024).toFixed(1).padStart(6)} KB`);
     console.log(`${' '.repeat(22)} ${target.note}\n`);
   }
 
