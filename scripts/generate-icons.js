@@ -107,6 +107,17 @@ const TARGETS = [
     size: 96,
     svg: () => boltSvg({ size: 96, boltHeight: 62, fill: WHITE }),
   },
+  {
+    file: 'email-logo.png',
+    note: 'Email header, displayed at 22px. White on transparent rather than a green disc, '
+      + 'because that header bar turns red for safety mail and amber for device mail. '
+      + 'Copy to the web repo public/ - email clients need a hosted URL.',
+    // Exported well above its display size: email clients do not serve
+    // density-specific assets, so the only way to stay sharp on a retina
+    // screen is to ship the larger image and let the HTML scale it down.
+    size: 120,
+    svg: () => boltSvg({ size: 120, boltHeight: 96, fill: WHITE }),
+  },
 ];
 
 const main = async () => {

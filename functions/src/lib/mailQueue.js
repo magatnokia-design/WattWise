@@ -91,6 +91,20 @@ const accentFor = (tag) => ACCENTS[tag] || THEME.primary;
 // to read it, which is the thing most worth saying in a footer.
 const APP_WEB_URL = (process.env.APP_WEB_URL || 'https://www.wattwise.site').trim();
 
+// The brand mark in the email header, opt-in through the environment the same
+// way the domain senders above are.
+//
+// It cannot be inlined: Gmail strips `data:` URI images, so the only thing that
+// renders is a hosted URL - and the only host this project has is the web
+// client. Defaulting it on would put a broken image in every email until that
+// file is deployed, so an unset variable keeps the lightning emoji that has
+// been shipping. Set MAIL_LOGO_URL once /email-logo.png is live.
+//
+// Deliberately the white-on-transparent bolt rather than the green disc: this
+// header turns red for safety mail and amber for device mail, and a green disc
+// would sit on both.
+const EMAIL_LOGO_URL = (process.env.MAIL_LOGO_URL || '').trim();
+
 // Password reset and address confirmation get none of the footer link, the
 // advisory note, or anything else optional. A security email that also markets
 // is the exact shape of a phishing message, and every extra link in one is
@@ -182,6 +196,28 @@ const buildEmailHtml = ({ heading, intro, rows, tag, action, note }) => {
   // first text they find, which would be the wordmark.
   const preheader = String(intro || '').slice(0, 140);
 
+  // Two cells rather than an <img> beside a <span>: Outlook's Word engine
+  // ignores vertical-align on inline images, which drops the mark below the
+  // baseline of the wordmark next to it.
+  //
+  // The wordmark stays either way. Most clients block remote images until the
+  // reader allows them, so a header that is only an image is a header that is
+  // sometimes nothing at all.
+  const brandMark = EMAIL_LOGO_URL
+    ? `
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+              <tr>
+                <td style="padding:0 9px 0 0;" valign="middle">
+                  <img src="${escapeHtml(EMAIL_LOGO_URL)}" width="22" height="22" alt=""
+                    style="display:block;width:22px;height:22px;border:0;outline:none;text-decoration:none;">
+                </td>
+                <td valign="middle">
+                  <span style="color:${THEME.white};font-size:17px;font-weight:700;letter-spacing:-0.2px;">WattWise</span>
+                </td>
+              </tr>
+            </table>`
+    : `<span style="color:${THEME.white};font-size:17px;font-weight:700;letter-spacing:-0.2px;">&#9889; WattWise</span>`;
+
   return `<!DOCTYPE html>
 <html>
 <head>
@@ -198,7 +234,7 @@ const buildEmailHtml = ({ heading, intro, rows, tag, action, note }) => {
       <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" style="width:100%;max-width:600px;background:${THEME.white};border:1px solid ${THEME.border};border-radius:12px;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,Helvetica,sans-serif;">
         <tr>
           <td style="background:${accent};padding:18px 24px;">
-            <span style="color:${THEME.white};font-size:17px;font-weight:700;letter-spacing:-0.2px;">&#9889; WattWise</span>
+${brandMark}
           </td>
         </tr>
         <tr>
