@@ -108,6 +108,20 @@ const TARGETS = [
     svg: () => boltSvg({ size: 96, boltHeight: 62, fill: WHITE }),
   },
   {
+    file: 'logo-mark.png',
+    note: 'In-app mark on a light background - Login and Register. Keeps the disc, since a '
+      + 'white bolt on white is nothing at all.',
+    size: 256,
+    svg: () => boltSvg({ size: 256, boltHeight: 128, fill: WHITE, circleRadius: 128 }),
+  },
+  {
+    file: 'logo-mark-white.png',
+    note: 'In-app mark on the green splash. No disc - the background is already the brand '
+      + 'green, and a green disc on green is a rectangle of nothing.',
+    size: 256,
+    svg: () => boltSvg({ size: 256, boltHeight: 200, fill: WHITE }),
+  },
+  {
     file: 'email-logo.png',
     note: 'Email header, displayed at 22px. White on transparent rather than a green disc, '
       + 'because that header bar turns red for safety mail and amber for device mail. '

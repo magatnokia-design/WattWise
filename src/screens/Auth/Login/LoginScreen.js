@@ -8,6 +8,7 @@ import {
   Platform, 
   ScrollView,
   TouchableOpacity,
+  Image,
   Alert
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -104,7 +105,13 @@ const handleLogin = async () => {
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.header}>
-            <Text style={styles.logo}>⚡</Text>
+            {/* The disc version: this screen is on a light background, where a
+                white bolt alone would be invisible. */}
+            <Image
+              source={require('../../../../assets/logo-mark.png')}
+              style={styles.logo}
+              resizeMode="contain"
+            />
             <Text style={styles.title}>Welcome Back</Text>
             <Text style={styles.subtitle}>Login to your account</Text>
           </View>
@@ -179,7 +186,8 @@ const styles = StyleSheet.create({
     marginBottom: 40,
   },
   logo: {
-    fontSize: 60,
+    width: 72,
+    height: 72,
     marginBottom: 16,
   },
   title: {

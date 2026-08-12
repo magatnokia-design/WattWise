@@ -8,6 +8,7 @@ import {
   Platform, 
   ScrollView,
   TouchableOpacity,
+  Image,
   Alert
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -155,7 +156,11 @@ const handleRegister = async () => {
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.header}>
-            <Text style={styles.logo}>⚡</Text>
+            <Image
+              source={require('../../../../assets/logo-mark.png')}
+              style={styles.logo}
+              resizeMode="contain"
+            />
             <Text style={styles.title}>Create Account</Text>
             <Text style={styles.subtitle}>Sign up to get started</Text>
           </View>
@@ -267,7 +272,8 @@ const styles = StyleSheet.create({
     marginBottom: 30,
   },
   logo: {
-    fontSize: 60,
+    width: 72,
+    height: 72,
     marginBottom: 16,
   },
   title: {

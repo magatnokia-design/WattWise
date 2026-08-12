@@ -1,6 +1,6 @@
 // Splash Screen
 import React, { useEffect } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, Image } from 'react-native';
 import { COLORS } from '../../constants/colors';
 import { FONTS } from '../../constants/theme';
 
@@ -15,7 +15,13 @@ export const SplashScreen = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.logo}>⚡</Text>
+      {/* The brand mark, not the emoji. The emoji renders in the platform's
+          own yellow, which is the one colour this theme does not have. */}
+      <Image
+        source={require('../../../assets/logo-mark-white.png')}
+        style={styles.logo}
+        resizeMode="contain"
+      />
       <Text style={styles.title}>WattWise</Text>
       <Text style={styles.subtitle}>Smart Energy Monitoring</Text>
     </View>
@@ -30,7 +36,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   logo: {
-    fontSize: 80,
+    width: 88,
+    height: 88,
     marginBottom: 20,
   },
   title: {

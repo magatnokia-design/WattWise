@@ -11,6 +11,11 @@ const { resolveUserContact, enqueueEmail } = require('../lib/mailQueue');
  * measurement rather than an artefact of binary floating point. Rounded to the
  * precision the sensor actually resolves.
  */
+// How many alerts the safety document keeps. It is the document both clients
+// subscribe to for live readings, so an unbounded array would grow every
+// realtime update forever. Ten is what getAlertHistory asks for by default.
+const ALERT_HISTORY_LIMIT = 20;
+
 const formatReading = (outlet) => {
   const value = (raw, places) => Number(raw || 0).toFixed(places);
   return `${value(outlet?.voltage, 1)} V / ${value(outlet?.current, 2)} A / `
@@ -111,6 +116,34 @@ async function handleSafetyAlerts(event) {
         outlet2Power: outlet2?.power || 0,
       },
     });
+
+    // Alert history. Both clients render this from
+    // `power_safety/settings.alerts` via safetyService.getAlertHistory, and
+    // **nothing had ever written that field** - so the panel read "No safety
+    // alerts" while a notification and an email for the same event went out.
+    // A reader with no writer, which is the same shape as the four dead
+    // triggers and took a user noticing the contradiction to surface.
+    //
+    // serverTimestamp() is rejected inside an array, so the entry carries a
+    // concrete Timestamp - getTimestampMs handles it via toDate().
+    //
+    // This write lands on the document this trigger watches. The stage is
+    // unchanged by it, so the re-fire returns at the `currentStage === oldStage`
+    // guard above rather than looping.
+    const previousAlerts = Array.isArray(newData.alerts) ? newData.alerts : [];
+    const alertEntry = {
+      id: `${currentStage}_${Date.now()}`,
+      type,
+      title,
+      message,
+      stage: currentStage,
+      outlet: null,
+      timestamp: admin.firestore.Timestamp.now(),
+    };
+
+    await change.after.ref.set({
+      alerts: [alertEntry, ...previousAlerts].slice(0, ALERT_HISTORY_LIMIT),
+    }, { merge: true });
 
     const contact = await resolveUserContact(userId);
     if (contact?.email) {
