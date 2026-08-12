@@ -207,3 +207,38 @@ export const compareToActualBill = (totals, actualBill) => {
     direction: difference >= 0 ? 'over' : 'under',
   };
 };
+
+/**
+ * Why the estimate and the paper bill differ, in one sentence for the user.
+ *
+ * The 5% band assumes WattWise measures everything the bill covers. It does
+ * not: the bill is for the whole apartment, WattWise is two outlets. So a large
+ * *under* reading is the expected result and says nothing about the billing
+ * model - telling that user to check their generation rate sends them after a
+ * fault that is not there. A large *over* reading is the one scope cannot
+ * explain, since two outlets cannot cost more than the apartment containing
+ * them, and that is where the rate is worth checking.
+ *
+ * Lives here rather than in a screen so both clients say the same thing. The
+ * "98.9% off" figure is the first thing anyone reviewing this project asks
+ * about, and two clients answering it differently would be worse than either
+ * answer alone.
+ */
+export const explainAccuracy = (accuracy, monthLabel) => {
+  const percent = accuracy.absolutePercent.toFixed(1);
+
+  if (accuracy.isClose) {
+    return `WattWise is tracking your ${monthLabel} bill closely.`;
+  }
+
+  if (accuracy.direction === 'under') {
+    return `WattWise read ${percent}% under the ${monthLabel} bill. That is expected `
+      + 'unless everything you own runs through these two outlets - the bill covers the '
+      + 'whole apartment, WattWise covers outlet 1 and outlet 2. This gap is a difference '
+      + 'in what is being measured, not an error in the estimate.';
+  }
+
+  return `WattWise read ${percent}% over the ${monthLabel} bill. Two outlets cannot cost `
+    + 'more than the whole apartment they are in, so check that your generation rate in '
+    + "Settings matches that month's bill.";
+};

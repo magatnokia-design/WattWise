@@ -14,7 +14,7 @@ import MonthComparePicker from './components/MonthComparePicker';
 import CompareMetric from './components/CompareMetric';
 import AddPreviousBillModal from './components/AddPreviousBillModal';
 import useReferenceComparison from './hooks/useReferenceComparison';
-import { buildVerdict, formatMonthShort } from './utils/comparisonHelpers';
+import { buildVerdict, explainAccuracy, formatMonthShort } from './utils/comparisonHelpers';
 import { WebAppNotice } from '../../components/common/WebAppNotice';
 import { WEB_APP_LINKS } from '../../constants/webApp';
 import { useDismissibleNotice } from '../../hooks/useDismissibleNotice';
@@ -45,6 +45,9 @@ const ReferenceComparisonScreen = ({ navigation }) => {
 
   const labelA = formatMonthShort(monthA);
   const labelB = formatMonthShort(monthB);
+
+  // The bill card is about month A alone - month B has no bearing on it.
+  const hasMonthAUsage = totalsA.daysRecorded > 0;
 
   const verdict = useMemo(
     () => buildVerdict(comparison, labelA, labelB),
@@ -172,63 +175,6 @@ const ReferenceComparisonScreen = ({ navigation }) => {
                 );
               })}
             </View>
-
-            {/* Accuracy check: the one place the billing model is graded against
-                a real bill rather than another app-computed figure. */}
-            <Text style={styles.sectionTitle}>Check against your real bill</Text>
-            {accuracy ? (
-              <View style={styles.accuracyCard}>
-                <View style={styles.accuracyRow}>
-                  <Text style={styles.accuracyLabel}>PELCO III billed you</Text>
-                  <Text style={styles.accuracyValue}>{formatPeso(accuracy.actualCost)}</Text>
-                </View>
-                <View style={styles.accuracyRow}>
-                  <Text style={styles.accuracyLabel}>WattWise estimated</Text>
-                  <Text style={styles.accuracyValue}>{formatPeso(accuracy.estimatedCost)}</Text>
-                </View>
-                <View style={styles.accuracyDivider} />
-                <View style={styles.accuracyRow}>
-                  <Text style={styles.accuracyLabel}>Difference</Text>
-                  <Text
-                    style={[
-                      styles.accuracyValueStrong,
-                      { color: accuracy.isClose ? COLORS.success : COLORS.warning },
-                    ]}
-                  >
-                    {formatPeso(accuracy.absolute)} {accuracy.direction}
-                    {' '}({accuracy.absolutePercent.toFixed(1)}%)
-                  </Text>
-                </View>
-                <Text style={styles.accuracyNote}>
-                  {accuracy.isClose
-                    ? `WattWise is tracking your ${labelA} bill closely.`
-                    : `WattWise read ${accuracy.absolutePercent.toFixed(1)}% ${accuracy.direction} for ${labelA}. Check that your generation rate in Settings matches that month's bill.`}
-                </Text>
-                <TouchableOpacity
-                  style={styles.secondaryButton}
-                  onPress={() => setShowBillModal(true)}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.secondaryButtonText}>Edit actual bill</Text>
-                </TouchableOpacity>
-              </View>
-            ) : (
-              <TouchableOpacity
-                style={styles.addBillCard}
-                onPress={() => setShowBillModal(true)}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="receipt-outline" size={22} color={COLORS.primary} />
-                <View style={styles.addBillText}>
-                  <Text style={styles.addBillTitle}>Add your {labelA} bill</Text>
-                  <Text style={styles.addBillSub}>
-                    Enter the total from your paper PELCO III bill to see how close
-                    WattWise&apos;s estimate came.
-                  </Text>
-                </View>
-                <Ionicons name="chevron-forward" size={18} color={COLORS.textLight} />
-              </TouchableOpacity>
-            )}
           </View>
         ) : (
           <View style={styles.emptyState}>
@@ -245,6 +191,92 @@ const ReferenceComparisonScreen = ({ navigation }) => {
             </Text>
           </View>
         )}
+
+        {/* Deliberately outside the comparison above.
+            A paper bill is a figure copied off paper - it depends on neither
+            month having recorded usage, and it is about month A alone.
+            Sitting inside that branch meant a user with one month of data could
+            neither see a bill already on file nor add one, whatever Firestore
+            held. Found from the web client, which gates neither. */}
+        <View style={styles.billSection}>
+          <Text style={styles.sectionTitle}>Check against your real bill</Text>
+
+          {accuracy && hasMonthAUsage ? (
+            <View style={styles.accuracyCard}>
+              <View style={styles.accuracyRow}>
+                <Text style={styles.accuracyLabel}>PELCO III billed you</Text>
+                <Text style={styles.accuracyValue}>{formatPeso(accuracy.actualCost)}</Text>
+              </View>
+              <View style={styles.accuracyRow}>
+                <Text style={styles.accuracyLabel}>WattWise estimated</Text>
+                <Text style={styles.accuracyValue}>{formatPeso(accuracy.estimatedCost)}</Text>
+              </View>
+              <View style={styles.accuracyDivider} />
+              <View style={styles.accuracyRow}>
+                <Text style={styles.accuracyLabel}>Difference</Text>
+                <Text
+                  style={[
+                    styles.accuracyValueStrong,
+                    { color: accuracy.isClose ? COLORS.success : COLORS.warning },
+                  ]}
+                >
+                  {formatPeso(accuracy.absolute)} {accuracy.direction}
+                  {' '}({accuracy.absolutePercent.toFixed(1)}%)
+                </Text>
+              </View>
+              <Text style={styles.accuracyNote}>{explainAccuracy(accuracy, labelA)}</Text>
+              <TouchableOpacity
+                style={styles.secondaryButton}
+                onPress={() => setShowBillModal(true)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.secondaryButtonText}>Edit actual bill</Text>
+              </TouchableOpacity>
+            </View>
+          ) : accuracy ? (
+            // A bill on file for a month WattWise did not measure. Showing it
+            // against an estimate of zero would read as a 100% error rather
+            // than as an absence of data, so the estimate line says so instead.
+            <View style={styles.accuracyCard}>
+              <View style={styles.accuracyRow}>
+                <Text style={styles.accuracyLabel}>PELCO III billed you</Text>
+                <Text style={styles.accuracyValue}>{formatPeso(accuracy.actualCost)}</Text>
+              </View>
+              <View style={styles.accuracyRow}>
+                <Text style={styles.accuracyLabel}>WattWise measured</Text>
+                <Text style={styles.accuracyValue}>Nothing yet</Text>
+              </View>
+              <Text style={styles.accuracyNote}>
+                Your {labelA} bill is saved. WattWise has no recorded usage for that
+                month, so there is nothing to compare it against yet - the check
+                appears once your outlets have reported for a full day.
+              </Text>
+              <TouchableOpacity
+                style={styles.secondaryButton}
+                onPress={() => setShowBillModal(true)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.secondaryButtonText}>Edit actual bill</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <TouchableOpacity
+              style={styles.addBillCard}
+              onPress={() => setShowBillModal(true)}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="receipt-outline" size={22} color={COLORS.primary} />
+              <View style={styles.addBillText}>
+                <Text style={styles.addBillTitle}>Add your {labelA} bill</Text>
+                <Text style={styles.addBillSub}>
+                  Enter the total from your paper PELCO III bill to see how close
+                  WattWise&apos;s estimate came.
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={COLORS.textLight} />
+            </TouchableOpacity>
+          )}
+        </View>
       </ScrollView>
 
       <AddPreviousBillModal
@@ -333,6 +365,10 @@ const styles = StyleSheet.create({
   body: {
     paddingHorizontal: 20,
     marginTop: 20,
+  },
+  billSection: {
+    paddingHorizontal: 20,
+    marginTop: 12,
   },
   sectionTitle: {
     fontSize: 16,
