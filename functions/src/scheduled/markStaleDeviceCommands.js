@@ -75,6 +75,11 @@ async function markStaleDeviceCommands() {
           batch.set(db.doc(`devices/${deviceId}`), {
             userId,
             deviceId,
+            // Timed out, so it is never going to be delivered. Left in the queue
+            // it would be re-offered on every poll and hold up everything behind
+            // it - this sweeper is the only thing that clears commands the device
+            // never polled for at all.
+            pendingCommandIds: admin.firestore.FieldValue.arrayRemove(commandId),
             lastCommandTimeoutId: commandId,
             lastCommandTimeoutAtMs: now,
             health: {

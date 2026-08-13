@@ -118,6 +118,10 @@ async function ackDeviceCommand(req, res) {
       lastAckAtMs: now,
       lastAckCommandId: normalizedCommandId,
       lastAckStatus: normalizedStatus,
+      // Done with, whatever the outcome - executed, failed or rejected. Leaving
+      // it queued would hand the device the same command on its next poll and
+      // block everything behind it.
+      pendingCommandIds: admin.firestore.FieldValue.arrayRemove(normalizedCommandId),
       lastSeenAtMs: now,
       lastSeenAt: admin.firestore.FieldValue.serverTimestamp(),
       health: {

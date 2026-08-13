@@ -127,6 +127,26 @@ const dispatchDeviceCommand = async ({
     {
       userId,
       deviceId: targetDeviceId,
+      // Queued, not overwritten.
+      //
+      // `lastCommandId` is a single pointer, and getDeviceCommand followed it -
+      // so of two commands issued inside one poll interval, only the later one
+      // was ever reachable. The earlier document was written, never fetched, and
+      // timed out, which then emailed the user about a failure the system had
+      // caused itself.
+      //
+      // Observed from the UI: switching both outlets off a second apart left
+      // outlet 1 running at 54 W with a delivery-failure notification, and it
+      // took a second press to actually turn it off. The same race cut the wrong
+      // outlet during an auto-cutoff; that was worked around in handleSafetyAlerts
+      // by dispatching sequentially, which made the ordering deterministic but
+      // still delivered only the last command. This is the actual fix.
+      //
+      // arrayUnion is atomic per element, so concurrent dispatches both land
+      // without a transaction, and no composite index is needed.
+      pendingCommandIds: admin.firestore.FieldValue.arrayUnion(commandRef.id),
+      // Retained: the clients read it for "last command ack", and a device
+      // fetching one command at a time still reports against it.
       lastCommandId: commandRef.id,
       lastCommandIssuedAtMs: issuedAtMs,
       lastCommandDeadlineAtMs: deadlineAtMs,

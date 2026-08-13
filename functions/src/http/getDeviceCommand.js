@@ -7,7 +7,7 @@ const {
   validateDeviceRequest,
 } = require('../lib/deviceSecurity');
 
-const TERMINAL_ACK_STATUS = new Set(['executed', 'failed', 'rejected', 'timeout']);
+const { selectNextCommand } = require('../lib/deviceCommandQueue');
 
 // A successful poll used to write nothing, so `health.status` only ever meant
 // "posted telemetry recently". The ESP32 polls this endpoint constantly, which
@@ -108,51 +108,29 @@ async function getDeviceCommand(req, res) {
     // the status to degraded.
     await markDeviceSeenOnPoll(deviceRef, deviceData, now);
 
-    const latestCommandId = String(deviceData.lastCommandId || '').trim();
     const latestCommandIssuedAtMs = Number(deviceData.lastCommandIssuedAtMs || 0);
-    const lastAckCommandId = String(deviceData.lastAckCommandId || '').trim();
-    const clientLastCommandId = String(lastCommandId || '').trim();
 
-    if (!latestCommandId || latestCommandId === lastAckCommandId || latestCommandId === clientLastCommandId) {
-      return res.status(200).json({
-        success: true,
-        hasCommand: false,
-      });
-    }
+    // Which command to hand over lives in deviceCommandQueue so it can be tested
+    // without device auth or a live Firestore. This function owns the I/O only.
+    const selection = await selectNextCommand({
+      pendingIds: deviceData.pendingCommandIds,
+      pointerCommandId: deviceData.lastCommandId,
+      lastAckCommandId: deviceData.lastAckCommandId,
+      clientLastCommandId: lastCommandId,
+      deviceId: normalizedDeviceId,
+      nowMs: now,
+      loadCommand: async (commandId) => {
+        const snapshot = await db.doc(`users/${userId}/device_commands/${commandId}`).get();
+        return snapshot.exists ? snapshot.data() || {} : null;
+      },
+    });
 
-    const commandRef = db.doc(`users/${userId}/device_commands/${latestCommandId}`);
-    const commandDoc = await commandRef.get();
-
-    if (!commandDoc.exists) {
-      return res.status(200).json({
-        success: true,
-        hasCommand: false,
-      });
-    }
-
-    const commandData = commandDoc.data() || {};
-    const commandDeviceId = String(commandData.deviceId || '').trim();
-    if (commandDeviceId && commandDeviceId !== normalizedDeviceId) {
-      return res.status(403).json({
-        success: false,
-        error: 'Command does not belong to this device',
-      });
-    }
-
-    const delivery = commandData.delivery || {};
-    const ackStatus = String(delivery.lastAckStatus || commandData.acknowledgment?.status || '').trim().toLowerCase();
-    if (TERMINAL_ACK_STATUS.has(ackStatus)) {
-      return res.status(200).json({
-        success: true,
-        hasCommand: false,
-      });
-    }
-
-    const deadlineAtMs = Number(delivery.deadlineAtMs || 0);
-    if (deadlineAtMs && now > deadlineAtMs) {
-      await commandRef.set({
+    // Expired entries are recorded and dropped, never returned - a stale command
+    // must not stall the ones behind it.
+    for (const { commandId, command } of selection.expired) {
+      await db.doc(`users/${userId}/device_commands/${commandId}`).set({
         delivery: {
-          ...delivery,
+          ...(command.delivery || {}),
           status: 'failed',
           lastAckStatus: 'timeout',
           timedOut: true,
@@ -160,7 +138,7 @@ async function getDeviceCommand(req, res) {
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         },
         acknowledgment: {
-          ...(commandData.acknowledgment || {}),
+          ...(command.acknowledgment || {}),
           status: 'failed',
           details: 'Command timed out waiting for device acknowledgement',
           receivedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -168,7 +146,7 @@ async function getDeviceCommand(req, res) {
       }, { merge: true });
 
       await deviceRef.set({
-        lastCommandTimeoutId: latestCommandId,
+        lastCommandTimeoutId: commandId,
         lastCommandTimeoutAtMs: now,
         health: {
           status: 'degraded',
@@ -179,18 +157,33 @@ async function getDeviceCommand(req, res) {
         },
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       }, { merge: true });
+    }
 
-      return res.status(200).json({
-        success: true,
-        hasCommand: false,
+    // One write for everything resolved on this poll, rather than one per entry.
+    if (selection.settled.length > 0) {
+      await deviceRef.set({
+        pendingCommandIds: admin.firestore.FieldValue.arrayRemove(...selection.settled),
+      }, { merge: true });
+    }
+
+    if (selection.outcome === 'mismatch') {
+      return res.status(403).json({
+        success: false,
+        error: 'Command does not belong to this device',
       });
     }
+
+    if (selection.outcome !== 'deliver') {
+      return res.status(200).json({ success: true, hasCommand: false });
+    }
+
+    const commandData = selection.command;
 
     return res.status(200).json({
       success: true,
       hasCommand: true,
       command: {
-        commandId: latestCommandId,
+        commandId: selection.commandId,
         action: String(commandData.action || '').trim().toLowerCase(),
         outletId: String(commandData.outletId || '').trim(),
         reason: String(commandData.reason || '').trim(),
