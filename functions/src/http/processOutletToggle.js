@@ -3,6 +3,7 @@ const logger = require('firebase-functions/logger');
 const { HttpsError } = require('firebase-functions/v2/https');
 const { dispatchDeviceCommand } = require('../lib/deviceCommandDispatcher');
 const { PENDING_STATUS_WINDOW_MS } = require('../lib/outletStatus');
+const { resolveOutletLogName } = require('../lib/applianceDetector');
 
 const HTTPS_ERROR_CODES = new Set([
   'cancelled',
@@ -91,7 +92,7 @@ async function processOutletToggle(request) {
       .add({
         timestamp: admin.firestore.FieldValue.serverTimestamp(),
         outlet: outletNumber,
-        outletName: outletData.applianceName || `Outlet ${outletNumber}`,
+        outletName: resolveOutletLogName(outletData, outletNumber),
         action: status ? 'on' : 'off',
         source: 'manual',
         power: outletData.power || 0,

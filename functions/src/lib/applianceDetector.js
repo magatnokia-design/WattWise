@@ -450,6 +450,83 @@ const buildApplianceSignature = (runState, label) => {
   };
 };
 
+/**
+ * Is the load on this outlet still the appliance the outlet is named after?
+ *
+ * The name is a label the user set once; the appliance behind it can be
+ * unplugged and replaced at any moment, and nothing was checking. So an outlet
+ * named "LED Lamp" went on calling itself an LED Lamp while a 60 W ceiling fan
+ * ran on it - on the dashboard, in the history log written at switch-on, and in
+ * the per-appliance energy split. The system had the evidence to know better and
+ * never asked the question.
+ *
+ * Asked by scoring the live run against the learned signature saved under that
+ * name, not by comparing labels: the generic detector can call a run "Laptop
+ * Charger" when it is genuinely the user's fan, and a label mismatch there is
+ * ambiguity, not a swapped appliance.
+ *
+ * States:
+ *   unnamed    nothing to check - the outlet has no user-given name
+ *   unknown    named, but no signature learned yet, or too few samples so far
+ *   confirmed  the run matches the named appliance's signature
+ *   changed    it does not; whatever is plugged in, it is not that
+ *
+ * `changed` is the one that matters: it is the system's only way of saying "the
+ * name on this outlet is currently wrong", and it must never be inferred from
+ * silence. `unknown` is not `changed`.
+ */
+const matchNamedAppliance = (runState, label, userProfiles) => {
+  const normalizedLabel = String(label || '').trim();
+  if (!normalizedLabel || isPlaceholderLabel(normalizedLabel)) {
+    return { state: 'unnamed', score: null };
+  }
+
+  const features = extractRunFeatures(
+    normalizeDetectionState(runState, runState?.lastStatus || 'off')
+  );
+
+  if (!features || features.sampleCount < MIN_SAMPLE_COUNT) {
+    return { state: 'unknown', score: null };
+  }
+
+  const profile = normalizeUserProfiles(userProfiles).find(
+    (entry) => entry.label.toLowerCase() === normalizedLabel.toLowerCase()
+  );
+
+  // Named but never learned. The user typed a label; that is a claim, not a
+  // measurement, and there is nothing to check it against.
+  if (!profile) {
+    return { state: 'unknown', score: null };
+  }
+
+  const { score } = scoreUserProfile(features, profile);
+
+  return {
+    state: score <= USER_PROFILE_MAX_SCORE ? 'confirmed' : 'changed',
+    score: Number(score.toFixed(3)),
+  };
+};
+
+/**
+ * The name to record on a history line for an outlet.
+ *
+ * A log entry is permanent, so it must not assert an appliance the system has
+ * already measured as no longer being there. "LED Lamp turned ON" was written
+ * for a run that was a 60 W ceiling fan, purely because the label had not been
+ * updated yet - and unlike a live screen, a log cannot correct itself later.
+ *
+ * Falls back to the outlet's slot number, which is always true.
+ */
+const resolveOutletLogName = (outletData, outletNumber) => {
+  const fallback = `Outlet ${outletNumber}`;
+  const name = String(outletData?.applianceName || '').trim();
+
+  if (!name || isPlaceholderLabel(name)) return fallback;
+  if (outletData?.applianceIdentity?.state === 'changed') return fallback;
+
+  return name;
+};
+
 const detectApplianceFromRunState = (runState, options = {}) => {
   const features = extractRunFeatures(runState);
   if (!features) {
@@ -560,6 +637,8 @@ module.exports = {
   updateDetectionState,
   shouldEvaluateLive,
   detectApplianceFromRunState,
+  matchNamedAppliance,
+  resolveOutletLogName,
   normalizeUserProfiles,
   buildApplianceSignature,
 };

@@ -103,6 +103,23 @@ const assertParity = (label, clientCopy) => {
       functionsCopy.calculatePelcoIIIBill(testCase.kwh, options),
       `${label}: ${testCase.kwh} kWh produces a different bill from the Functions copy`
     );
+
+    // The rate every live figure is priced with - per-hour cost, today's cost,
+    // the per-outlet split. It is independent of kWh, so one call per rate set
+    // covers it.
+    assert.equal(
+      typeof clientCopy.marginalRatePerKwh,
+      'function',
+      `${label}: marginalRatePerKwh is missing - live costs will be priced with `
+        + 'effectiveRate, which divides the fixed period charges by whatever '
+        + 'energy has accumulated and reports thousands of pesos per kWh'
+    );
+
+    assert.deepEqual(
+      clientCopy.marginalRatePerKwh(options),
+      functionsCopy.marginalRatePerKwh(options),
+      `${label}: marginal rate differs from the Functions copy`
+    );
   }
 };
 

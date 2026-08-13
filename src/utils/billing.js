@@ -282,3 +282,37 @@ export const calculatePelcoIIIBill = (
     effectiveRate: usage > 0 ? roundTo(totals.total / usage, 4) : 0,
   };
 };
+
+/**
+ * What one more kWh costs, with no fixed period charges in it.
+ *
+ * `effectiveRate` is total/usage, so every fixed peso in the bill is smeared
+ * across whatever energy happens to have accumulated so far. Early in a billing
+ * period that is a catastrophic divisor: 0.001 kWh against the P5.00 metering
+ * charge and its VAT reported an effective rate of P5,610/kWh, and the dashboard
+ * multiplied a 15.9 W lamp by it and told the user it was costing P89.20 an hour.
+ * The real figure is about 16 centavos.
+ *
+ * So: `effectiveRate` answers "what has this period cost me per kWh so far" and
+ * is only meaningful once a period's worth of energy exists. This answers "what
+ * does running this appliance cost", and is the one to use for any live or
+ * partial quantity - per-hour projections, today's cost, per-outlet splits.
+ *
+ * Derived from the model rather than restated, so it cannot drift from it.
+ */
+export const marginalRatePerKwh = ({
+  supplyRates = null,
+  profiles = null,
+  profileId = null,
+  isLifeline = false,
+} = {}) => {
+  const bill = calculatePelcoIIIBill(1, {
+    supplyRates,
+    profiles,
+    profileId,
+    isLifeline,
+    includePeriodFlats: false,
+  });
+
+  return toNumber(bill?.totals?.total);
+};

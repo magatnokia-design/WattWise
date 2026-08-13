@@ -7,6 +7,8 @@ const {
   updateDetectionState,
   shouldEvaluateLive,
   detectApplianceFromRunState,
+  matchNamedAppliance,
+  resolveOutletLogName,
   normalizeUserProfiles,
   buildApplianceSignature,
 } = require('../src/lib/applianceDetector');
@@ -256,4 +258,101 @@ test('updateDetectionState resets counters when outlet turns off', () => {
   assert.equal(state.lastStatus, 'off');
   assert.equal(state.sampleCount, 0);
   assert.equal(state.runStartedAtMs, null);
+});
+// --- Appliance identity -----------------------------------------------------
+//
+// The scenario these cover happened on real hardware: an outlet named "LED Lamp"
+// with a learned 16 W signature had a 60 W ceiling fan plugged into it, and the
+// whole system went on calling it an LED Lamp - the dashboard, the history line
+// written at switch-on, and the per-appliance energy split.
+
+const LAMP_SIGNATURE = {
+  label: 'LED Lamp',
+  meanPower: 16,
+  peakPower: 16.4,
+  stdDevPower: 0.4,
+  activeRatio: 0.9,
+  lowRatio: 1,
+};
+
+test('matchNamedAppliance confirms the appliance it was named after', () => {
+  const run = buildRunState({ powerStart: 16, jitter: 0.4, sampleCount: 40 });
+  const result = matchNamedAppliance(run, 'LED Lamp', [LAMP_SIGNATURE]);
+
+  assert.equal(result.state, 'confirmed');
+  assert.ok(result.score <= 0.45);
+});
+
+test('matchNamedAppliance reports a swapped appliance as changed', () => {
+  // The fan that was actually plugged in.
+  const run = buildRunState({ powerStart: 60, jitter: 3, sampleCount: 40 });
+  const result = matchNamedAppliance(run, 'LED Lamp', [LAMP_SIGNATURE]);
+
+  assert.equal(result.state, 'changed');
+});
+
+test('matchNamedAppliance says unknown rather than changed with nothing learned', () => {
+  // A typed name is a claim, not a measurement. Reporting 'changed' here would
+  // accuse the user of swapping an appliance the system never measured.
+  const run = buildRunState({ powerStart: 60, jitter: 3, sampleCount: 40 });
+
+  assert.equal(matchNamedAppliance(run, 'LED Lamp', []).state, 'unknown');
+  assert.equal(matchNamedAppliance(run, 'LED Lamp', null).state, 'unknown');
+  assert.equal(
+    matchNamedAppliance(run, 'Something Else', [LAMP_SIGNATURE]).state,
+    'unknown'
+  );
+});
+
+test('matchNamedAppliance treats the outlet placeholder as unnamed', () => {
+  const run = buildRunState({ powerStart: 60, jitter: 3, sampleCount: 40 });
+
+  assert.equal(matchNamedAppliance(run, 'Outlet 1', [LAMP_SIGNATURE]).state, 'unnamed');
+  assert.equal(matchNamedAppliance(run, '', [LAMP_SIGNATURE]).state, 'unnamed');
+});
+
+test('matchNamedAppliance withholds a verdict until the run is measurable', () => {
+  const brief = buildRunState({ powerStart: 60, jitter: 3, sampleCount: 2 });
+  assert.equal(matchNamedAppliance(brief, 'LED Lamp', [LAMP_SIGNATURE]).state, 'unknown');
+
+  const idle = normalizeDetectionState(null, 'off');
+  assert.equal(matchNamedAppliance(idle, 'LED Lamp', [LAMP_SIGNATURE]).state, 'unknown');
+});
+
+test('resolveOutletLogName drops a name the measurements contradict', () => {
+  assert.equal(
+    resolveOutletLogName(
+      { applianceName: 'LED Lamp', applianceIdentity: { state: 'changed' } },
+      1
+    ),
+    'Outlet 1'
+  );
+});
+
+test('resolveOutletLogName keeps a confirmed or unverified name', () => {
+  assert.equal(
+    resolveOutletLogName(
+      { applianceName: 'LED Lamp', applianceIdentity: { state: 'confirmed' } },
+      1
+    ),
+    'LED Lamp'
+  );
+
+  // Unknown is not a contradiction - the name is all we have, so it stands.
+  assert.equal(
+    resolveOutletLogName(
+      { applianceName: 'LED Lamp', applianceIdentity: { state: 'unknown' } },
+      1
+    ),
+    'LED Lamp'
+  );
+
+  assert.equal(resolveOutletLogName({ applianceName: 'LED Lamp' }, 1), 'LED Lamp');
+});
+
+test('resolveOutletLogName falls back for unnamed and placeholder outlets', () => {
+  assert.equal(resolveOutletLogName({}, 2), 'Outlet 2');
+  assert.equal(resolveOutletLogName({ applianceName: '   ' }, 2), 'Outlet 2');
+  assert.equal(resolveOutletLogName({ applianceName: 'Outlet 2' }, 2), 'Outlet 2');
+  assert.equal(resolveOutletLogName(null, 1), 'Outlet 1');
 });

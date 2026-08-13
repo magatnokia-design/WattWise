@@ -49,7 +49,7 @@ const HistoryScreen = () => {
   // a separate paginated fetch would fight with.
   const [logLimit, setLogLimit] = useState(ACTIVITY_PAGE_SIZE);
 
- const { activityLogs, usageHistory, loading, hasMore, rateProfileId, subscribeActivityLogs, fetchUsageHistory } = useHistory();
+ const { activityLogs, usageHistory, loading, hasMore, rateProfileId, supplyRates, subscribeActivityLogs, fetchUsageHistory } = useHistory();
 
  const filterToOutletValue = useMemo(() => ({
    All: 'all',
@@ -129,14 +129,17 @@ useEffect(() => {
     // the once-a-month P5.00 metering charge, so summing them would leave the
     // fee out entirely - just as summing days that each included it charged
     // the fee once per day, which is what this header used to show.
-    const totalCost = calculatePelcoIIIBill(totalKwh, { profileId: rateProfileId }).totals.total;
+    const totalCost = calculatePelcoIIIBill(totalKwh, {
+      supplyRates,
+      profileId: rateProfileId,
+    }).totals.total;
 
     return {
       totalRecords: activeTab === 0 ? visibleActivityLogs.length : usageHistory.length,
       totalKwh: totalKwh.toFixed(2),
       totalCost: formatCost(totalCost),
     };
-  }, [usageHistory, visibleActivityLogs.length, activeTab, rateProfileId]);
+  }, [usageHistory, visibleActivityLogs.length, activeTab, rateProfileId, supplyRates]);
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>

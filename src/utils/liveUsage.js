@@ -5,7 +5,7 @@
 // outlets already carry `energyTodayKwh`, accumulated by updateOutletMetrics on
 // every telemetry post, so today can be assembled on the client in the same
 // shape a rolled-up day uses and dropped into the same code paths.
-import { calculatePelcoIIIBill } from './billing';
+import { calculatePelcoIIIBill, marginalRatePerKwh } from './billing';
 
 const MANILA_OFFSET_MS = 8 * 60 * 60 * 1000;
 
@@ -77,10 +77,17 @@ export const buildLiveTodayEntry = (outlets, { rateProfileId = null, supplyRates
 
   if (totalEnergy <= 0) return null;
 
+  // Marginal, exactly as processDailyRollup prices a closed day. A day is not a
+  // billing period, so the once-a-month P5.00 metering charge has no business in
+  // it - and with it included, a day on which almost nothing ran was costed at
+  // P5.61 for 0.001 kWh, which reads as a billing fault rather than a fixed fee.
+  // It also made today's live row and yesterday's stored row two different kinds
+  // of number sitting in the same list.
   const bill = calculatePelcoIIIBill(totalEnergy, {
     date: new Date(),
     supplyRates,
     profileId: rateProfileId,
+    includePeriodFlats: false,
     daysInPeriod: 1,
     billingDays: getDaysInManilaMonth(dateKey),
   });
@@ -163,14 +170,12 @@ export const buildLiveAppliances = (outlets, { rateProfileId = null, supplyRates
     const powerW = Math.max(0, toNumber(outlet.power));
     const isOn = String(outlet.status || '').trim().toLowerCase() === 'on';
 
-    const bill = calculatePelcoIIIBill(Math.max(energyKwh, 0.0001), {
-      date: new Date(),
-      supplyRates,
-    profileId: rateProfileId,
-      daysInPeriod: 1,
-      billingDays: getDaysInManilaMonth(dateKey),
-    });
-    const perKwhRate = toNumber(bill?.effectiveRate) || toNumber(bill?.totals?.total);
+    // One rate for both figures below, and it must be the marginal one. The old
+    // line took `effectiveRate` from a bill computed on `Math.max(energy, 0.0001)`
+    // - so on a fresh day it divided the full P5.60 of fixed charges by 0.0001 kWh
+    // and priced the outlet at tens of thousands of pesos per kWh. That is what
+    // put "P22.38/hr" under a 15.9 W lamp.
+    const perKwhRate = marginalRatePerKwh({ supplyRates, profileId: rateProfileId });
 
     return {
       outletNumber,

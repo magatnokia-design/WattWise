@@ -81,6 +81,11 @@ export const useHistory = () => {
   const [usageRange, setUsageRange] = useState({ startDate: null, endDate: null });
   const [outlets, setOutlets] = useState([]);
   const [rateProfileId, setRateProfileId] = useState(null);
+  // The user's own Block 1 rates. Without them this screen priced everything at
+  // the seeded profile while Analytics and Compare Months used what the user
+  // actually saved, so the same month read P8.82 here and P8.34 there off the
+  // same kWh. Same omission the comparison screen had.
+  const [supplyRates, setSupplyRates] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [lastDoc, setLastDoc] = useState(null);
@@ -100,12 +105,15 @@ export const useHistory = () => {
       if (!user?.uid) {
         setOutlets([]);
         setRateProfileId(null);
+        setSupplyRates(null);
         return;
       }
 
       userService.getUserPreferences(user.uid)
         .then((result) => {
-          if (result?.success) setRateProfileId(result.data?.rateProfileId || null);
+          if (!result?.success) return;
+          setRateProfileId(result.data?.rateProfileId || null);
+          setSupplyRates(result.data?.supplyRates || null);
         })
         .catch((prefsError) => console.warn('Could not load rate profile:', prefsError?.message));
 
@@ -225,7 +233,7 @@ export const useHistory = () => {
   // from live outlet telemetry and merged in here. Without this the current day
   // was simply missing from History until the next morning.
   const usageHistory = useMemo(() => {
-    const liveToday = buildLiveTodayEntry(outlets, { rateProfileId });
+    const liveToday = buildLiveTodayEntry(outlets, { rateProfileId, supplyRates });
 
     // Only splice today in when the selected range actually covers it -
     // otherwise browsing an earlier week would show today's row as well.
@@ -240,7 +248,7 @@ export const useHistory = () => {
     return normalizeUsageHistory(
       [...merged].sort((a, b) => String(b?.date).localeCompare(String(a?.date)))
     );
-  }, [storedUsage, outlets, rateProfileId, usageRange]);
+  }, [storedUsage, outlets, rateProfileId, supplyRates, usageRange]);
 
   return {
     activityLogs,
@@ -249,9 +257,10 @@ export const useHistory = () => {
     error,
     hasMore,
     // The screen prices its header total from the range's total energy rather
-    // than by summing per-day costs, so it needs the same profile the rows
-    // were priced with.
+    // than by summing per-day costs, so it needs the same rates the rows
+    // were priced with - the profile AND the user's own Block 1 figures.
     rateProfileId,
+    supplyRates,
     fetchActivityLogs,
     subscribeActivityLogs,
     fetchUsageHistory,

@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect } from 'react';
 import { outletService, userService } from '../../../services/firebase';
 import { auth } from '../../../services/firebase/config';
 import { onAuthStateChanged } from 'firebase/auth';
-import { calculatePelcoIIIBill } from '../../../utils/billing';
+import { calculatePelcoIIIBill, marginalRatePerKwh } from '../../../utils/billing';
 
 const DEFAULT_OUTLET_METRICS = {
   voltage: 0,
@@ -22,6 +22,8 @@ const EMPTY_OUTLET_SUGGESTION = {
   // between same-wattage appliances the measurements genuinely cannot separate.
   candidates: [],
   ambiguous: false,
+  identityState: 'unknown',
+  recognised: false,
   showBadge: false,
   canAccept: false,
 };
@@ -147,6 +149,21 @@ const buildOutletSuggestion = (outlet = {}, applianceName = '', runtimeState = {
     return { ...EMPTY_OUTLET_SUGGESTION };
   }
 
+  const identity = outlet.applianceIdentity || null;
+
+  // Read before every early return below. Whether the outlet's name still
+  // describes what is plugged in is a separate question from whether the
+  // detector has a name to offer, and the two have different answers for the
+  // case that matters most: a load the detector cannot place, on an outlet that
+  // is named. Returning early there reported no suggestion AND no doubt, so the
+  // stale name was displayed as fact - exactly the bug this is meant to catch.
+  const identityState = String(identity?.state || 'unknown');
+  const withIdentity = (base) => ({
+    ...base,
+    identityState,
+    recognised: identity?.recognised === true,
+  });
+
   const detectionUpdatedAtMs = toEpochMs(outlet.applianceDetection?.updatedAtMs);
   const runStartedAtMs = toEpochMs(outlet.detectionState?.runStartedAtMs);
   const hasCurrentRunDetection =
@@ -154,17 +171,26 @@ const buildOutletSuggestion = (outlet = {}, applianceName = '', runtimeState = {
     (runStartedAtMs <= 0 || detectionUpdatedAtMs >= runStartedAtMs);
 
   if (!hasCurrentRunDetection) {
-    return { ...EMPTY_OUTLET_SUGGESTION };
+    return withIdentity(EMPTY_OUTLET_SUGGESTION);
   }
 
   const suggestedName = String(outlet.autoDetectedAppliance || '').trim();
   if (!suggestedName) {
-    return { ...EMPTY_OUTLET_SUGGESTION };
+    return withIdentity(EMPTY_OUTLET_SUGGESTION);
   }
 
   const normalizedCurrent = String(applianceName || '').trim().toLowerCase();
   const normalizedSuggested = suggestedName.toLowerCase();
-  const isDifferent = !!suggestedName && normalizedCurrent !== normalizedSuggested;
+
+  // Whether to offer a name is decided by the backend now (`suggestionPending`
+  // on applianceIdentity), so the phone and the web cannot disagree about it -
+  // they did, and the site kept offering a suggestion this app had accepted.
+  // The label comparison stays as the fallback for outlet documents written
+  // before that field existed.
+  const isDifferent = typeof identity?.suggestionPending === 'boolean'
+    ? identity.suggestionPending
+    : (!!suggestedName && normalizedCurrent !== normalizedSuggested);
+
   const features = outlet.applianceDetection?.features || {};
 
   const rawCandidates = Array.isArray(outlet.applianceDetection?.candidates)
@@ -189,6 +215,14 @@ const buildOutletSuggestion = (outlet = {}, applianceName = '', runtimeState = {
     sampleCount: toOptionalNumber(features.sampleCount),
     candidates,
     ambiguous: outlet.applianceDetection?.ambiguous === true,
+    // 'changed' means the measurements say the outlet's name is currently wrong.
+    // The UI needs this separately from the suggestion: it is the difference
+    // between "here is a name you could use" and "the name shown above is not
+    // what is plugged in".
+    identityState,
+    // The match came from one of this account's saved signatures, not a generic
+    // wattage range - the appliance was recognised on being plugged back in.
+    recognised: identity?.recognised === true,
     showBadge: isDifferent,
     canAccept: isDifferent,
   };
@@ -417,14 +451,26 @@ export const useOutletControl = () => {
   const totalPowerW =
     toMetricNumber(outlet1Metrics.power) + toMetricNumber(outlet2Metrics.power);
 
-  const bill = calculatePelcoIIIBill(totalEnergyKwh, { supplyRates, profileId: rateProfileId });
+  // `totalEnergyKwh` is TODAY's energy, so today is what this prices - marginally,
+  // matching processDailyRollup and the live History row. Including the
+  // once-a-month P5.00 metering charge here showed "Est. cost P5.61" beside
+  // "0.00 kWh", which is a true bill line answering a question nobody asked.
+  const bill = calculatePelcoIIIBill(totalEnergyKwh, {
+    supplyRates,
+    profileId: rateProfileId,
+    includePeriodFlats: false,
+  });
   const estimatedCost = toMetricNumber(bill?.totals?.total);
-  const effectiveRate = toMetricNumber(bill?.effectiveRate);
-  // Effective rate is 0 until some energy accumulates, so fall back to a
-  // 1 kWh probe to price the current draw on day one.
-  const perKwhRate = effectiveRate > 0
-    ? effectiveRate
-    : toMetricNumber(calculatePelcoIIIBill(1, { supplyRates, profileId: rateProfileId })?.totals?.total);
+
+  // The marginal rate, never `bill.effectiveRate`. The latter divides the whole
+  // bill - including the once-a-period P5.00 metering charge and its VAT - by
+  // however much energy has accumulated, so at the start of a month it explodes:
+  // 0.001 kWh gave an "effective" P5,610/kWh, and a 15.9 W lamp was reported as
+  // costing P89.20 an hour. Pricing an hour of draw is a marginal question, so it
+  // takes the marginal rate.
+  const perKwhRate = toMetricNumber(
+    marginalRatePerKwh({ supplyRates, profileId: rateProfileId })
+  );
   const estimatedCostPerHour = (totalPowerW / 1000) * perKwhRate;
 
   return {

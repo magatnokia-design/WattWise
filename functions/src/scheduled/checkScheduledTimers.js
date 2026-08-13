@@ -3,6 +3,7 @@ const logger = require('firebase-functions/logger');
 const { dispatchDeviceCommand } = require('../lib/deviceCommandDispatcher');
 const { createNotification } = require('../lib/notifications');
 const { getManilaTimeString, getManilaWeekday } = require('../lib/manilaTime');
+const { resolveOutletLogName } = require('../lib/applianceDetector');
 
 const DAY_LABEL_TO_INDEX = {
   sun: 0,
@@ -132,7 +133,7 @@ async function checkScheduledTimers() {
           await db.collection(`users/${userId}/history_logs`).add({
             timestamp: admin.firestore.FieldValue.serverTimestamp(),
             outlet: Number.isNaN(outletNumber) ? null : outletNumber,
-            outletName: outletData.applianceName || `Outlet ${outletNumber}`,
+            outletName: resolveOutletLogName(outletData, outletNumber),
             action: newStatus ? 'on' : 'off',
             source: 'schedule',
             power: outletData.power || 0,
@@ -233,7 +234,7 @@ async function checkScheduledTimers() {
           await db.collection(`users/${userId}/history_logs`).add({
             timestamp: admin.firestore.FieldValue.serverTimestamp(),
             outlet: Number.isNaN(outletNumber) ? null : outletNumber,
-            outletName: outletData.applianceName || `Outlet ${outletNumber}`,
+            outletName: resolveOutletLogName(outletData, outletNumber),
             action: newStatus ? 'on' : 'off',
             source: 'countdown',
             power: outletData.power || 0,

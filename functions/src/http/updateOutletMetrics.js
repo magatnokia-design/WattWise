@@ -13,6 +13,8 @@ const {
   updateDetectionState,
   shouldEvaluateLive,
   detectApplianceFromRunState,
+  matchNamedAppliance,
+  isPlaceholderLabel,
 } = require('../lib/applianceDetector');
 const { dispatchDeviceCommand } = require('../lib/deviceCommandDispatcher');
 const { resolveOutletStatus } = require('../lib/outletStatus');
@@ -190,7 +192,12 @@ async function updateOutletMetrics(req, res) {
       const detectionOptions = { userProfiles: userData?.applianceProfiles };
 
       let detectionResult = null;
+      // The run state the conclusions below are drawn from - the just-ended run
+      // when the outlet is switching off, otherwise the run as it now stands.
+      let evaluatedState = null;
+
       if (isRunEnding) {
+        evaluatedState = normalizedPreviousState;
         detectionResult = detectApplianceFromRunState(normalizedPreviousState, detectionOptions);
       }
 
@@ -200,7 +207,8 @@ async function updateOutletMetrics(req, res) {
         timestampMs,
       });
 
-      if (!detectionResult && shouldEvaluateLive(nextDetectionState)) {
+      if (!evaluatedState && shouldEvaluateLive(nextDetectionState)) {
+        evaluatedState = nextDetectionState;
         detectionResult = detectApplianceFromRunState(nextDetectionState, detectionOptions);
       }
 
@@ -252,9 +260,19 @@ async function updateOutletMetrics(req, res) {
         safety: outletSafety,
       };
 
+      // What the outlet claims to be, ignoring the "Outlet 1" placeholder - that
+      // is a slot number, not an appliance, and treating it as a name would have
+      // every run come back "changed".
+      const rawApplianceName = String(previousOutletData.applianceName || '').trim();
+      const namedAs = isPlaceholderLabel(rawApplianceName) ? '' : rawApplianceName;
+
       if (isRunStarting) {
         outletUpdate.autoDetectedAppliance = '';
         outletUpdate.applianceDetection = admin.firestore.FieldValue.delete();
+        // A new run has proved nothing yet. Carrying the previous run's verdict
+        // across would let a stale "confirmed" vouch for whatever got plugged in
+        // next, which is precisely the failure this field exists to catch.
+        outletUpdate.applianceIdentity = admin.firestore.FieldValue.delete();
       }
 
       if (detectionResult) {
@@ -270,6 +288,40 @@ async function updateOutletMetrics(req, res) {
       } else if (isRunEnding) {
         outletUpdate.autoDetectedAppliance = '';
         outletUpdate.applianceDetection = admin.firestore.FieldValue.delete();
+      }
+
+      // Whether the load matches the name on the outlet. Written here, once, so
+      // both clients read the same verdict instead of each re-deriving it from
+      // the raw fields - the phone compared the suggestion against the current
+      // name and hid the prompt, the web did not, and the site went on offering
+      // to accept a suggestion the user had already accepted on their phone.
+      //
+      // `suggestionPending` is that shared rule: offer a name when the outlet has
+      // none, or when the measurements say the named appliance is no longer the
+      // one running. Never when the identity is confirmed.
+      if (evaluatedState) {
+        const identity = matchNamedAppliance(
+          evaluatedState,
+          namedAs,
+          userData?.applianceProfiles
+        );
+
+        const measuredAs = detectionResult?.appliance || '';
+        const nameIsWrong = identity.state === 'changed';
+
+        outletUpdate.applianceIdentity = {
+          namedAs,
+          measuredAs,
+          state: identity.state,
+          matchScore: identity.score,
+          // The measured appliance was matched against one of this account's own
+          // saved signatures rather than a generic wattage range - this is what
+          // "WattWise recognised the appliance you plugged back in" means.
+          recognised: detectionResult?.matchSource === 'learned',
+          confidence: detectionResult?.confidence ?? null,
+          suggestionPending: !!measuredAs && (nameIsWrong || !namedAs),
+          updatedAtMs: now,
+        };
       }
 
       if (shouldDispatchOverPower) {

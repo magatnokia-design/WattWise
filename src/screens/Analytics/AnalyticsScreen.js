@@ -635,15 +635,32 @@ export const AnalyticsScreen = ({ navigation }) => {
       };
     }
 
-    const weeklyBuckets = [0, 0, 0, 0];
-    dailyValues.forEach((value, index) => {
-      weeklyBuckets[Math.min(3, Math.floor(index / 7))] += value;
-    });
+    // The month in 7-day blocks, labelled by the days each one actually covers.
+    //
+    // This used to be four fixed buckets with `Math.min(3, ...)`, which swept
+    // days 29-31 into "Week 4" - a bar ten days wide sitting beside three that
+    // were seven, always taller for that reason alone, and labelled as though it
+    // were not. Naming the span instead of the week number means the chart
+    // cannot misrepresent what it is adding up, whatever the month's length.
+    //
+    // The web client charts the same month day by day. That is the better view
+    // where there is room for 31 bars; this is the phone.
+    const blocks = [];
+    for (let index = 0; index < dailyValues.length; index += 7) {
+      const window = dailyValues.slice(index, index + 7);
+      const firstDay = days[index].getDate();
+      const lastDay = days[index + window.length - 1].getDate();
+
+      blocks.push({
+        label: firstDay === lastDay ? `${firstDay}` : `${firstDay}-${lastDay}`,
+        value: window.reduce((sum, value) => sum + value, 0),
+      });
+    }
 
     return {
       summary,
-      chartLabels: ['Week 1', 'Week 2', 'Week 3', 'Week 4'],
-      chartData: weeklyBuckets,
+      chartLabels: blocks.map((block) => block.label),
+      chartData: blocks.map((block) => block.value),
       billDetails: bill,
     };
   }, [selectedTab, rangeEntries, fallbackDaily, liveTodayEntry, rateProfileId, supplyRates]);

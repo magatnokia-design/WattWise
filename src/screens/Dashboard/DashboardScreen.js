@@ -33,10 +33,24 @@ const formatMetric = (value, unit, decimals = 1) => {
   return `${formatted} ${unit}`;
 };
 
+/**
+ * A kWh figure at a precision that can actually show it.
+ *
+ * Two decimals is right for a month and useless for an hour: a 16 W lamp running
+ * for four minutes is 0.001 kWh, which printed as "0.00 kWh" beside a live power
+ * reading that was plainly not zero. The web client shows three decimals and so
+ * the two clients disagreed on screen about whether anything had been measured.
+ *
+ * Below 1 kWh the third decimal is the only one carrying information, so it is
+ * shown; above that it is noise on a figure people read in whole kWh.
+ */
 const formatEnergyKwh = (value) => {
-  const formatted = toMetricNumber(value).toLocaleString(undefined, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
+  const parsed = toMetricNumber(value);
+  const decimals = parsed > 0 && Math.abs(parsed) < 1 ? 3 : 2;
+
+  const formatted = parsed.toLocaleString(undefined, {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
   });
   return `${formatted} kWh`;
 };
@@ -46,12 +60,20 @@ const formatEnergyKwh = (value) => {
  * power right now: while loading we stay blank rather than flashing "Not set",
  * and with no live load we say so instead of showing a stale saved name.
  */
-const formatApplianceName = (name, { hasLoad, isLoading }) => {
+const formatApplianceName = (name, { hasLoad, isLoading, identityState }) => {
   if (isLoading) return '—';
   if (!hasLoad) return 'Nothing plugged in';
 
   const normalized = String(name || '').trim();
-  return normalized ? normalized : 'Not set';
+  if (!normalized) return 'Not set';
+
+  // The measurements say this is no longer the appliance the outlet is named
+  // after. Printing the name unqualified is what let an outlet report "LED Lamp"
+  // while a 60 W ceiling fan ran on it, and the user is the one who has to
+  // notice - so say it, rather than quietly showing a name known to be wrong.
+  if (identityState === 'changed') return `Not ${normalized}`;
+
+  return normalized;
 };
 
 const formatPeso = (value) => {
@@ -96,10 +118,12 @@ export const DashboardScreen = ({ navigation }) => {
   const outlet1ApplianceLabel = formatApplianceName(outlet1ApplianceName, {
     hasLoad: outlet1HasLoad,
     isLoading: isLoadingOutlets,
+    identityState: outlet1Suggestion.identityState,
   });
   const outlet2ApplianceLabel = formatApplianceName(outlet2ApplianceName, {
     hasLoad: outlet2HasLoad,
     isLoading: isLoadingOutlets,
+    identityState: outlet2Suggestion.identityState,
   });
 
   const activeOutletsCount = (outlet1Status === true ? 1 : 0) + (outlet2Status === true ? 1 : 0);
