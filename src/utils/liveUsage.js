@@ -9,6 +9,9 @@ import { calculatePelcoIIIBill, marginalRatePerKwh } from './billing';
 
 const MANILA_OFFSET_MS = 8 * 60 * 60 * 1000;
 
+// Below this the PZEM is reporting its own noise floor, not an appliance.
+const LIVE_LOAD_FLOOR_W = 0.5;
+
 const pad = (value) => String(value).padStart(2, '0');
 
 const toNumber = (value) => {
@@ -168,10 +171,6 @@ export const buildLiveTodayEntry = (outlets, { rateProfileId = null, supplyRates
       resolveOutletPeakForDate(outlet1, dateKey),
       resolveOutletPeakForDate(outlet2, dateKey)
     ),
-    // Kept separate rather than folded into peakPower, so a screen showing live
-    // draw and a screen showing the day's peak cannot end up reading the same
-    // field under two different labels.
-    currentPower: Math.max(toNumber(outlet1.power), toNumber(outlet2.power)),
     // Today's peak hour stays unreported: the nightly rollup fills it in from
     // peakPowerTodayAtMs, and converting UTC to a Manila hour on the client to
     // show it a few hours early is not worth a second timezone implementation.
@@ -197,8 +196,16 @@ export const withLiveToday = (entries, liveEntry) => {
 /**
  * Per-appliance live state for the "right now" view: what is drawing power at
  * this moment, and what it has used today.
+ *
+ * `nowMs` is injectable but defaults to reading the clock here, matching how
+ * buildLiveTodayEntry resolves the Manila day internally. Callers pass nothing;
+ * the argument exists so the pending window below can be exercised without
+ * waiting on wall-clock time.
  */
-export const buildLiveAppliances = (outlets, { rateProfileId = null, supplyRates = null } = {}) => {
+export const buildLiveAppliances = (
+  outlets,
+  { rateProfileId = null, supplyRates = null, nowMs = Date.now() } = {}
+) => {
   const dateKey = getManilaDateKey();
 
   return [1, 2].map((outletNumber) => {
@@ -207,12 +214,40 @@ export const buildLiveAppliances = (outlets, { rateProfileId = null, supplyRates
     const powerW = Math.max(0, toNumber(outlet.power));
     const isOn = String(outlet.status || '').trim().toLowerCase() === 'on';
 
+    // A toggle sets `status` immediately and marks it pending, but the ESP32
+    // only learns about it on its next poll - so for that window the relay is
+    // still in its old position and the meter still reports the truth. An outlet
+    // switched off while a fan runs reads status 'off' and power 52.6 W at the
+    // same time, and both are correct.
+    //
+    // Without this the badge said "Off" beside "52.6 W", which reads as a broken
+    // sensor rather than a command in flight.
+    const pendingStatus = String(outlet.pendingStatus || '').trim().toLowerCase();
+    const pendingUntilMs = toNumber(outlet.pendingStatusUntilMs);
+    const isPending = (pendingStatus === 'on' || pendingStatus === 'off')
+      && pendingUntilMs > nowMs;
+
     // One rate for both figures below, and it must be the marginal one. The old
     // line took `effectiveRate` from a bill computed on `Math.max(energy, 0.0001)`
     // - so on a fresh day it divided the full P5.60 of fixed charges by 0.0001 kWh
     // and priced the outlet at tens of thousands of pesos per kWh. That is what
     // put "P22.38/hr" under a 15.9 W lamp.
     const perKwhRate = marginalRatePerKwh({ supplyRates, profileId: rateProfileId });
+
+    // The meter decides whether anything is being consumed, not the commanded
+    // state. This used to read `isOn && powerW > 0.5`, which during the pending
+    // window excluded an outlet that was genuinely still pulling 52.6 W - so the
+    // combined line under it read "Drawing 0.0 W" while a fan ran, and the
+    // per-hour cost it drives went to zero with it. The 0.5 W floor already
+    // rejects sensor noise; `isOn` was doing nothing the threshold did not.
+    const isDrawing = powerW > LIVE_LOAD_FLOOR_W;
+
+    // Only a real disagreement counts as switching: told to go off while still
+    // drawing, or told to come on while still drawing nothing. A command that
+    // matches what the meter already shows has nothing left to wait for.
+    const isSwitchingOff = isPending && pendingStatus === 'off' && isDrawing;
+    const isSwitchingOn = isPending && pendingStatus === 'on' && !isDrawing;
+    const switchingTo = isSwitchingOff ? 'off' : (isSwitchingOn ? 'on' : null);
 
     return {
       outletNumber,
@@ -221,9 +256,14 @@ export const buildLiveAppliances = (outlets, { rateProfileId = null, supplyRates
       energyKwh,
       costToday: energyKwh * perKwhRate,
       costPerHour: (powerW / 1000) * perKwhRate,
+      // What the outlet was told to be.
       isOn,
-      // Drawing power right now, as opposed to switched on with nothing plugged.
-      isDrawing: isOn && powerW > 0.5,
+      // What the meter says it is doing.
+      isDrawing,
+      // Set while the two disagree because the device has not polled yet, so a
+      // caller can say "Switching off..." rather than asserting either one.
+      isSwitching: switchingTo !== null,
+      switchingTo,
     };
   });
 };
