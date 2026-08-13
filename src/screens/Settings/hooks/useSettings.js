@@ -427,6 +427,45 @@ export const useSettings = () => {
     }
   }, []);
 
+  /**
+   * Rename one learned appliance signature, keeping its measurements.
+   *
+   * The callable also renames any outlet wearing the old label, so `outlet1Name`
+   * and `outlet2Name` are refreshed from the server rather than patched here -
+   * guessing which outlet it touched would be a second implementation of a rule
+   * the backend already applied.
+   */
+  const renameSavedAppliance = useCallback(async (fromLabel, toLabel) => {
+    setError(null);
+
+    try {
+      const userId = auth.currentUser?.uid;
+      if (!userId) throw new Error('User not authenticated');
+
+      const result = await outletService.renameApplianceProfile(userId, fromLabel, toLabel);
+      if (!result.success) {
+        throw new Error(result.error || 'Unable to rename saved appliance');
+      }
+
+      const from = String(fromLabel || '').trim().toLowerCase();
+      const to = String(toLabel || '').trim();
+
+      setSavedAppliances((previous) => previous.map((appliance) =>
+        appliance.label.toLowerCase() === from ? { ...appliance, label: to } : appliance
+      ));
+
+      if (result.data?.renamedOutlets?.length) {
+        await fetchSettings();
+      }
+
+      return { success: true };
+    } catch (err) {
+      setError(err.message);
+      console.error('Error renaming saved appliance:', err);
+      return { success: false, error: err.message };
+    }
+  }, [fetchSettings]);
+
   return {
     settings,
     savedAppliances,
@@ -441,5 +480,6 @@ export const useSettings = () => {
     updateOutletName,
     clearOutletDetection,
     removeSavedAppliance,
+    renameSavedAppliance,
   };
 };

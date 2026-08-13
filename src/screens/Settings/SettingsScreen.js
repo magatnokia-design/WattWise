@@ -15,6 +15,7 @@ import SupplyRateModal from './components/SupplyRateModal';
 import ESP32DeviceModal from './components/ESP32DeviceModal';
 import DeviceQRScannerModal from './components/DeviceQRScannerModal';
 import ProfileNameModal from './components/ProfileNameModal';
+import OutletNameModal from './components/OutletNameModal';
 import { useSettings } from './hooks/useSettings';
 import {
   formatVersion,
@@ -44,6 +45,9 @@ const SettingsScreen = ({ navigation }) => {
   const [deviceModalVisible, setDeviceModalVisible] = useState(false);
   const [scannerVisible, setScannerVisible] = useState(false);
   const [nameModalVisible, setNameModalVisible] = useState(false);
+  // Which saved appliance is being renamed, or null. Holds the label rather than
+  // a boolean so the modal knows what it is editing.
+  const [renamingAppliance, setRenamingAppliance] = useState(null);
   const {
     settings,
     savedAppliances,
@@ -55,6 +59,7 @@ const SettingsScreen = ({ navigation }) => {
     updateDeviceSettings,
     clearDeviceSettings,
     removeSavedAppliance,
+    renameSavedAppliance,
   } = useSettings();
 
   // Budget and rates are edited on other screens, so this screen reloads on
@@ -66,14 +71,18 @@ const SettingsScreen = ({ navigation }) => {
     }, [fetchSettings])
   );
 
-  const handleRemoveSavedAppliance = useCallback((label) => {
+  // Tapping a saved appliance offers both actions. Renaming used to mean
+  // forgetting and re-teaching, which discards the measured run the signature
+  // was built from - so the non-destructive option is offered first.
+  const handleSavedAppliancePress = useCallback((label) => {
     Alert.alert(
-      'Remove Saved Appliance',
-      `Forget the learned power signature for "${label}"? Detection will fall back to the built-in appliance profiles.`,
+      label,
+      'Rename keeps the measured power signature. Forget deletes it, and detection falls back to the built-in appliance profiles.',
       [
         { text: 'Cancel', style: 'cancel' },
+        { text: 'Rename', onPress: () => setRenamingAppliance(label) },
         {
-          text: 'Remove',
+          text: 'Forget',
           style: 'destructive',
           onPress: async () => {
             const result = await removeSavedAppliance(label);
@@ -85,6 +94,11 @@ const SettingsScreen = ({ navigation }) => {
       ]
     );
   }, [removeSavedAppliance]);
+
+  const handleRenameSavedAppliance = useCallback(
+    async (newName) => renameSavedAppliance(renamingAppliance, newName),
+    [renameSavedAppliance, renamingAppliance]
+  );
 
   // Shows the generation rate specifically, not the Block 1 sum - it is the
   // number printed on the bill, so the user can eyeball that it matches.
@@ -404,7 +418,7 @@ const SettingsScreen = ({ navigation }) => {
                   label={appliance.label}
                   value={formatApplianceSignature(appliance)}
                   showArrow
-                  onPress={() => handleRemoveSavedAppliance(appliance.label)}
+                  onPress={() => handleSavedAppliancePress(appliance.label)}
                 />
               </React.Fragment>
             ))
@@ -500,6 +514,18 @@ const SettingsScreen = ({ navigation }) => {
         visible={scannerVisible}
         onClose={handleScannerClose}
         onScanned={handleDeviceScanned}
+      />
+
+      {/* Rename a learned signature, keeping its measurements. */}
+      <OutletNameModal
+        visible={renamingAppliance !== null}
+        currentName={renamingAppliance || ''}
+        title="Rename Appliance"
+        subtitle="The learned power signature is kept, and any outlet using this name is renamed with it."
+        placeholder="Appliance name"
+        fieldLabel="Appliance name"
+        onClose={() => setRenamingAppliance(null)}
+        onSave={handleRenameSavedAppliance}
       />
     </SafeAreaView>
   );

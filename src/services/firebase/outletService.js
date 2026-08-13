@@ -373,6 +373,44 @@ export const outletService = {
     }
   },
 
+  /**
+   * Renames a saved appliance signature, keeping the measurements behind it.
+   *
+   * Forgetting and re-teaching was the only way to correct a name, and it costs
+   * the measured run - the detector then cannot recognise that appliance until
+   * it has been run again. The callable also renames any outlet using the old
+   * label, so the identity check keeps working.
+   */
+  renameApplianceProfile: async (userId, fromLabel, toLabel) => {
+    try {
+      if (!userId) {
+        throw new Error('User not authenticated');
+      }
+
+      const from = String(fromLabel || '').trim();
+      const to = String(toLabel || '').trim();
+
+      if (!from) throw new Error('The appliance to rename is required');
+      if (!to) throw new Error('Enter a new name');
+
+      const renameApplianceProfileCallable = httpsCallable(functions, 'renameApplianceProfile');
+      const result = await renameApplianceProfileCallable({ from, to });
+
+      if (!result?.data?.success) {
+        throw new Error(result?.data?.error || 'Failed to rename saved appliance');
+      }
+
+      return { success: true, data: result.data };
+    } catch (error) {
+      const code = normalizeFunctionErrorCode(error) || error?.code;
+      const message = error?.details || error?.message || 'Failed to rename saved appliance';
+
+      console.error('Error renaming saved appliance:', { code, message });
+
+      return { success: false, error: message, code };
+    }
+  },
+
   // Backward-compatible alias used by dashboard hooks
   toggleOutlet: async (userId, outletIdOrNumber, status) => {
     return outletService.updateOutletStatus(userId, outletIdOrNumber, status);

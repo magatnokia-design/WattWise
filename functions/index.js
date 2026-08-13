@@ -24,6 +24,7 @@ const { processOutletToggle } = require('./src/http/processOutletToggle');
 const { clearAutoDetection } = require('./src/http/clearAutoDetection');
 const { registerApplianceProfile } = require('./src/http/registerApplianceProfile');
 const { removeApplianceProfile } = require('./src/http/removeApplianceProfile');
+const { renameApplianceProfile } = require('./src/http/renameApplianceProfile');
 const { linkDeviceToAccount } = require('./src/http/linkDeviceToAccount');
 const { checkUserExistsByEmail } = require('./src/http/checkUserExistsByEmail');
 const { sendPasswordResetEmail } = require('./src/http/sendPasswordResetEmail');
@@ -146,6 +147,18 @@ exports.removeApplianceProfile = onCall(
     maxInstances: 10,
   },
   removeApplianceProfile
+);
+
+/**
+ * Callable function to rename one learned appliance signature, keeping its
+ * measurements, and carry the new name onto any outlet using it
+ * Called from: Settings screen (Saved Appliances)
+ */
+exports.renameApplianceProfile = onCall(
+  {
+    maxInstances: 10,
+  },
+  renameApplianceProfile
 );
 
 /**

@@ -12,7 +12,22 @@ import {
 } from 'react-native';
 import { COLORS } from '../../../constants/colors';
 
-const OutletNameModal = ({ visible, outletNumber, currentName, onClose, onSave }) => {
+/**
+ * Name-entry modal. Defaults to naming an outlet; the copy is overridable so
+ * renaming a saved appliance signature reuses it rather than cloning 200 lines
+ * of identical form to change three strings.
+ */
+const OutletNameModal = ({
+  visible,
+  outletNumber,
+  currentName,
+  onClose,
+  onSave,
+  title,
+  subtitle,
+  placeholder,
+  fieldLabel = 'Outlet name',
+}) => {
   const { width } = useWindowDimensions();
   const [name, setName] = useState(currentName || '');
   const [error, setError] = useState('');
@@ -36,12 +51,12 @@ const OutletNameModal = ({ visible, outletNumber, currentName, onClose, onSave }
     const trimmedName = String(name || '').trim();
 
     if (!trimmedName) {
-      setError('Outlet name is required');
+      setError(`${fieldLabel} is required`);
       return;
     }
 
     if (trimmedName.length > 30) {
-      setError('Outlet name must be 30 characters or less');
+      setError(`${fieldLabel} must be 30 characters or less`);
       return;
     }
 
@@ -59,7 +74,7 @@ const OutletNameModal = ({ visible, outletNumber, currentName, onClose, onSave }
     } finally {
       setSaving(false);
     }
-  }, [name, onSave, onClose]);
+  }, [name, onSave, onClose, fieldLabel]);
 
   return (
     <Modal
@@ -74,13 +89,15 @@ const OutletNameModal = ({ visible, outletNumber, currentName, onClose, onSave }
       >
         <View style={[styles.modalContainer, { width: width - 32 }]}>
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Outlet {outletNumber} Name</Text>
+            <Text style={styles.modalTitle}>{title || `Outlet ${outletNumber} Name`}</Text>
             <TouchableOpacity onPress={handleClose} activeOpacity={0.7}>
               <Text style={styles.closeBtn}>x</Text>
             </TouchableOpacity>
           </View>
 
-          <Text style={styles.modalSub}>Customize the label shown across dashboard and history.</Text>
+          <Text style={styles.modalSub}>
+            {subtitle || 'Customize the label shown across dashboard and history.'}
+          </Text>
 
           <TextInput
             style={styles.input}
@@ -89,7 +106,7 @@ const OutletNameModal = ({ visible, outletNumber, currentName, onClose, onSave }
               setName(text);
               setError('');
             }}
-            placeholder={`Outlet ${outletNumber}`}
+            placeholder={placeholder || `Outlet ${outletNumber}`}
             placeholderTextColor={COLORS.textLight}
             maxLength={30}
           />
