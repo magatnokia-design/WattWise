@@ -7,6 +7,7 @@ const {
   updateDetectionState,
   shouldEvaluateLive,
   detectApplianceFromRunState,
+  APPLIANCE_PROFILES,
   matchNamedAppliance,
   resolveOutletLogName,
   normalizeUserProfiles,
@@ -355,4 +356,139 @@ test('resolveOutletLogName falls back for unnamed and placeholder outlets', () =
   assert.equal(resolveOutletLogName({ applianceName: '   ' }, 2), 'Outlet 2');
   assert.equal(resolveOutletLogName({ applianceName: 'Outlet 2' }, 2), 'Outlet 2');
   assert.equal(resolveOutletLogName(null, 1), 'Outlet 1');
+});
+
+// An out-of-scope load is a finding, not an absence of one. Returning bare null
+// made a 1200 W kettle indistinguishable from a lamp switched on two seconds
+// ago, so the user waited for a suggestion that was never coming with nothing on
+// screen to say why.
+test('detectApplianceFromRunState reports an unsupported load rather than staying silent', () => {
+  // Far outside the low-voltage appliances this system is built for.
+  const kettle = buildRunState({ powerStart: 1400, jitter: 40, sampleCount: 40 });
+  const result = detectApplianceFromRunState(kettle);
+
+  assert.ok(result, 'an unsupported load must not be reported as no result');
+  assert.equal(result.unsupported, true);
+  assert.equal(result.appliance, null, 'nothing may be presented as an identification');
+  assert.equal(result.confidence, 0);
+  assert.deepEqual(result.candidates, []);
+  // The measurements are still reported - they are the evidence for the verdict.
+  assert.ok(result.features.meanPower > 1000);
+});
+
+test('an in-scope load is still not marked unsupported', () => {
+  const fan = buildRunState({ powerStart: 72, jitter: 4, sampleCount: 40 });
+  const result = detectApplianceFromRunState(fan);
+
+  assert.equal(result.appliance, 'Electric Fan');
+  assert.ok(!result.unsupported);
+});
+
+test('too little data is still silence, not an unsupported verdict', () => {
+  // The distinction the whole change exists to make.
+  const brief = buildRunState({ powerStart: 1400, jitter: 40, sampleCount: 2 });
+  assert.equal(detectApplianceFromRunState(brief), null);
+
+  const idle = buildRunState({ powerStart: 0.5, jitter: 0.1, sampleCount: 40 });
+  assert.equal(detectApplianceFromRunState(idle), null);
+});
+
+// Onboarding promises the user a list of supported appliances; the detector has
+// its own. They had drifted - onboarding listed seven, omitted Monitor, and
+// renamed three ("TV", "Gaming Console", "Radio/Speaker" against the detector's
+// "Television", "Game Console", "Speaker"). Nothing connected the two files, so
+// the screen could promise one set and the suggestions offer another.
+//
+// Same approach as billingParity.test.js: read the sibling file rather than
+// restating its contents here, which would just be a third list to keep in step.
+test('onboarding lists exactly the appliances the detector can identify', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+
+  const onboarding = path.join(
+    __dirname, '..', '..', 'src', 'screens', 'Onboarding', 'OnboardingScreen.js'
+  );
+
+  const source = fs.readFileSync(onboarding, 'utf8');
+  const slide = source
+    .split('\n')
+    .find((line) => line.includes('Designed for low-voltage devices'));
+
+  assert.ok(slide, 'the supported-appliances slide should still exist');
+
+  for (const profile of APPLIANCE_PROFILES) {
+    assert.ok(
+      slide.includes(profile.label),
+      `onboarding does not list "${profile.label}"`
+    );
+  }
+
+  // And nothing extra: a name on the slide the detector cannot produce is a
+  // promise the system does not keep.
+  //
+  // The source holds the list as one string literal, so the separator to split
+  // on is the two characters backslash-n, not an actual newline.
+  const listed = slide
+    .slice(slide.indexOf('devices:'))
+    .split('\\n')
+    .map((entry) => entry.trim())
+    .filter((entry) => /[a-z]/i.test(entry) && !entry.includes('devices:'));
+
+  assert.equal(
+    listed.length,
+    APPLIANCE_PROFILES.length,
+    `onboarding lists ${listed.length} appliances (${listed.join(' | ')}), `
+      + `the detector has ${APPLIANCE_PROFILES.length}`
+  );
+});
+
+// The gap above the catalogue was not silence - it was confident nonsense.
+// Scoring is relative: it finds the least bad profile and always finds one, so a
+// 300 W load landed on Game Console at 0.41 confidence with an Accept button
+// beside it. On a system whose hard constraint is low-voltage appliances only,
+// naming a rice cooker a games console is worse than saying nothing.
+test('a load above every profile is unsupported, not the nearest guess', () => {
+  for (const watts of [250, 300, 400, 800]) {
+    const result = detectApplianceFromRunState(
+      buildRunState({ powerStart: watts, jitter: watts * 0.05, sampleCount: 40 })
+    );
+
+    assert.ok(result, `${watts} W should produce a verdict`);
+    assert.equal(result.unsupported, true, `${watts} W was identified as ${result.appliance}`);
+    assert.equal(result.appliance, null);
+  }
+});
+
+test('loads inside the catalogue are unaffected by the scope ceiling', () => {
+  const expected = [
+    [16, 'LED Lamp'],
+    [60, 'Electric Fan'],
+    [150, 'Television'],
+    [230, 'Game Console'],
+  ];
+
+  for (const [watts, appliance] of expected) {
+    const result = detectApplianceFromRunState(
+      buildRunState({ powerStart: watts, jitter: watts * 0.05, sampleCount: 40 })
+    );
+
+    assert.equal(result.appliance, appliance, `${watts} W`);
+    assert.ok(!result.unsupported);
+  }
+});
+
+// The user's own measurement outranks the catalogue. If they named a 300 W
+// appliance themselves, overruling them with "unsupported" would throw away the
+// only ground truth on the system.
+test('a learned signature is exempt from the scope ceiling', () => {
+  const run = buildRunState({ powerStart: 300, jitter: 15, sampleCount: 40 });
+  const taught = buildApplianceSignature(run, 'Rice Cooker');
+
+  assert.ok(taught, 'the run should be learnable even though it is out of scope');
+
+  const result = detectApplianceFromRunState(run, { userProfiles: [taught] });
+
+  assert.equal(result.appliance, 'Rice Cooker');
+  assert.equal(result.matchSource, 'learned');
+  assert.ok(!result.unsupported);
 });

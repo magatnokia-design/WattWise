@@ -139,6 +139,22 @@ const APPLIANCE_PROFILES = [
 
 // Shared across every generic profile: mean power carries the most signal,
 // spread is the tie-breaker between same-wattage appliances.
+// The highest mean draw any supported profile claims, derived from the catalogue
+// rather than written down separately so it cannot fall out of step with it.
+//
+// Above this, no generic profile covers the load - but scoring alone did not say
+// so. `rangePenalty` grades an out-of-range value by how far outside it sits, and
+// at 250-300 W the overshoot past Game Console's 230 W ceiling was still cheap
+// enough to keep the total under MAX_ACCEPTABLE_SCORE. The result was worse than
+// the silence it was meant to avoid: a 300 W rice cooker was reported to the user
+// as a "Game Console" at 0.41 confidence, with an Accept button next to it.
+//
+// Being told nothing is recoverable. Being told the wrong thing confidently, on a
+// system whose hard constraint is low-voltage appliances only, is not.
+const MAX_PROFILE_MEAN_POWER_W = Math.max(
+  ...APPLIANCE_PROFILES.map((profile) => profile.meanPower[1])
+);
+
 const PROFILE_WEIGHTS = {
   meanPower: 0.38,
   peakPower: 0.17,
@@ -580,8 +596,47 @@ const detectApplianceFromRunState = (runState, options = {}) => {
   const second = ranked[1] || null;
   const margin = second ? (second.effectiveScore - top.effectiveScore) : 0.35;
 
-  if (top.effectiveScore > MAX_ACCEPTABLE_SCORE) {
-    return null;
+  // Beyond the catalogue's reach. Checked separately from the score because
+  // scoring is relative - it finds the *least bad* profile and will always find
+  // one, however far outside the supported range the load sits.
+  //
+  // A learned signature is exempt: if the user measured and named this appliance
+  // themselves, they know better than the generic ranges do, and overruling them
+  // with "unsupported" would discard the one piece of ground truth on the system.
+  const beyondCatalogue = top.source !== 'learned'
+    && features.meanPower > MAX_PROFILE_MEAN_POWER_W;
+
+  // The load does not resemble anything this system supports. That is a finding,
+  // not an absence of one - the run was measured, scored against every profile,
+  // and rejected by all of them.
+  //
+  // Returning bare null made it indistinguishable from "still gathering data",
+  // so a 1200 W kettle on a low-voltage-only system produced exactly the same
+  // silence as a lamp switched on two seconds ago. The user is left waiting for
+  // a suggestion that is never coming, with nothing on screen to say why.
+  //
+  // `appliance` stays null so no caller can mistake this for an identification;
+  // `unsupported` is what the clients render.
+  if (beyondCatalogue || top.effectiveScore > MAX_ACCEPTABLE_SCORE) {
+    return {
+      appliance: null,
+      unsupported: true,
+      confidence: 0,
+      ambiguous: false,
+      candidates: [],
+      matchSource: null,
+      modelVersion: MODEL_VERSION,
+      features: {
+        sampleCount: features.sampleCount,
+        runtimeSec: features.runtimeSec,
+        meanPower: Number(features.meanPower.toFixed(1)),
+        peakPower: Number(features.peakPower.toFixed(1)),
+        stdDevPower: Number(features.stdDevPower.toFixed(1)),
+        activeRatio: Number(features.activeRatio.toFixed(2)),
+        highRatio: Number(features.highRatio.toFixed(2)),
+        lowRatio: Number(features.lowRatio.toFixed(2)),
+      },
+    };
   }
 
   const confidence = toConfidence(top.effectiveScore, margin);

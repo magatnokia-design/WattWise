@@ -275,13 +275,28 @@ async function updateOutletMetrics(req, res) {
         outletUpdate.applianceIdentity = admin.firestore.FieldValue.delete();
       }
 
-      if (detectionResult) {
+      if (detectionResult?.unsupported) {
+        // Measured, scored against every profile, and matched by none. There is
+        // no name to offer, but staying silent about it is what made an
+        // out-of-scope load look identical to one still being measured.
+        outletUpdate.autoDetectedAppliance = '';
+        outletUpdate.applianceDetection = {
+          modelVersion: detectionResult.modelVersion,
+          confidence: 0,
+          candidates: [],
+          matchSource: 'none',
+          unsupported: true,
+          features: detectionResult.features,
+          updatedAtMs: now,
+        };
+      } else if (detectionResult) {
         outletUpdate.autoDetectedAppliance = detectionResult.appliance;
         outletUpdate.applianceDetection = {
           modelVersion: detectionResult.modelVersion,
           confidence: detectionResult.confidence,
           candidates: detectionResult.candidates,
           matchSource: detectionResult.matchSource || 'generic',
+          unsupported: false,
           features: detectionResult.features,
           updatedAtMs: now,
         };
@@ -319,6 +334,9 @@ async function updateOutletMetrics(req, res) {
           // "WattWise recognised the appliance you plugged back in" means.
           recognised: detectionResult?.matchSource === 'learned',
           confidence: detectionResult?.confidence ?? null,
+          // The run is outside what this system is built to monitor. Surfaced
+          // here so a client can say so instead of showing a spinner forever.
+          unsupported: detectionResult?.unsupported === true,
           suggestionPending: !!measuredAs && (nameIsWrong || !namedAs),
           updatedAtMs: now,
         };
