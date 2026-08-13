@@ -157,13 +157,24 @@ const buildInsights = ({
     });
   }
 
-  // Effective rate, which makes the bill total explainable.
+  // The rate that makes the total explainable - but the two tabs mean different
+  // things by "rate", so they must not use the same sentence.
+  //
+  // Monthly is a billing period: its rate includes the once-a-month P5.00
+  // metering charge, so "effectively paying" is true. Daily and Weekly exclude
+  // it, so their figure is what one more kWh costs, not what the period averaged
+  // out at. Calling that "effectively paying" would state the smaller number as
+  // the bill rate and understate it.
   const effectiveRate = toNumber(summary.effectiveRate);
   if (effectiveRate > 0) {
+    const isBillingPeriod = selectedTab === 'Monthly';
+
     add('rate', `${selectedTab}:${effectiveRate.toFixed(2)}`, {
       icon: '💰',
       tone: 'neutral',
-      text: `You are effectively paying ${formatCurrency(effectiveRate)} per kWh this ${selectedTab.toLowerCase()} period.`,
+      text: isBillingPeriod
+        ? `You are effectively paying ${formatCurrency(effectiveRate)} per kWh this monthly period.`
+        : `${formatCurrency(effectiveRate)} per kWh for extra use.`,
     });
   }
 
@@ -543,10 +554,14 @@ export const AnalyticsScreen = ({ navigation }) => {
       const entryDate = dailyEntry?.date
         ? new Date(`${dailyEntry.date}T00:00:00`)
         : new Date();
+      // Marginal: a day is not a billing period, so the once-a-month P5.00
+      // metering charge does not belong in it. Charged here, a day on which
+      // almost nothing ran was priced at P5.61 for 0.001 kWh.
       const bill = calculatePelcoIIIBill(totalEnergy, {
         date: entryDate,
         supplyRates,
         profileId: rateProfileId || null,
+        includePeriodFlats: false,
         daysInPeriod: dailyEntry ? 1 : 0,
         billingDays: getDaysInMonth(entryDate),
       });
@@ -601,10 +616,17 @@ export const AnalyticsScreen = ({ navigation }) => {
       .filter((item) => item.value > 0)
       .sort((a, b) => a.value - b.value)[0];
 
+    // Monthly is the only tab that is a billing period, so it is the only one
+    // that carries the period flats and reports a true effective rate. "The last
+    // 7 days" is not a billing period either - Weekly was charging a full
+    // month's metering fee, the same error as the day, one scale up.
+    const isBillingPeriod = selectedTab === 'Monthly';
+
     const bill = calculatePelcoIIIBill(totalEnergy, {
       date: endDate,
       supplyRates,
       profileId: rateProfileId || null,
+      includePeriodFlats: isBillingPeriod,
       daysInPeriod: entries.length > 0 ? days.length : 0,
       billingDays: getDaysInMonth(endDate),
     });
@@ -806,7 +828,12 @@ export const AnalyticsScreen = ({ navigation }) => {
               />
               <View style={styles.breakdownFooter}>
                 <View style={styles.breakdownRow}>
-                  <Text style={styles.breakdownLabel}>Effective Rate</Text>
+                  {/* Named for what it is on this tab. Only Monthly's figure
+                      carries the period flats, so only Monthly's is the rate
+                      the period actually worked out at. */}
+                  <Text style={styles.breakdownLabel}>
+                    {selectedTab === 'Monthly' ? 'Effective Rate' : 'Rate for extra use'}
+                  </Text>
                   <Text style={styles.breakdownValue}>
                     ₱{summary.effectiveRate.toFixed(4)} / kWh
                   </Text>

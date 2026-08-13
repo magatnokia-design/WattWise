@@ -60,7 +60,7 @@ const formatEnergyKwh = (value) => {
  * power right now: while loading we stay blank rather than flashing "Not set",
  * and with no live load we say so instead of showing a stale saved name.
  */
-const formatApplianceName = (name, { hasLoad, isLoading, identityState }) => {
+const formatApplianceName = (name, { hasLoad, isLoading, identityState, recognised }) => {
   if (isLoading) return '—';
   if (!hasLoad) return 'Nothing plugged in';
 
@@ -72,6 +72,11 @@ const formatApplianceName = (name, { hasLoad, isLoading, identityState }) => {
   // while a 60 W ceiling fan ran on it, and the user is the one who has to
   // notice - so say it, rather than quietly showing a name known to be wrong.
   if (identityState === 'changed') return `Not ${normalized}`;
+
+  // Matched against this account's own saved signature rather than a generic
+  // wattage range: WattWise knows this appliance, not just its name. The web
+  // client marks it the same way, so both say the same thing about the same run.
+  if (recognised) return `${normalized} · recognised`;
 
   return normalized;
 };
@@ -119,11 +124,13 @@ export const DashboardScreen = ({ navigation }) => {
     hasLoad: outlet1HasLoad,
     isLoading: isLoadingOutlets,
     identityState: outlet1Suggestion.identityState,
+    recognised: outlet1Suggestion.recognised,
   });
   const outlet2ApplianceLabel = formatApplianceName(outlet2ApplianceName, {
     hasLoad: outlet2HasLoad,
     isLoading: isLoadingOutlets,
     identityState: outlet2Suggestion.identityState,
+    recognised: outlet2Suggestion.recognised,
   });
 
   const activeOutletsCount = (outlet1Status === true ? 1 : 0) + (outlet2Status === true ? 1 : 0);
