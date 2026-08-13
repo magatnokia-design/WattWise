@@ -33,7 +33,14 @@ const slides = [
     id: '3',
     emoji: '📱',
     title: 'Supported Appliances',
-    description: 'Designed for low-voltage devices:\n\n📱 Phone Charger\n💻 Laptop Charger\n🌀 Electric Fan\n📺 TV\n💡 LED Lamp\n🎮 Gaming Console\n📻 Radio/Speaker',
+    // These are the eight profiles in functions/src/lib/applianceDetector.js,
+    // named exactly as the detector names them. They were listed here as seven,
+    // with Monitor missing and three renamed in passing - "TV", "Gaming Console"
+    // and "Radio/Speaker" against the detector's "Television", "Game Console"
+    // and "Speaker". Onboarding promised one set of appliances and the
+    // suggestions offered another, with no way for a user to tell they were
+    // meant to be the same list. Keep in step with APPLIANCE_PROFILES.
+    description: 'Designed for low-voltage devices:\n\n📱 Phone Charger\n💡 LED Lamp\n🌀 Electric Fan\n💻 Laptop Charger\n🖥️ Monitor\n📻 Speaker\n📺 Television\n🎮 Game Console',
   },
   {
     id: '4',
