@@ -2,6 +2,7 @@ const admin = require('firebase-admin');
 const logger = require('firebase-functions/logger');
 const { dispatchDeviceCommand } = require('../lib/deviceCommandDispatcher');
 const { PENDING_STATUS_WINDOW_MS } = require('../lib/outletStatus');
+const { normalizeThresholds } = require('../lib/powerSafety');
 const { resolveUserContact, enqueueEmail } = require('../lib/mailQueue');
 
 /**
@@ -202,13 +203,55 @@ async function handleSafetyAlerts(event) {
 
     // Auto-cutoff if stage is 'cutoff' and protection enabled
     if (currentStage === 'cutoff' && protectionEnabled) {
-      logger.warn('Executing auto-cutoff', { userId });
+      // Cut only the outlets actually over their limit.
+      //
+      // This used to switch off both unconditionally and dispatch two commands
+      // through Promise.all. The device fetches exactly one command per poll -
+      // getDeviceCommand reads `devices/{id}.lastCommandId`, a single pointer
+      // that dispatchDeviceCommand overwrites - so of two concurrent dispatches
+      // only the later one is ever delivered. The other document is written,
+      // never fetched, and times out.
+      //
+      // In practice that meant the cutoff switched off whichever outlet lost
+      // the race. Observed: outlet2, sitting idle at 0.0 W, was disconnected
+      // while outlet1 kept drawing 54 W behind an alert saying power had been
+      // cut off. The wrong outlet, and the dangerous one left running.
+      //
+      // Cutting only the offending outlet is both better behaviour - an idle
+      // outlet is not part of the problem - and one command in every realistic
+      // case, so there is nothing to race.
+      const thresholds = normalizeThresholds(newData.thresholds);
+
+      const isOverLimit = (reading) => {
+        const power = Number(reading?.power) || 0;
+        const current = Number(reading?.current) || 0;
+        const powerRatio = thresholds.powerMax > 0 ? power / thresholds.powerMax : 0;
+        const currentRatio = thresholds.currentMax > 0 ? current / thresholds.currentMax : 0;
+        return Math.max(powerRatio, currentRatio) >= 1;
+      };
+
+      const candidates = [
+        { outletId: 'outlet1', number: 1, reading: outlet1 },
+        { outletId: 'outlet2', number: 2, reading: outlet2 },
+      ];
+
+      const overLimit = candidates.filter((entry) => isOverLimit(entry.reading));
+
+      // Nothing individually over means the combined draw tripped it, so the
+      // heavier outlet is the one to shed. Cutting the idle one would achieve
+      // nothing.
+      const targets = overLimit.length > 0
+        ? overLimit
+        : [[...candidates].sort(
+          (a, b) => (Number(b.reading?.power) || 0) - (Number(a.reading?.power) || 0)
+        )[0]];
+
+      logger.warn('Executing auto-cutoff', {
+        userId,
+        targets: targets.map((entry) => entry.outletId),
+      });
 
       const batch = db.batch();
-
-      // Turn off both outlets
-      const outlet1Ref = db.doc(`users/${userId}/outlets/outlet1`);
-      const outlet2Ref = db.doc(`users/${userId}/outlets/outlet2`);
 
       // The pending marker processOutletToggle sets, for the same reason: the
       // device only learns about this when it next polls, and keeps posting
@@ -217,40 +260,24 @@ async function handleSafetyAlerts(event) {
       // the outlets appear never to have been cut - which is indistinguishable
       // on screen from the cutoff not having run.
       const pendingUntilMs = Date.now() + PENDING_STATUS_WINDOW_MS;
-
-      batch.set(outlet1Ref, {
-        status: 'off',
-        pendingStatus: 'off',
-        pendingStatusUntilMs: pendingUntilMs,
-        lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
-      }, { merge: true });
-
-      batch.set(outlet2Ref, {
-        status: 'off',
-        pendingStatus: 'off',
-        pendingStatusUntilMs: pendingUntilMs,
-        lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
-      }, { merge: true });
-
-      // Create activity logs
       const logsRef = db.collection(`users/${userId}/history_logs`);
-      
-      batch.set(logsRef.doc(), {
-        timestamp: admin.firestore.FieldValue.serverTimestamp(),
-        outlet: 1,
-        outletName: 'Outlet 1',
-        action: 'off',
-        source: 'auto_cutoff',
-        power: outlet1?.power || 0,
-      });
 
-      batch.set(logsRef.doc(), {
-        timestamp: admin.firestore.FieldValue.serverTimestamp(),
-        outlet: 2,
-        outletName: 'Outlet 2',
-        action: 'off',
-        source: 'auto_cutoff',
-        power: outlet2?.power || 0,
+      targets.forEach((entry) => {
+        batch.set(db.doc(`users/${userId}/outlets/${entry.outletId}`), {
+          status: 'off',
+          pendingStatus: 'off',
+          pendingStatusUntilMs: pendingUntilMs,
+          lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
+        }, { merge: true });
+
+        batch.set(logsRef.doc(), {
+          timestamp: admin.firestore.FieldValue.serverTimestamp(),
+          outlet: entry.number,
+          outletName: `Outlet ${entry.number}`,
+          action: 'off',
+          source: 'auto_cutoff',
+          power: entry.reading?.power || 0,
+        });
       });
 
       // Update lastCutoff timestamp
@@ -260,32 +287,36 @@ async function handleSafetyAlerts(event) {
 
       await batch.commit();
 
-      const [outlet1Command, outlet2Command] = await Promise.all([
-        dispatchDeviceCommand({
+      // Sequential, never Promise.all. Each dispatch moves the device's single
+      // `lastCommandId` pointer, so concurrent dispatches silently discard all
+      // but the last. Awaiting in turn does not make two commands deliverable -
+      // the device still fetches one per poll - but it makes the ordering
+      // deterministic instead of a race, and the last one written is the one
+      // that gets through.
+      //
+      // Targets is one outlet in every realistic case. If it is ever two, the
+      // second is the one delivered and the first is picked up by the firmware's
+      // own 500 W per-outlet limit, which is enforced on the device regardless
+      // of anything here.
+      const dispatched = [];
+      for (const entry of targets) {
+        const command = await dispatchDeviceCommand({
           userId,
-          outletId: 'outlet1',
+          outletId: entry.outletId,
           action: 'off',
           reason: 'safety_cutoff',
           source: 'safety_trigger',
           metadata: { stage: currentStage },
-        }),
-        dispatchDeviceCommand({
-          userId,
-          outletId: 'outlet2',
-          action: 'off',
-          reason: 'safety_cutoff',
-          source: 'safety_trigger',
-          metadata: { stage: currentStage },
-        }),
-      ]);
+        });
 
-      logger.info('Auto-cutoff executed', {
-        userId,
-        outlet1CommandId: outlet1Command.commandId,
-        outlet1Channel: outlet1Command.channel,
-        outlet2CommandId: outlet2Command.commandId,
-        outlet2Channel: outlet2Command.channel,
-      });
+        dispatched.push({
+          outletId: entry.outletId,
+          commandId: command.commandId,
+          channel: command.channel,
+        });
+      }
+
+      logger.info('Auto-cutoff executed', { userId, dispatched });
     }
 
     return null;
