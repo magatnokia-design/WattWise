@@ -1,6 +1,7 @@
 const admin = require('firebase-admin');
 const logger = require('firebase-functions/logger');
 const { dispatchDeviceCommand } = require('../lib/deviceCommandDispatcher');
+const { PENDING_STATUS_WINDOW_MS } = require('../lib/outletStatus');
 const { resolveUserContact, enqueueEmail } = require('../lib/mailQueue');
 
 /**
@@ -48,8 +49,26 @@ async function handleSafetyAlerts(event) {
       return null;
     }
 
-    const { currentStage, autoProtectionEnabled, outlet1, outlet2 } = newData;
+    const { currentStage, outlet1, outlet2 } = newData;
     const oldStage = oldData?.currentStage || 'normal';
+
+    // The document carries two names for one setting, and until now this file
+    // read the *other* one from everything else.
+    //
+    //   the UI toggle   -> protectionEnabled (falling back to autoProtectionEnabled)
+    //   evaluateSafety  -> protectionEnabled !== false
+    //   this trigger    -> autoProtectionEnabled, plain truthy, no default
+    //
+    // So a document with `protectionEnabled: true` and no
+    // `autoProtectionEnabled` showed the switch on, computed the cutoff stage
+    // correctly, announced "Power has been automatically cut off" - and never
+    // opened the relay. The appliance kept running behind a message saying it
+    // had been disconnected.
+    //
+    // Now matches evaluateSafety: either name, and absent means enabled. A
+    // safety cutoff must not be skipped because a field was never written.
+    const protectionEnabled = newData.protectionEnabled !== false
+      && newData.autoProtectionEnabled !== false;
 
     // Check if stage changed
     if (currentStage === oldStage) {
@@ -83,8 +102,20 @@ async function handleSafetyAlerts(event) {
         break;
 
       case 'cutoff':
-        title = '🚨 Auto-Cutoff Triggered';
-        message = 'Power has been automatically cut off for your safety. Dangerous levels detected.';
+        // The wording has to depend on what is about to happen. This branch
+        // previously claimed the power had been cut off before the code that
+        // does the cutting had run, and regardless of whether it would run at
+        // all - so with protection disabled the user was told their outlets
+        // were safe while the appliance carried on drawing.
+        if (protectionEnabled) {
+          title = '🚨 Auto-Cutoff Triggered';
+          message = 'Power has been automatically cut off for your safety. Dangerous levels detected.';
+        } else {
+          title = '🚨 Cut-off Level Reached';
+          message = 'Power reached the cut-off level, but auto cut-off is switched off, so '
+            + 'nothing was disconnected. Switch the outlet off yourself, or turn auto cut-off '
+            + 'on in Power Safety.';
+        }
         type = 'cutoff';
         break;
 
@@ -170,7 +201,7 @@ async function handleSafetyAlerts(event) {
     logger.info('Safety alert created', { userId, stage: currentStage });
 
     // Auto-cutoff if stage is 'cutoff' and protection enabled
-    if (currentStage === 'cutoff' && autoProtectionEnabled) {
+    if (currentStage === 'cutoff' && protectionEnabled) {
       logger.warn('Executing auto-cutoff', { userId });
 
       const batch = db.batch();
@@ -179,13 +210,25 @@ async function handleSafetyAlerts(event) {
       const outlet1Ref = db.doc(`users/${userId}/outlets/outlet1`);
       const outlet2Ref = db.doc(`users/${userId}/outlets/outlet2`);
 
+      // The pending marker processOutletToggle sets, for the same reason: the
+      // device only learns about this when it next polls, and keeps posting
+      // telemetry carrying its *current* relay state in the meantime. Without
+      // it, updateOutletMetrics writes 'on' back over this within a second and
+      // the outlets appear never to have been cut - which is indistinguishable
+      // on screen from the cutoff not having run.
+      const pendingUntilMs = Date.now() + PENDING_STATUS_WINDOW_MS;
+
       batch.set(outlet1Ref, {
         status: 'off',
+        pendingStatus: 'off',
+        pendingStatusUntilMs: pendingUntilMs,
         lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
       }, { merge: true });
 
       batch.set(outlet2Ref, {
         status: 'off',
+        pendingStatus: 'off',
+        pendingStatusUntilMs: pendingUntilMs,
         lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
       }, { merge: true });
 
