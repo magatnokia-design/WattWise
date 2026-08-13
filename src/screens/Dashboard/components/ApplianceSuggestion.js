@@ -60,6 +60,21 @@ const formatWhy = (suggestion) => {
     : 'Based on recent live power telemetry.';
 };
 
+/**
+ * Amber rather than the suggestion's green: when both are on screen this is the
+ * caveat on that offer, and it belongs with the "Not <name>" line it explains
+ * rather than with the thing it is qualifying. Matches the web client.
+ */
+const StaleRunNotice = () => (
+  <View style={styles.staleNotice}>
+    <Ionicons name="refresh-outline" size={14} color="#B45309" />
+    <Text style={styles.staleText}>
+      Different appliance detected. Switch this outlet off and on to measure it on
+      its own — otherwise this reading still includes the last one.
+    </Text>
+  </View>
+);
+
 const ApplianceSuggestion = ({
   suggestion,
   expanded,
@@ -67,16 +82,6 @@ const ApplianceSuggestion = ({
   onToggleWhy,
   onChoose,
 }) => {
-  if (!suggestion?.showBadge) return null;
-
-  const alternatives = (suggestion.candidates || []).filter(
-    (candidate) => candidate.name !== suggestion.name
-  );
-
-  // Same-wattage appliances: show the choices immediately rather than making
-  // the user open "Why" to discover the suggestion was a coin flip.
-  const showPickerInline = suggestion.ambiguous && alternatives.length > 0;
-
   // Swapping an appliance while the outlet stays on does not restart the
   // measurement, so the run keeps averaging the appliance that has gone with the
   // one that arrived. Observed: a lamp replaced by a fan reported "about 16.3 W"
@@ -86,10 +91,34 @@ const ApplianceSuggestion = ({
   // The measurements are stale rather than wrong, and the user cannot tell the
   // difference from the outside. Until the detector restarts a run on a sustained
   // level shift, say plainly what clears it.
-  const suggestionIsStale = suggestion.identityState === 'changed';
+  //
+  // Deliberately NOT inside the suggestion block, and not behind `showBadge`.
+  // A blended run can score past the scope ceiling and come back unsupported, so
+  // there is no name to offer and `suggestionPending` is false - and gating the
+  // hint on the badge hid it in precisely the case the user is most stuck, with a
+  // contradicted name, no suggestion, and nothing explaining either. Verified:
+  // a 20 W load swapped for a 300 W one gives state 'changed' with
+  // suggestionPending false. Caught by the web repo, which shipped it this way
+  // and was right to override the instruction I sent.
+  const suggestionIsStale = suggestion?.identityState === 'changed';
+
+  if (!suggestion?.showBadge) {
+    // The hint still has to render on its own.
+    return suggestionIsStale ? <StaleRunNotice /> : null;
+  }
+
+  const alternatives = (suggestion.candidates || []).filter(
+    (candidate) => candidate.name !== suggestion.name
+  );
+
+  // Same-wattage appliances: show the choices immediately rather than making
+  // the user open "Why" to discover the suggestion was a coin flip.
+  const showPickerInline = suggestion.ambiguous && alternatives.length > 0;
 
   return (
     <>
+      {suggestionIsStale ? <StaleRunNotice /> : null}
+
       <View style={styles.row}>
         <Text style={styles.headline}>{formatHeadline(suggestion)}</Text>
         <View style={styles.actions}>
@@ -109,16 +138,6 @@ const ApplianceSuggestion = ({
           </TouchableOpacity>
         </View>
       </View>
-
-      {suggestionIsStale ? (
-        <View style={styles.ambiguousNotice}>
-          <Ionicons name="refresh-outline" size={14} color={COLORS.textDark} />
-          <Text style={styles.ambiguousText}>
-            Different appliance detected. Switch this outlet off and on to measure
-            it on its own — otherwise this reading still includes the last one.
-          </Text>
-        </View>
-      ) : null}
 
       {showPickerInline ? (
         <View style={styles.ambiguousNotice}>
@@ -216,6 +235,25 @@ const styles = StyleSheet.create({
     ...FONTS.small,
     color: COLORS.white,
     fontWeight: '700',
+  },
+  staleNotice: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 6,
+    marginBottom: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    // Amber, matching the safety "warning" tone already used across the app and
+    // the web client's treatment of this same notice.
+    backgroundColor: '#FFFBEB',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+  },
+  staleText: {
+    flex: 1,
+    ...FONTS.small,
+    color: '#B45309',
   },
   ambiguousNotice: {
     flexDirection: 'row',

@@ -333,6 +333,7 @@ export const DashboardScreen = ({ navigation }) => {
                     style={[
                       styles.applianceValue,
                       (!outlet1HasLoad || !outlet1ApplianceName) && styles.applianceValuePlaceholder,
+                      outlet1Suggestion.identityState === 'changed' && styles.applianceValueChanged,
                     ]}
                   >
                     {outlet1ApplianceLabel}
@@ -405,6 +406,7 @@ export const DashboardScreen = ({ navigation }) => {
                     style={[
                       styles.applianceValue,
                       (!outlet2HasLoad || !outlet2ApplianceName) && styles.applianceValuePlaceholder,
+                      outlet2Suggestion.identityState === 'changed' && styles.applianceValueChanged,
                     ]}
                   >
                     {outlet2ApplianceLabel}
@@ -719,6 +721,12 @@ const styles = StyleSheet.create({
   applianceValuePlaceholder: {
     color: COLORS.textLight,
     fontWeight: '500',
+  },
+  // "Not <name>" - the measurements contradict the label. Amber rather than red:
+  // a swapped appliance is something to correct, not a fault. Matches the web
+  // client's treatment and the notice that explains how to clear it.
+  applianceValueChanged: {
+    color: '#B45309',
   },
   statusBadge: {
     flexDirection: 'row',
