@@ -524,6 +524,52 @@ const matchNamedAppliance = (runState, label, userProfiles) => {
 };
 
 /**
+ * The verdict both clients read: does the outlet's name still describe what is
+ * plugged into it, and should a correction be offered?
+ *
+ * Pure, and here rather than inline in updateOutletMetrics, because it has now
+ * been wrong twice in ways nothing could catch:
+ *
+ *   - gating the prompt on 'changed' alone silenced the 'unknown' case, so an
+ *     outlet named "Speaker" with no signature, running a load measured as
+ *     "LED Lamp", offered no correction at all
+ *   - `recognised` was taken from the detector's match source alone, which says
+ *     the best match anywhere was a learned one - not that the outlet's own name
+ *     held up. "Speaker - recognised" was displayed for an LED lamp
+ *
+ * Both rendered as confident, specific, wrong statements on two clients at once.
+ *
+ * @param {object} match Result of matchNamedAppliance for this run.
+ * @param {object} detection Result of detectApplianceFromRunState, or null.
+ * @param {string} namedAs The outlet's user-given name, placeholders removed.
+ */
+const buildApplianceIdentity = (match, detection, namedAs) => {
+  const measuredAs = detection?.appliance || '';
+  const name = String(namedAs || '').trim();
+
+  const nameIsWrong = match.state === 'changed';
+  // Named, but nothing learned to check it against - unverified, not fine.
+  const nameUnverified = match.state === 'unknown';
+  const labelsDiffer = !!name
+    && !!measuredAs
+    && name.toLowerCase() !== measuredAs.toLowerCase();
+
+  return {
+    namedAs: name,
+    measuredAs,
+    state: match.state,
+    matchScore: match.score,
+    // Requires the name itself to hold up, not merely that some learned
+    // signature won the ranking.
+    recognised: match.state === 'confirmed' && detection?.matchSource === 'learned',
+    confidence: detection?.confidence ?? null,
+    unsupported: detection?.unsupported === true,
+    suggestionPending: !!measuredAs
+      && (nameIsWrong || !name || (nameUnverified && labelsDiffer)),
+  };
+};
+
+/**
  * The name to record on a history line for an outlet.
  *
  * A log entry is permanent, so it must not assert an appliance the system has
@@ -693,6 +739,7 @@ module.exports = {
   shouldEvaluateLive,
   detectApplianceFromRunState,
   matchNamedAppliance,
+  buildApplianceIdentity,
   resolveOutletLogName,
   normalizeUserProfiles,
   buildApplianceSignature,

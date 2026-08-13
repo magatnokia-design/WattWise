@@ -9,6 +9,7 @@ const {
   detectApplianceFromRunState,
   APPLIANCE_PROFILES,
   matchNamedAppliance,
+  buildApplianceIdentity,
   resolveOutletLogName,
   normalizeUserProfiles,
   buildApplianceSignature,
@@ -491,4 +492,109 @@ test('a learned signature is exempt from the scope ceiling', () => {
   assert.equal(result.appliance, 'Rice Cooker');
   assert.equal(result.matchSource, 'learned');
   assert.ok(!result.unsupported);
+});
+
+// --- The verdict both clients render -----------------------------------------
+//
+// Written from the owner's own Firestore document, which caught both of these.
+// The outlet was named "Speaker" (a signature learned from an LED lamp during an
+// earlier test) and the run measured as "LED Lamp" from a second saved
+// signature. Both bugs rendered as confident, specific, wrong statements.
+
+const identityFor = (state, score = null) => ({ state, score });
+const detectionFor = (appliance, matchSource = 'generic', extra = {}) => ({
+  appliance, matchSource, confidence: 0.9, ...extra,
+});
+
+test('an unverified name is still corrected when the measurements disagree', () => {
+  // "Speaker" with its signature forgotten: nothing to check the name against,
+  // but the run plainly measures as something else. Gating on 'changed' alone
+  // offered nothing here, which is worse than the label comparison it replaced.
+  const result = buildApplianceIdentity(
+    identityFor('unknown'),
+    detectionFor('LED Lamp', 'learned'),
+    'Speaker'
+  );
+
+  assert.equal(result.suggestionPending, true);
+  assert.equal(result.recognised, false, 'an unverified name cannot be "recognised"');
+});
+
+test('an unverified name that already matches is left alone', () => {
+  const result = buildApplianceIdentity(
+    identityFor('unknown'),
+    detectionFor('LED Lamp', 'learned'),
+    'LED Lamp'
+  );
+
+  assert.equal(result.suggestionPending, false);
+});
+
+test('recognised requires the outlet name itself to hold up', () => {
+  const mismatched = buildApplianceIdentity(
+    identityFor('unknown', 0.289),
+    detectionFor('LED Lamp', 'learned'),
+    'Speaker'
+  );
+  assert.equal(mismatched.recognised, false);
+
+  const confirmed = buildApplianceIdentity(
+    identityFor('confirmed', 0.1),
+    detectionFor('LED Lamp', 'learned'),
+    'LED Lamp'
+  );
+  assert.equal(confirmed.recognised, true);
+
+  // Confirmed, but matched on a generic wattage range - known, not recognised.
+  const generic = buildApplianceIdentity(
+    identityFor('confirmed', 0.1),
+    detectionFor('LED Lamp', 'generic'),
+    'LED Lamp'
+  );
+  assert.equal(generic.recognised, false);
+});
+
+test('a confirmed name is never second-guessed', () => {
+  const result = buildApplianceIdentity(
+    identityFor('confirmed', 0.1),
+    detectionFor('LED Lamp', 'learned'),
+    'LED Lamp'
+  );
+
+  assert.equal(result.suggestionPending, false);
+});
+
+test('a contradicted name is always corrected', () => {
+  const result = buildApplianceIdentity(
+    identityFor('changed', 0.9),
+    detectionFor('Electric Fan'),
+    'LED Lamp'
+  );
+
+  assert.equal(result.suggestionPending, true);
+  assert.equal(result.recognised, false);
+});
+
+test('an unnamed outlet is offered a name', () => {
+  const result = buildApplianceIdentity(
+    identityFor('unnamed'),
+    detectionFor('Electric Fan'),
+    ''
+  );
+
+  assert.equal(result.suggestionPending, true);
+});
+
+test('nothing measured means nothing to suggest', () => {
+  const unsupported = buildApplianceIdentity(
+    identityFor('unknown'),
+    { appliance: null, unsupported: true, matchSource: null },
+    'Speaker'
+  );
+
+  assert.equal(unsupported.suggestionPending, false, 'cannot offer a name there is none of');
+  assert.equal(unsupported.unsupported, true);
+
+  const nothing = buildApplianceIdentity(identityFor('unknown'), null, 'Speaker');
+  assert.equal(nothing.suggestionPending, false);
 });

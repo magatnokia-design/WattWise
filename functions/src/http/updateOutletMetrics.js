@@ -14,6 +14,7 @@ const {
   shouldEvaluateLive,
   detectApplianceFromRunState,
   matchNamedAppliance,
+  buildApplianceIdentity,
   isPlaceholderLabel,
 } = require('../lib/applianceDetector');
 const { dispatchDeviceCommand } = require('../lib/deviceCommandDispatcher');
@@ -321,23 +322,8 @@ async function updateOutletMetrics(req, res) {
           userData?.applianceProfiles
         );
 
-        const measuredAs = detectionResult?.appliance || '';
-        const nameIsWrong = identity.state === 'changed';
-
         outletUpdate.applianceIdentity = {
-          namedAs,
-          measuredAs,
-          state: identity.state,
-          matchScore: identity.score,
-          // The measured appliance was matched against one of this account's own
-          // saved signatures rather than a generic wattage range - this is what
-          // "WattWise recognised the appliance you plugged back in" means.
-          recognised: detectionResult?.matchSource === 'learned',
-          confidence: detectionResult?.confidence ?? null,
-          // The run is outside what this system is built to monitor. Surfaced
-          // here so a client can say so instead of showing a spinner forever.
-          unsupported: detectionResult?.unsupported === true,
-          suggestionPending: !!measuredAs && (nameIsWrong || !namedAs),
+          ...buildApplianceIdentity(identity, detectionResult, namedAs),
           updatedAtMs: now,
         };
       }
