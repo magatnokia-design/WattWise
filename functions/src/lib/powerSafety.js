@@ -9,7 +9,16 @@
  * has the numbers.
  */
 
+// Per outlet. Matches MAX_OUTLET_POWER_W in updateOutletMetrics and the firmware.
 const HARD_MAX_POWER_W = 500;
+
+// Both outlets together. This is a *separate* ceiling, and conflating the two was
+// a real fault: the combined check divided total draw by the per-outlet 500 W, so
+// 300 W + 300 W read as 120% and tripped an auto-cutoff the hardware would have
+// allowed. Both the firmware and updateOutletMetrics permit 1000 W total, and the
+// Power Safety screen tells the user so in as many words - so the backend was
+// cutting power off at a limit both clients denied existed.
+const HARD_MAX_TOTAL_POWER_W = 1000;
 
 // Philippine residential supply is 230 V nominal. The band is deliberately wide:
 // measured mains here sit around 244 V, and a narrow band would flag a healthy
@@ -120,13 +129,14 @@ const evaluateSafety = ({ settings, outlets = [], totalPowerW = 0, nowMs = Date.
     }
   });
 
-  // Combined draw is judged against the same ceiling: two outlets at 60% each
-  // is a real problem the per-outlet check cannot see.
+  // Combined draw, judged against the total ceiling rather than the per-outlet
+  // one: two outlets at 60% each is a real problem the per-outlet check cannot
+  // see, but 60% each is 600 W of the 1000 W the hardware actually permits.
   if (protectionEnabled && thresholds.powerMax > 0) {
-    const combinedStage = stageFromRatio(totalPowerW / HARD_MAX_POWER_W);
+    const combinedStage = stageFromRatio(totalPowerW / HARD_MAX_TOTAL_POWER_W);
     if (combinedStage !== 'normal') {
       stage = higherStage(stage, combinedStage);
-      reasons.push(`combined draw ${totalPowerW.toFixed(0)}W of ${HARD_MAX_POWER_W}W`);
+      reasons.push(`combined draw ${totalPowerW.toFixed(0)}W of ${HARD_MAX_TOTAL_POWER_W}W`);
     }
   }
 
@@ -148,6 +158,7 @@ const evaluateSafety = ({ settings, outlets = [], totalPowerW = 0, nowMs = Date.
 
 module.exports = {
   HARD_MAX_POWER_W,
+  HARD_MAX_TOTAL_POWER_W,
   DEFAULT_VOLTAGE_MIN,
   DEFAULT_VOLTAGE_MAX,
   WARNING_RATIO,

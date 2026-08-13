@@ -43,17 +43,57 @@ test('stages escalate as the load approaches the configured limit', () => {
   assert.equal(at(400), 'cutoff');   // 100%
 });
 
-test('combined draw is caught even when neither outlet alone is over', () => {
+// This test used to assert the bug, which is why the bug survived review: it
+// read 480 W combined as "96% of the 500 W hardware ceiling" and expected a
+// 'limit'. 500 W is the ceiling for ONE outlet. The pair is allowed 1000 W by
+// the firmware, by updateOutletMetrics, and by the Power Safety screen's own
+// wording - so this expectation had the backend cutting power off at a limit
+// both clients told the user did not exist.
+test('combined draw well inside the total ceiling is not a fault', () => {
   const result = evaluateSafety({
     settings: settingsWith(),
     outlets: [outlet(1, 240), outlet(2, 240)],
     totalPowerW: 480,
   });
 
-  // 240W each is only 60% of the 400W per-outlet limit, but 480W combined is
-  // 96% of the 500W hardware ceiling.
-  assert.equal(result.stage, 'limit');
-  assert.ok(result.reasons.some((reason) => reason.includes('combined')));
+  // 480 W is 48% of the 1000 W the hardware actually permits, and 60% of the
+  // 400 W configured per outlet. Nothing here is a problem.
+  assert.equal(result.stage, 'normal');
+  assert.equal(result.reasons.some((reason) => reason.includes('combined')), false);
+});
+
+// Worth stating outright, because it is the reason the combined check looks
+// redundant now and should not be "fixed" back: with a per-outlet ceiling of
+// P and a total ceiling of exactly 2P, the per-outlet ratio max(a,b)/P is always
+// at least the combined ratio (a+b)/2P, since 2*max(a,b) >= a+b. So the combined
+// check can never escalate past what the per-outlet check has already found.
+//
+// It is kept as a backstop: it costs nothing, it states the intent, and it would
+// start doing real work the moment the two ceilings stop being 1:2 - which is
+// exactly the change most likely to be made without thinking about this file.
+test('the per-outlet check always reaches a fault before the combined one', () => {
+  const cases = [
+    [200, 200], [399, 399], [400, 400], [450, 300], [500, 100], [480, 480],
+  ];
+
+  for (const [a, b] of cases) {
+    const result = evaluateSafety({
+      settings: settingsWith({
+        thresholds: { voltage: { min: 200, max: 250 }, current: { max: 10 }, power: { max: 500 } },
+      }),
+      outlets: [outlet(1, a), outlet(2, b)],
+      totalPowerW: a + b,
+    });
+
+    const combinedOnly = result.reasons.length > 0
+      && result.reasons.every((reason) => reason.includes('combined'));
+
+    assert.equal(
+      combinedOnly,
+      false,
+      `${a}W + ${b}W was flagged by the combined check alone`
+    );
+  }
 });
 
 test('a switched-off outlet reading 0V is not an under-voltage fault', () => {
@@ -157,4 +197,57 @@ test('a missing settings document still evaluates and writes defaults', () => {
 
   assert.equal(result.stage, 'normal');
   assert.equal(result.shouldWrite, true);
+});
+
+// Regression: the combined-draw check divided total power by the *per-outlet*
+// 500 W ceiling, so two outlets at 300 W each read as 120% of limit and tripped
+// an auto-cutoff. Both the firmware and updateOutletMetrics allow 1000 W total,
+// and the Power Safety screen states that limit to the user - so the backend was
+// disconnecting power at a threshold both clients said did not exist.
+test('combined draw is judged against the total ceiling, not the per-outlet one', () => {
+  const result = evaluateSafety({
+    settings: { thresholds: { powerMax: 500 }, protectionEnabled: true },
+    outlets: [
+      { number: 1, voltage: 240, current: 1.3, power: 300, status: 'on' },
+      { number: 2, voltage: 240, current: 1.3, power: 300, status: 'on' },
+    ],
+    totalPowerW: 600,
+    nowMs: Date.now(),
+  });
+
+  // 600 W is 60% of 1000 W - nowhere near any stage.
+  assert.equal(result.stage, 'normal');
+  assert.equal(
+    result.reasons.some((reason) => reason.includes('combined')),
+    false,
+    'combined draw should not be flagged at 60% of the total ceiling'
+  );
+});
+
+test('combined draw still escalates as it approaches the total ceiling', () => {
+  const atWarning = evaluateSafety({
+    settings: { thresholds: { powerMax: 500 }, protectionEnabled: true },
+    outlets: [
+      { number: 1, voltage: 240, current: 1.8, power: 420, status: 'on' },
+      { number: 2, voltage: 240, current: 1.8, power: 400, status: 'on' },
+    ],
+    totalPowerW: 820,
+    nowMs: Date.now(),
+  });
+
+  // 82% of 1000 W crosses WARNING_RATIO but not LIMIT_RATIO.
+  assert.equal(atWarning.stage, 'warning');
+  assert.ok(atWarning.reasons.some((reason) => reason.includes('combined draw 820W of 1000W')));
+
+  const atCutoff = evaluateSafety({
+    settings: { thresholds: { powerMax: 500 }, protectionEnabled: true },
+    outlets: [
+      { number: 1, voltage: 240, current: 2.1, power: 499, status: 'on' },
+      { number: 2, voltage: 240, current: 2.1, power: 501, status: 'on' },
+    ],
+    totalPowerW: 1000,
+    nowMs: Date.now(),
+  });
+
+  assert.equal(atCutoff.stage, 'cutoff');
 });
