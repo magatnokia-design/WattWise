@@ -8,7 +8,9 @@
     "ios": "expo run:ios",
     "web": "expo start --web",
     "verify:functions": "npm --prefix functions run lint && npm --prefix functions test",
-    "device:qr": "node scripts/generate-device-qr.js"
+    "device:qr": "node scripts/generate-device-qr.js",
+    "lint:app": "node functions/node_modules/eslint/bin/eslint.js src --ext .js",
+    "verify": "npm run lint:app && npm run verify:functions"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",
