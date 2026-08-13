@@ -77,6 +77,17 @@ const ApplianceSuggestion = ({
   // the user open "Why" to discover the suggestion was a coin flip.
   const showPickerInline = suggestion.ambiguous && alternatives.length > 0;
 
+  // Swapping an appliance while the outlet stays on does not restart the
+  // measurement, so the run keeps averaging the appliance that has gone with the
+  // one that arrived. Observed: a lamp replaced by a fan reported "about 16.3 W"
+  // on an outlet drawing 56 W, and the blend inflated the spread from 0.5 to
+  // 17.3 - which is a Speaker's signature, so that is what it suggested.
+  //
+  // The measurements are stale rather than wrong, and the user cannot tell the
+  // difference from the outside. Until the detector restarts a run on a sustained
+  // level shift, say plainly what clears it.
+  const suggestionIsStale = suggestion.identityState === 'changed';
+
   return (
     <>
       <View style={styles.row}>
@@ -98,6 +109,16 @@ const ApplianceSuggestion = ({
           </TouchableOpacity>
         </View>
       </View>
+
+      {suggestionIsStale ? (
+        <View style={styles.ambiguousNotice}>
+          <Ionicons name="refresh-outline" size={14} color={COLORS.textDark} />
+          <Text style={styles.ambiguousText}>
+            Different appliance detected. Switch this outlet off and on to measure
+            it on its own — otherwise this reading still includes the last one.
+          </Text>
+        </View>
+      ) : null}
 
       {showPickerInline ? (
         <View style={styles.ambiguousNotice}>

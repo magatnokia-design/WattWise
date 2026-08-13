@@ -53,6 +53,12 @@ infrastructure exists only under `functions/`.
   - don't relax these for convenience.
 - Appliance detection is **suggestion-first** - it never auto-renames or auto-acts without user
   confirmation. Resets go through the explicit `clearAutoDetection` callable, not ad hoc writes.
+- A detection **run only ends when the outlet is switched off** (or the draw drops under 3 W for
+  3 samples). Swapping appliances on a live outlet keeps one run going across both, so the mean
+  and spread blend the two and the suggestion is confidently wrong - a 14 W lamp replaced by a
+  56 W fan measured 23 W and was suggested as a "Speaker". Switching the outlet off and on clears
+  it, and both clients say so on screen when `applianceIdentity.state` is `changed`. See the
+  KNOWN LIMITATION note in `functions/src/lib/applianceDetector.js` before changing run handling.
 
 ## Architecture
 

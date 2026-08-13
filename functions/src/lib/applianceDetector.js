@@ -9,6 +9,24 @@ const LOAD_PRESENT_THRESHOLD_W = 3;
 // finished). A short dip does not end it - chargers taper, fans restart.
 const IDLE_SAMPLES_TO_END_RUN = 3;
 
+// KNOWN LIMITATION - a run only ends when the outlet is switched off, or when the
+// draw falls below LOAD_PRESENT_THRESHOLD_W for IDLE_SAMPLES_TO_END_RUN samples.
+// A *sustained level shift* does not end it.
+//
+// So swapping appliances while the outlet stays powered keeps one run going
+// across both, and every figure drawn from it is a blend. Measured on hardware:
+// a 14 W lamp replaced by a 56 W fan reported a mean of 23 W on an outlet
+// actually drawing 56 W, and the blend pushed the standard deviation from 0.5 to
+// 17.3 - erratic draw is a Speaker's whole signature, so "Speaker @ 0.84" is what
+// it suggested. Confidently wrong, from good evidence mixed with stale evidence.
+//
+// Switching the outlet off and on clears it, and both clients now say so on
+// screen when the identity reads 'changed'. That is a workaround, not a fix: the
+// run should restart on its own when the level shifts and stays shifted. Doing
+// that safely needs a rolling window rather than a single-sample threshold,
+// because a laptop charger genuinely swings 15<->60 W - the difference is that it
+// swings *both ways* while a swap steps one way and stays there.
+
 const MIN_SAMPLE_COUNT = 4;
 const MIN_RUNTIME_MS = 3000;
 const LIVE_EVALUATION_SAMPLE_INTERVAL = 2;
