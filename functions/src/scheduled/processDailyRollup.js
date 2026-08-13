@@ -8,7 +8,7 @@ const {
   getManilaPreviousDateKey,
   getDaysInManilaMonth,
 } = require('../lib/manilaTime');
-const { resolveEnergyForDate } = require('../lib/energyAccounting');
+const { resolveEnergyForDate, resolvePeakForDate } = require('../lib/energyAccounting');
 const { upsertInvoice } = require('./processMonthlyInvoice');
 
 const upsertApplianceBreakdown = (items, applianceName, energyKwh, cost, outletNumber) => {
@@ -172,16 +172,33 @@ async function processDailyRollup() {
           ? String(outlet2Doc.data().applianceName || 'Outlet 2').trim()
           : 'Outlet 2';
 
-        // Calculate peak power from logs
+        // The day's peak draw, measured across every telemetry sample by
+        // updateOutletMetrics rather than reconstructed here.
         let peakPower = 0;
         let peakHour = 0;
 
+        for (const outletDoc of [outlet1Doc, outlet2Doc]) {
+          const peak = resolvePeakForDate(
+            outletDoc.exists ? outletDoc.data() : {},
+            dateString
+          );
+          if (peak.powerW > peakPower) {
+            peakPower = peak.powerW;
+            // Reported to the user as a Manila hour, so convert from the UTC clock.
+            peakHour = peak.atMs ? getManilaHour(new Date(peak.atMs)) : 0;
+          }
+        }
+
+        // Event logs record the draw at the instant something happened - a
+        // toggle, a schedule, a cutoff - so they are a poor peak on their own and
+        // used to be the only source. Kept as a floor: they are still real
+        // readings, and for any day that ended before telemetry began tracking a
+        // peak they are the only evidence left.
         logsSnapshot.forEach((logDoc) => {
           const logData = logDoc.data();
           if (logData.power > peakPower) {
             peakPower = logData.power;
             const timestamp = logData.timestamp?.toDate() || new Date();
-            // Reported to the user as a Manila hour, so convert from the UTC clock.
             peakHour = getManilaHour(timestamp);
           }
         });

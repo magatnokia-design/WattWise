@@ -55,6 +55,28 @@ const resolveOutletEnergyForDate = (outlet = {}, dateKey) => {
   return 0;
 };
 
+/**
+ * The peak draw measured for `dateKey`, mirroring the backend's
+ * resolvePeakForDate. Guarded on the same day keys as the energy above, so a
+ * stale outlet document cannot report yesterday's high as today's.
+ *
+ * Returns 0 until the device has posted telemetry carrying the new field, which
+ * is why the caller keeps the instantaneous reading as a separate value rather
+ * than falling back to it - a live draw is not a peak, and labelling it as one
+ * is what this replaces.
+ */
+const resolveOutletPeakForDate = (outlet = {}, dateKey) => {
+  if (String(outlet.energyPreviousDateKey || '') === dateKey) {
+    return Math.max(0, toNumber(outlet.peakPowerPreviousDayW));
+  }
+
+  if (String(outlet.energyDateKey || '') === dateKey) {
+    return Math.max(0, toNumber(outlet.peakPowerTodayW));
+  }
+
+  return 0;
+};
+
 const resolveApplianceName = (outlet = {}, outletNumber) => {
   const name = String(outlet.applianceName || '').trim();
   const fallback = `Outlet ${outletNumber}`;
@@ -137,7 +159,22 @@ export const buildLiveTodayEntry = (outlets, { rateProfileId = null, supplyRates
     cost,
     bill,
     applianceBreakdown,
-    peakPower: Math.max(toNumber(outlet1.power), toNumber(outlet2.power)),
+    // The day's highest measured draw, tracked per sample by updateOutletMetrics.
+    // This used to be Math.max of the two outlets' *instantaneous* power, which
+    // is not a peak at all: it read 0.0 W under a "PEAK POWER" heading the moment
+    // both outlets were switched off, and it was the only number the History
+    // screen's Peak column had for today.
+    peakPower: Math.max(
+      resolveOutletPeakForDate(outlet1, dateKey),
+      resolveOutletPeakForDate(outlet2, dateKey)
+    ),
+    // Kept separate rather than folded into peakPower, so a screen showing live
+    // draw and a screen showing the day's peak cannot end up reading the same
+    // field under two different labels.
+    currentPower: Math.max(toNumber(outlet1.power), toNumber(outlet2.power)),
+    // Today's peak hour stays unreported: the nightly rollup fills it in from
+    // peakPowerTodayAtMs, and converting UTC to a Manila hour on the client to
+    // show it a few hours early is not worth a second timezone implementation.
     peakHour: null,
     // Marks the row as measured-so-far rather than a closed day.
     isLive: true,

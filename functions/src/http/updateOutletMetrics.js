@@ -227,7 +227,10 @@ async function updateOutletMetrics(req, res) {
       // The device reports a lifetime cumulative meter reading, so `energy` is
       // derived here as today's usage. Everything downstream - the dashboard,
       // the nightly rollup, budgets - reads a real per-day number.
-      const energyState = deriveOutletEnergy(previousOutletData, energy, timestampMs);
+      // `power` is passed so the day's peak is a maximum over every telemetry
+      // sample. It used to be reconstructed in the nightly rollup from event
+      // logs, which only exist when someone pressed something.
+      const energyState = deriveOutletEnergy(previousOutletData, energy, timestampMs, power);
 
       // A toggle the device has not polled for yet must not be overwritten by
       // telemetry still reporting the old relay state.
@@ -252,6 +255,10 @@ async function updateOutletMetrics(req, res) {
         energyMeterKwh: energyState.energyMeterKwh,
         energyPreviousDayKwh: energyState.energyPreviousDayKwh,
         energyPreviousDateKey: energyState.energyPreviousDateKey,
+        peakPowerTodayW: energyState.peakPowerTodayW,
+        peakPowerTodayAtMs: energyState.peakPowerTodayAtMs,
+        peakPowerPreviousDayW: energyState.peakPowerPreviousDayW,
+        peakPowerPreviousDayAtMs: energyState.peakPowerPreviousDayAtMs,
         totalEnergy: energyState.totalEnergy,
         deviceId: normalizedDeviceId,
         detectionState: nextDetectionState,

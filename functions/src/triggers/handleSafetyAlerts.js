@@ -3,6 +3,7 @@ const logger = require('firebase-functions/logger');
 const { dispatchDeviceCommand } = require('../lib/deviceCommandDispatcher');
 const { PENDING_STATUS_WINDOW_MS } = require('../lib/outletStatus');
 const { normalizeThresholds } = require('../lib/powerSafety');
+const { resolveOutletLogName } = require('../lib/applianceDetector');
 const { resolveUserContact, enqueueEmail } = require('../lib/mailQueue');
 
 /**
@@ -251,6 +252,27 @@ async function handleSafetyAlerts(event) {
         targets: targets.map((entry) => entry.outletId),
       });
 
+      // The outlet documents, for their names. This trigger only has the safety
+      // document's readings, which carry no appliance name - so a cutoff logged
+      // "Outlet 1" while a manual toggle of the same outlet logged "Nokia's Fan",
+      // and History showed one outlet under two names. One read, on a path that
+      // only runs when a cutoff actually fires.
+      const targetOutletData = new Map();
+      try {
+        const outletDocs = await db.getAll(
+          ...targets.map((entry) => db.doc(`users/${userId}/outlets/${entry.outletId}`))
+        );
+        outletDocs.forEach((doc) => {
+          targetOutletData.set(doc.id, doc.exists ? doc.data() || {} : {});
+        });
+      } catch (nameError) {
+        // A cutoff must never fail over a label. Falls through to `Outlet N`.
+        logger.warn('Could not load outlet names for cutoff log', {
+          userId,
+          message: nameError?.message,
+        });
+      }
+
       const batch = db.batch();
 
       // The pending marker processOutletToggle sets, for the same reason: the
@@ -273,7 +295,10 @@ async function handleSafetyAlerts(event) {
         batch.set(logsRef.doc(), {
           timestamp: admin.firestore.FieldValue.serverTimestamp(),
           outlet: entry.number,
-          outletName: `Outlet ${entry.number}`,
+          outletName: resolveOutletLogName(
+            targetOutletData.get(entry.outletId) || {},
+            entry.number
+          ),
           action: 'off',
           source: 'auto_cutoff',
           power: entry.reading?.power || 0,
