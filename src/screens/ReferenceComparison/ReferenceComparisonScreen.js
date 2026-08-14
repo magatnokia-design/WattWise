@@ -437,22 +437,34 @@ const styles = StyleSheet.create({
     borderColor: COLORS.border,
     padding: 16,
   },
+  // space-between alone does not stop a row from overflowing: without flex on
+  // either child both Texts size to their content, and once they no longer fit
+  // they simply butt together - "Not measured by WattWise" ran straight into
+  // "P1172.83 under (99.1%)" with no gap at all. The short currency rows fit, so
+  // the card looked correct until a long value appeared. The label is the part
+  // that may wrap; the value stays on one line and keeps its right edge.
   accuracyRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingVertical: 5,
+    gap: 12,
   },
   accuracyLabel: {
+    flex: 1,
     fontSize: 13,
     color: COLORS.textLight,
   },
   accuracyValue: {
+    flexShrink: 0,
+    textAlign: 'right',
     fontSize: 14,
     fontWeight: '600',
     color: COLORS.text,
   },
   accuracyValueStrong: {
+    flexShrink: 0,
+    textAlign: 'right',
     fontSize: 15,
     fontWeight: '700',
   },
