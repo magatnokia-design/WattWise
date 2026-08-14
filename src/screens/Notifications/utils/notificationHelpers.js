@@ -89,13 +89,27 @@ const titleCase = (value) => {
 /** `outlet1Voltage` -> `Outlet1 voltage`. Only used by the fallback below. */
 const humanizeKey = (key) => titleCase(String(key).replace(/([a-z0-9])([A-Z])/g, '$1 $2'));
 
-const humanizeValue = (value) => {
+/**
+ * Energy is measured in kWh, and two decimals is a significant figure short of
+ * useful for it. A day on a two-outlet setup routinely lands under 0.1 kWh, so
+ * 0.088 and 0.094 both rendered "0.09" and a quiet day rendered "0" - while the
+ * same notification's body text, formatted server-side to 3 dp, said 0.088. The
+ * rollup notification contradicted itself in two adjacent lines.
+ *
+ * Matched on the name rather than listed, because the branch this feeds exists
+ * precisely to handle metadata shapes added after it was written. Every energy
+ * figure in this project is kWh, and no non-energy key is named for it.
+ */
+const isEnergyKey = (key) => /energy/i.test(String(key || ''));
+
+const humanizeValue = (value, key) => {
   if (typeof value === 'boolean') return value ? 'Yes' : 'No';
 
   const numeric = toNumber(value);
-  // Trailing-zero-free, but never a 9-digit float.
+  // Trailing-zero-free, but never a 9-digit float. Two decimals suits pesos and
+  // percentages, which is everything here except energy.
   if (numeric !== null && typeof value !== 'string') {
-    return String(Number(numeric.toFixed(2)));
+    return String(Number(numeric.toFixed(isEnergyKey(key) ? 3 : 2)));
   }
 
   return String(value ?? '');
@@ -167,7 +181,7 @@ export const describeNotificationDetails = (item) => {
   Object.entries(metadata).forEach(([key, value]) => {
     if (key === 'type' || value === null || value === undefined || value === '') return;
     if (typeof value === 'object') return;
-    rows.push({ label: humanizeKey(key), value: humanizeValue(value) });
+    rows.push({ label: humanizeKey(key), value: humanizeValue(value, key) });
   });
 
   return rows;

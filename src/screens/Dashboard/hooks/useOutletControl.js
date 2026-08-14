@@ -28,7 +28,6 @@ const EMPTY_OUTLET_SUGGESTION = {
   canAccept: false,
 };
 
-const LIVE_CURRENT_THRESHOLD_A = 0.01;
 const LIVE_POWER_THRESHOLD_W = 0.5;
 const HARDWARE_STALE_THRESHOLD_MS = 12000;
 
@@ -80,9 +79,15 @@ const getTelemetryUpdatedAtMs = (outlet = {}) => {
 };
 
 const deriveOutletRuntimeState = (outlet = {}) => {
-  const current = toMetricNumber(outlet.current);
   const power = toMetricNumber(outlet.power);
-  const hasLiveLoad = power >= LIVE_POWER_THRESHOLD_W || current >= LIVE_CURRENT_THRESHOLD_A;
+  // Power alone. This used to accept `current >= 0.01 A` as evidence of a load,
+  // and the owner's PZEM reads 0.02 A at 0.0 W on a switched-off outlet - double
+  // the threshold with nothing consuming - so outlet 2 sat there reading
+  // "Nokia's Fan - recognised" while off. It tracked the meter exactly: 0.02 A
+  // showed the name, 0.00 A showed "No appliance detected yet", 0.02 A showed it
+  // again. Current without power is not consumption, it is the meter's noise
+  // floor, and the power threshold was already doing the work.
+  const hasLiveLoad = power >= LIVE_POWER_THRESHOLD_W;
 
   const lastUpdatedMs = getTelemetryUpdatedAtMs(outlet);
   const hasFreshTelemetry =
@@ -102,8 +107,7 @@ const buildOutletMetrics = (outlet = {}, isOutletOn = false, runtimeState = {}) 
 
   const hasLiveLoad =
     runtimeState.hasLiveLoad === true ||
-    power >= LIVE_POWER_THRESHOLD_W ||
-    current >= LIVE_CURRENT_THRESHOLD_A;
+    power >= LIVE_POWER_THRESHOLD_W;
   const hasFreshTelemetry = runtimeState.hasFreshTelemetry === true;
 
   if (!hasFreshTelemetry) {
@@ -267,6 +271,12 @@ export const useOutletControl = () => {
   // name is only meaningful while something is plugged in and running.
   const [outlet1HasLoad, setOutlet1HasLoad] = useState(false);
   const [outlet2HasLoad, setOutlet2HasLoad] = useState(false);
+  // Kept apart from hasLoad because they answer different questions. "Nothing is
+  // drawing" is a measurement; "the hardware stopped reporting" is the absence
+  // of one. Collapsed together, a stale outlet claimed to be empty on the
+  // strength of readings that had ended twelve seconds earlier.
+  const [outlet1HasReading, setOutlet1HasReading] = useState(false);
+  const [outlet2HasReading, setOutlet2HasReading] = useState(false);
   const [isToggling, setIsToggling] = useState(false);
   // Starts true so the UI can show a placeholder instead of briefly rendering
   // "Not set" before the first Firestore snapshot arrives.
@@ -291,12 +301,14 @@ export const useOutletControl = () => {
       setOutlet1Metrics(metrics);
       setOutlet1Suggestion(suggestion);
       setOutlet1HasLoad(hasLoad);
+      setOutlet1HasReading(runtimeState.hasFreshTelemetry);
     } else if (outlet.outletNumber === 2) {
       setOutlet2Status(resolvedStatus);
       setOutlet2ApplianceName(resolvedApplianceName);
       setOutlet2Metrics(metrics);
       setOutlet2Suggestion(suggestion);
       setOutlet2HasLoad(hasLoad);
+      setOutlet2HasReading(runtimeState.hasFreshTelemetry);
     }
   }, []);
 
@@ -321,6 +333,8 @@ export const useOutletControl = () => {
         setOutlet2Suggestion({ ...EMPTY_OUTLET_SUGGESTION });
         setOutlet1HasLoad(false);
         setOutlet2HasLoad(false);
+        setOutlet1HasReading(false);
+        setOutlet2HasReading(false);
         setRateProfileId(null);
         setIsLoadingOutlets(false);
         return;
@@ -484,6 +498,8 @@ export const useOutletControl = () => {
     outlet2Suggestion,
     outlet1HasLoad,
     outlet2HasLoad,
+    outlet1HasReading,
+    outlet2HasReading,
     isLoadingOutlets,
     totalEnergyKwh,
     totalPowerW,

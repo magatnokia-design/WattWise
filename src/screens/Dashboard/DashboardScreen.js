@@ -60,8 +60,18 @@ const formatEnergyKwh = (value) => {
  * power right now: while loading we stay blank rather than flashing "Not set",
  * and with no live load we say so instead of showing a stale saved name.
  */
-const formatApplianceName = (name, { hasLoad, isLoading, identityState, recognised }) => {
+const formatApplianceName = (
+  name,
+  { hasLoad, hasReading, isLoading, identityState, recognised }
+) => {
   if (isLoading) return '—';
+
+  // Telemetry stopping is not evidence of an empty outlet. This used to fall
+  // through to "Nothing plugged in" the moment readings went stale, asserting
+  // the outlet was empty on the strength of measurements that had ended twelve
+  // seconds earlier - and a fan running behind a dropped wi-fi connection reads
+  // exactly the same as an unplugged one. Report the half still known.
+  if (!hasReading) return 'No reading';
   if (!hasLoad) return 'Nothing plugged in';
 
   const normalized = String(name || '').trim();
@@ -106,6 +116,8 @@ export const DashboardScreen = ({ navigation }) => {
     outlet2Suggestion,
     outlet1HasLoad,
     outlet2HasLoad,
+    outlet1HasReading,
+    outlet2HasReading,
     isLoadingOutlets,
     totalEnergyKwh,
     totalPowerW,
@@ -122,12 +134,14 @@ export const DashboardScreen = ({ navigation }) => {
   const outlet2Label = 'Outlet 2';
   const outlet1ApplianceLabel = formatApplianceName(outlet1ApplianceName, {
     hasLoad: outlet1HasLoad,
+    hasReading: outlet1HasReading,
     isLoading: isLoadingOutlets,
     identityState: outlet1Suggestion.identityState,
     recognised: outlet1Suggestion.recognised,
   });
   const outlet2ApplianceLabel = formatApplianceName(outlet2ApplianceName, {
     hasLoad: outlet2HasLoad,
+    hasReading: outlet2HasReading,
     isLoading: isLoadingOutlets,
     identityState: outlet2Suggestion.identityState,
     recognised: outlet2Suggestion.recognised,

@@ -220,8 +220,7 @@ export const buildLiveAppliances = (
     // switched off while a fan runs reads status 'off' and power 52.6 W at the
     // same time, and both are correct.
     //
-    // Without this the badge said "Off" beside "52.6 W", which reads as a broken
-    // sensor rather than a command in flight.
+    // Only the `on` direction needs this marker; see below.
     const pendingStatus = String(outlet.pendingStatus || '').trim().toLowerCase();
     const pendingUntilMs = toNumber(outlet.pendingStatusUntilMs);
     const isPending = (pendingStatus === 'on' || pendingStatus === 'off')
@@ -242,11 +241,22 @@ export const buildLiveAppliances = (
     // rejects sensor noise; `isOn` was doing nothing the threshold did not.
     const isDrawing = powerW > LIVE_LOAD_FLOOR_W;
 
-    // Only a real disagreement counts as switching: told to go off while still
-    // drawing, or told to come on while still drawing nothing. A command that
-    // matches what the meter already shows has nothing left to wait for.
-    const isSwitchingOff = isPending && pendingStatus === 'off' && isDrawing;
+    // Keyed on the contradiction itself rather than on a pending command. An
+    // auto-cutoff never opens a pending window - updateOutletMetrics references
+    // pendingStatus only to delete it - so a dashboard read "Off" beside 1030 W
+    // and 4.31 A with nothing marking it as in flight. Current running through an
+    // outlet the document calls off is the same user-visible problem whether a
+    // toggle, a cutoff, or a firmware-local trip caused it, and it cannot be a
+    // resting state: something has to give.
+    const isSwitchingOff = !isOn && isDrawing;
+
+    // The `on` direction cannot key off a contradiction, because there isn't
+    // one. An outlet switched on with nothing plugged into it is a perfectly
+    // ordinary resting state, and "Switching on..." would sit there forever
+    // claiming a transition that already finished. Only the pending window
+    // separates a relay that has yet to close from an empty outlet.
     const isSwitchingOn = isPending && pendingStatus === 'on' && !isDrawing;
+
     const switchingTo = isSwitchingOff ? 'off' : (isSwitchingOn ? 'on' : null);
 
     return {
