@@ -59,50 +59,48 @@ export const getSafetyStageConfig = (stage, readingsAreStale = false) => {
   return configs[stage] || configs.normal;
 };
 
+// The ratios evaluateSafety grades by, duplicated here for the same reason
+// billing.js is: the chips render directly beneath the banner the backend
+// grades, and the two disagreeing about one reading is worse than either rule
+// alone. Keep in step with WARNING_RATIO and LIMIT_RATIO in
+// functions/src/lib/powerSafety.js.
+const WARNING_RATIO = 0.8;
+const CRITICAL_RATIO = 0.95;
+
+const CRITICAL = { label: 'Critical', color: COLORS.error, bg: '#FEF2F2' };
+const WARNING = { label: 'Warning', color: '#F59E0B', bg: '#FFFBEB' };
+const NORMAL = { label: 'Normal', color: COLORS.success, bg: '#ECFDF5' };
+
 export const getStatusColor = (value, threshold) => {
-  // For voltage (has min and max)
+  // Voltage: a band, graded in or out, with no margin either side.
+  //
+  // This used to warn above `max * 0.95`, which on a 200-250 V band put Normal
+  // at 210-237.5 V. Philippine mains sits at 240-250: the owner reads 245.3 V
+  // and 245.7 V, so both chips showed Warning, and would have on essentially
+  // every reading forever - directly beneath a backend-graded banner reading
+  // "Normal - All systems operating within safe parameters".
+  //
+  // The proportional rule is right for power, where the ceiling is one the user
+  // chose and 90% of it genuinely is approaching a cutoff. Voltage is not like
+  // that. Mains sits wherever the utility puts it, the user cannot act on it,
+  // and evaluateSafety already treats it as strictly in-band or out - it
+  // escalates over-voltage to 'limit' and never to 'cutoff', because switching
+  // the load off does not fix a supply problem. A band whose top 5% is
+  // permanently occupied is not a margin.
   if (threshold.min !== undefined) {
-    if (value < threshold.min || value > threshold.max) {
-      return {
-        label: 'Critical',
-        color: COLORS.error,
-        bg: '#FEF2F2',
-      };
-    }
-    if (value < threshold.min * 1.05 || value > threshold.max * 0.95) {
-      return {
-        label: 'Warning',
-        color: '#F59E0B',
-        bg: '#FFFBEB',
-      };
-    }
-    return {
-      label: 'Normal',
-      color: COLORS.success,
-      bg: '#ECFDF5',
-    };
+    return (value < threshold.min || value > threshold.max) ? CRITICAL : NORMAL;
   }
 
-  // For current and power (has only max)
-  if (value > threshold.max) {
-    return {
-      label: 'Critical',
-      color: COLORS.error,
-      bg: '#FEF2F2',
-    };
-  }
-  if (value > threshold.max * 0.9) {
-    return {
-      label: 'Warning',
-      color: '#F59E0B',
-      bg: '#FFFBEB',
-    };
-  }
-  return {
-    label: 'Normal',
-    color: COLORS.success,
-    bg: '#ECFDF5',
-  };
+  // Current and power: a ceiling, graded proportionally, on the backend's
+  // ratios rather than a separate 0.9 this file used to apply on its own. At 85%
+  // of the limit the chip said Normal while the banner above it said Warning.
+  const limit = Number(threshold.max) || 0;
+  if (limit <= 0) return NORMAL;
+
+  const ratio = value / limit;
+  if (ratio >= CRITICAL_RATIO) return CRITICAL;
+  if (ratio >= WARNING_RATIO) return WARNING;
+  return NORMAL;
 };
 
 /**
