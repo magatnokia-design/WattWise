@@ -1,8 +1,14 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { outletService, userService } from '../../../services/firebase';
 import { auth } from '../../../services/firebase/config';
 import { onAuthStateChanged } from 'firebase/auth';
 import { calculatePelcoIIIBill, marginalRatePerKwh } from '../../../utils/billing';
+import {
+  deriveOutletRuntimeState,
+  toEpochMs,
+  LIVE_POWER_THRESHOLD_W,
+  HARDWARE_STALE_THRESHOLD_MS,
+} from '../utils/outletRuntime';
 
 const DEFAULT_OUTLET_METRICS = {
   voltage: 0,
@@ -28,9 +34,6 @@ const EMPTY_OUTLET_SUGGESTION = {
   canAccept: false,
 };
 
-const LIVE_POWER_THRESHOLD_W = 0.5;
-const HARDWARE_STALE_THRESHOLD_MS = 12000;
-
 const toMetricNumber = (value) => {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
@@ -43,60 +46,6 @@ const toOptionalNumber = (value) => {
 
 const normalizeOutletDisplayName = (value) => {
   return String(value || '').replace(/\s+/g, ' ').trim();
-};
-
-const toEpochMs = (value) => {
-  if (!value) return 0;
-
-  if (typeof value?.toDate === 'function') {
-    return value.toDate().getTime();
-  }
-
-  const numeric = Number(value);
-  if (Number.isFinite(numeric)) return numeric;
-
-  const parsed = new Date(value).getTime();
-  return Number.isFinite(parsed) ? parsed : 0;
-};
-
-const getTelemetryUpdatedAtMs = (outlet = {}) => {
-  const explicitTelemetryMs = toEpochMs(
-    outlet.metricsUpdatedAtMs ||
-    outlet.lastMetricsAtMs ||
-    outlet.lastTelemetryAtMs
-  );
-
-  if (explicitTelemetryMs > 0) {
-    return explicitTelemetryMs;
-  }
-
-  return toEpochMs(
-    outlet.metricsUpdatedAt ||
-    outlet.lastMetricsAt ||
-    outlet.lastTelemetryAt ||
-    outlet.lastUpdated
-  );
-};
-
-const deriveOutletRuntimeState = (outlet = {}) => {
-  const power = toMetricNumber(outlet.power);
-  // Power alone. This used to accept `current >= 0.01 A` as evidence of a load,
-  // and the owner's PZEM reads 0.02 A at 0.0 W on a switched-off outlet - double
-  // the threshold with nothing consuming - so outlet 2 sat there reading
-  // "Nokia's Fan - recognised" while off. It tracked the meter exactly: 0.02 A
-  // showed the name, 0.00 A showed "No appliance detected yet", 0.02 A showed it
-  // again. Current without power is not consumption, it is the meter's noise
-  // floor, and the power threshold was already doing the work.
-  const hasLiveLoad = power >= LIVE_POWER_THRESHOLD_W;
-
-  const lastUpdatedMs = getTelemetryUpdatedAtMs(outlet);
-  const hasFreshTelemetry =
-    lastUpdatedMs > 0 && (Date.now() - lastUpdatedMs) <= HARDWARE_STALE_THRESHOLD_MS;
-
-  return {
-    hasLiveLoad,
-    hasFreshTelemetry,
-  };
 };
 
 const buildOutletMetrics = (outlet = {}, isOutletOn = false, runtimeState = {}) => {
@@ -259,24 +208,20 @@ const resolveApplianceName = (outlet = {}) => {
 };
 
 export const useOutletControl = () => {
-  const [outlet1Status, setOutlet1Status] = useState(false);
-  const [outlet2Status, setOutlet2Status] = useState(false);
-  const [outlet1ApplianceName, setOutlet1ApplianceName] = useState('');
-  const [outlet2ApplianceName, setOutlet2ApplianceName] = useState('');
-  const [outlet1Metrics, setOutlet1Metrics] = useState(DEFAULT_OUTLET_METRICS);
-  const [outlet2Metrics, setOutlet2Metrics] = useState(DEFAULT_OUTLET_METRICS);
-  const [outlet1Suggestion, setOutlet1Suggestion] = useState({ ...EMPTY_OUTLET_SUGGESTION });
-  const [outlet2Suggestion, setOutlet2Suggestion] = useState({ ...EMPTY_OUTLET_SUGGESTION });
-  // Whether a load is actually drawing power right now. The saved appliance
-  // name is only meaningful while something is plugged in and running.
-  const [outlet1HasLoad, setOutlet1HasLoad] = useState(false);
-  const [outlet2HasLoad, setOutlet2HasLoad] = useState(false);
-  // Kept apart from hasLoad because they answer different questions. "Nothing is
-  // drawing" is a measurement; "the hardware stopped reporting" is the absence
-  // of one. Collapsed together, a stale outlet claimed to be empty on the
-  // strength of readings that had ended twelve seconds earlier.
-  const [outlet1HasReading, setOutlet1HasReading] = useState(false);
-  const [outlet2HasReading, setOutlet2HasReading] = useState(false);
+  // The raw documents, not conclusions drawn from them. Everything below is
+  // derived during render instead of in the snapshot handler, because the
+  // conclusions depend on the clock: staleness has to arrive on time, and a
+  // handler only runs when data arrives. When the ESP32 goes quiet no data
+  // arrives, so a value computed there freezes at its last reading and goes on
+  // presenting it as current.
+  const [outletDocs, setOutletDocs] = useState({ 1: null, 2: null });
+  // Optimistic toggle and rename, each held only until the next snapshot for
+  // that outlet. Kept beside the documents rather than written over the derived
+  // values, because the derived values are recomputed every render now and would
+  // overwrite them straight back.
+  const [pendingToggle, setPendingToggle] = useState({ 1: null, 2: null });
+  const [pendingRename, setPendingRename] = useState({ 1: null, 2: null });
+  const [nowMs, setNowMs] = useState(() => Date.now());
   const [isToggling, setIsToggling] = useState(false);
   // Starts true so the UI can show a placeholder instead of briefly rendering
   // "Not set" before the first Firestore snapshot arrives.
@@ -285,32 +230,89 @@ export const useOutletControl = () => {
   const [supplyRates, setSupplyRates] = useState(null);
   const [hasSupplyRates, setHasSupplyRates] = useState(true);
 
+  // Half the staleness threshold, so an outlet is reported stale within about
+  // six seconds of the readings stopping rather than whenever something else
+  // happens to re-render.
+  useEffect(() => {
+    const timer = setInterval(() => setNowMs(Date.now()), HARDWARE_STALE_THRESHOLD_MS / 2);
+    return () => clearInterval(timer);
+  }, []);
+
   const applyOutletData = useCallback((outlet) => {
     if (!outlet || !outlet.outletNumber) return;
 
-    const runtimeState = deriveOutletRuntimeState(outlet);
-    const resolvedStatus = runtimeState.hasFreshTelemetry ? resolveOutletStatus(outlet) : false;
-    const resolvedApplianceName = resolveApplianceName(outlet);
-    const suggestion = buildOutletSuggestion(outlet, resolvedApplianceName, runtimeState);
-    const metrics = buildOutletMetrics(outlet, resolvedStatus, runtimeState);
-    const hasLoad = runtimeState.hasFreshTelemetry && runtimeState.hasLiveLoad;
+    const outletNumber = Number(outlet.outletNumber);
+    if (outletNumber !== 1 && outletNumber !== 2) return;
 
-    if (outlet.outletNumber === 1) {
-      setOutlet1Status(resolvedStatus);
-      setOutlet1ApplianceName(resolvedApplianceName);
-      setOutlet1Metrics(metrics);
-      setOutlet1Suggestion(suggestion);
-      setOutlet1HasLoad(hasLoad);
-      setOutlet1HasReading(runtimeState.hasFreshTelemetry);
-    } else if (outlet.outletNumber === 2) {
-      setOutlet2Status(resolvedStatus);
-      setOutlet2ApplianceName(resolvedApplianceName);
-      setOutlet2Metrics(metrics);
-      setOutlet2Suggestion(suggestion);
-      setOutlet2HasLoad(hasLoad);
-      setOutlet2HasReading(runtimeState.hasFreshTelemetry);
-    }
+    setOutletDocs((previous) => ({ ...previous, [outletNumber]: outlet }));
+    // The document now says what the relay is doing, so the optimistic value
+    // has nothing left to cover.
+    setPendingToggle((previous) => (
+      previous[outletNumber] === null ? previous : { ...previous, [outletNumber]: null }
+    ));
+    setPendingRename((previous) => (
+      previous[outletNumber] === null ? previous : { ...previous, [outletNumber]: null }
+    ));
+    // Any snapshot is also proof the clock should be re-read: a document that
+    // has just arrived is fresh, and the interval may be up to six seconds away.
+    setNowMs(Date.now());
   }, []);
+
+  const derived = useMemo(() => {
+    const forOutlet = (outletNumber) => {
+      const outlet = outletDocs[outletNumber];
+      if (!outlet) {
+        return {
+          status: false,
+          applianceName: '',
+          metrics: DEFAULT_OUTLET_METRICS,
+          suggestion: { ...EMPTY_OUTLET_SUGGESTION },
+          hasLoad: false,
+          hasReading: false,
+        };
+      }
+
+      const runtimeState = deriveOutletRuntimeState(outlet, nowMs);
+      const reportedStatus = runtimeState.hasFreshTelemetry ? resolveOutletStatus(outlet) : false;
+      const optimisticStatus = pendingToggle[outletNumber];
+      const status = optimisticStatus === null ? reportedStatus : optimisticStatus;
+
+      const optimisticName = pendingRename[outletNumber];
+      const applianceName = optimisticName === null
+        ? resolveApplianceName(outlet)
+        : optimisticName;
+
+      const suggestion = buildOutletSuggestion(outlet, applianceName, runtimeState);
+
+      return {
+        status,
+        applianceName,
+        metrics: buildOutletMetrics(outlet, status, runtimeState),
+        // A name the user has just chosen leaves nothing to suggest, and the
+        // offer must go the moment they accept it rather than a round trip later.
+        suggestion: optimisticName === null
+          ? suggestion
+          : { ...suggestion, showBadge: false, canAccept: false },
+        hasLoad: runtimeState.hasLoad,
+        hasReading: runtimeState.hasFreshTelemetry,
+      };
+    };
+
+    return { 1: forOutlet(1), 2: forOutlet(2) };
+  }, [outletDocs, pendingToggle, pendingRename, nowMs]);
+
+  const outlet1Status = derived[1].status;
+  const outlet2Status = derived[2].status;
+  const outlet1ApplianceName = derived[1].applianceName;
+  const outlet2ApplianceName = derived[2].applianceName;
+  const outlet1Metrics = derived[1].metrics;
+  const outlet2Metrics = derived[2].metrics;
+  const outlet1Suggestion = derived[1].suggestion;
+  const outlet2Suggestion = derived[2].suggestion;
+  const outlet1HasLoad = derived[1].hasLoad;
+  const outlet2HasLoad = derived[2].hasLoad;
+  const outlet1HasReading = derived[1].hasReading;
+  const outlet2HasReading = derived[2].hasReading;
 
   // Load outlet data on mount
   useEffect(() => {
@@ -323,18 +325,10 @@ export const useOutletControl = () => {
       }
 
       if (!user?.uid) {
-        setOutlet1Status(false);
-        setOutlet2Status(false);
-        setOutlet1ApplianceName('');
-        setOutlet2ApplianceName('');
-        setOutlet1Metrics(DEFAULT_OUTLET_METRICS);
-        setOutlet2Metrics(DEFAULT_OUTLET_METRICS);
-        setOutlet1Suggestion({ ...EMPTY_OUTLET_SUGGESTION });
-        setOutlet2Suggestion({ ...EMPTY_OUTLET_SUGGESTION });
-        setOutlet1HasLoad(false);
-        setOutlet2HasLoad(false);
-        setOutlet1HasReading(false);
-        setOutlet2HasReading(false);
+        // Dropping the documents resets everything derived from them.
+        setOutletDocs({ 1: null, 2: null });
+        setPendingToggle({ 1: null, 2: null });
+        setPendingRename({ 1: null, 2: null });
         setRateProfileId(null);
         setIsLoadingOutlets(false);
         return;
@@ -382,15 +376,14 @@ export const useOutletControl = () => {
 
   // Toggle outlet ON/OFF
   const toggleOutlet = useCallback(async (outletNumber, newStatus) => {
-    const setStatus = outletNumber === 2 ? setOutlet2Status : setOutlet1Status;
-    const previousStatus = outletNumber === 2 ? outlet2Status : outlet1Status;
+    const key = outletNumber === 2 ? 2 : 1;
 
     // Move the switch now rather than after the round trip. The callable has to
     // reach asia-southeast1, and a cold start alone can take seconds - waiting
-    // on that made a working toggle feel broken. The Firestore listener
-    // overwrites this with the real value moments later either way, and a
-    // failure below puts it straight back.
-    setStatus(newStatus);
+    // on that made a working toggle feel broken. Held as an override rather than
+    // written over the derived value, so the next snapshot clears it by simply
+    // being newer; a failure below drops it early.
+    setPendingToggle((previous) => ({ ...previous, [key]: newStatus }));
     setIsToggling(true);
 
     try {
@@ -405,13 +398,13 @@ export const useOutletControl = () => {
 
       return { success: true };
     } catch (error) {
-      setStatus(previousStatus);
+      setPendingToggle((previous) => ({ ...previous, [key]: null }));
       console.error('Error toggling outlet:', error);
       return { success: false, error: error.message };
     } finally {
       setIsToggling(false);
     }
-  }, [outlet1Status, outlet2Status]);
+  }, []);
 
   // Update appliance name
   const updateApplianceName = useCallback(async (outletNumber, newName, options = {}) => {
@@ -435,22 +428,11 @@ export const useOutletControl = () => {
         : sanitizedName;
 
       // Apply immediately in UI; snapshot listener will keep it in sync afterward.
-      if (outletNumber === 1) {
-        setOutlet1ApplianceName(visibleName);
-        setOutlet1Suggestion((previous) => ({
-          ...previous,
-          showBadge: false,
-          canAccept: false,
-        }));
-      } else if (outletNumber === 2) {
-        setOutlet2ApplianceName(visibleName);
-        setOutlet2Suggestion((previous) => ({
-          ...previous,
-          showBadge: false,
-          canAccept: false,
-        }));
+      if (outletNumber === 1 || outletNumber === 2) {
+        setPendingRename((previous) => ({ ...previous, [outletNumber]: visibleName }));
       }
-      
+
+
       return { success: true, learned: !!result.learned, learnError: result.learnError || null };
     } catch (error) {
       console.error('Error updating appliance name:', error);
