@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import {
   deriveOutletRuntimeState,
   getTelemetryUpdatedAtMs,
+  resolveSwitchingTo,
   HARDWARE_STALE_THRESHOLD_MS,
 } from '../src/screens/Dashboard/utils/outletRuntime.js';
 
@@ -86,5 +87,77 @@ test('the telemetry timestamp is read across the field names in use', () => {
     getTelemetryUpdatedAtMs({ metricsUpdatedAtMs: AT, lastUpdated: { toMillis: () => AT + 5000 } }),
     AT,
     'a real telemetry field wins over lastUpdated'
+  );
+});
+
+/*
+ * Switching state. The two directions are decided by different evidence on
+ * purpose - see resolveSwitchingTo - and the tests below exist mainly to hold
+ * that asymmetry in place, because the obvious "just use pendingStatus for
+ * both" simplification silently breaks the auto-cutoff case.
+ */
+
+test('an outlet commanded off while current still flows is switching off', () => {
+  assert.equal(
+    resolveSwitchingTo({}, { isOn: false, isDrawing: true, nowMs: AT }),
+    'off'
+  );
+});
+
+test('a cutoff is reported as switching off even with no pending marker', () => {
+  // updateOutletMetrics only ever deletes pendingStatus, so an auto-cutoff
+  // opens no pending window. Keyed on a marker instead of the contradiction,
+  // this case read "Off" beside 1030 W with nothing marking it in flight.
+  const cutoff = { status: 'off', pendingStatus: '', pendingStatusUntilMs: 0 };
+
+  assert.equal(
+    resolveSwitchingTo(cutoff, { isOn: false, isDrawing: true, nowMs: AT }),
+    'off'
+  );
+});
+
+test('an outlet switched on inside the poll window is switching on', () => {
+  const pending = { pendingStatus: 'on', pendingStatusUntilMs: AT + 20000 };
+
+  assert.equal(
+    resolveSwitchingTo(pending, { isOn: true, isDrawing: false, nowMs: AT }),
+    'on'
+  );
+});
+
+test('switching on ends once the load appears, before the window closes', () => {
+  const pending = { pendingStatus: 'on', pendingStatusUntilMs: AT + 20000 };
+
+  assert.equal(
+    resolveSwitchingTo(pending, { isOn: true, isDrawing: true, nowMs: AT }),
+    null,
+    'the relay has plainly closed - the meter says so'
+  );
+});
+
+test('an expired pending window stops claiming a transition', () => {
+  // The guard against a card sitting on "Switching on..." forever when the
+  // ESP32 never polls. An empty outlet that was switched on is an ordinary
+  // resting state, not an unfinished command.
+  const stale = { pendingStatus: 'on', pendingStatusUntilMs: AT - 1 };
+
+  assert.equal(
+    resolveSwitchingTo(stale, { isOn: true, isDrawing: false, nowMs: AT }),
+    null
+  );
+});
+
+test('a settled outlet is not switching in either direction', () => {
+  assert.equal(resolveSwitchingTo({}, { isOn: true, isDrawing: true, nowMs: AT }), null);
+  assert.equal(resolveSwitchingTo({}, { isOn: false, isDrawing: false, nowMs: AT }), null);
+});
+
+test('a stale reading cannot start a switching-off claim', () => {
+  // isDrawing already folds in freshness upstream. Stated here because the
+  // whole point of the freshness gate is that a frozen wattage would otherwise
+  // hold the badge on "Switching off..." indefinitely.
+  assert.equal(
+    resolveSwitchingTo({}, { isOn: false, isDrawing: false, nowMs: AT }),
+    null
   );
 });

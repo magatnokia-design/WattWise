@@ -60,4 +60,43 @@ export const deriveOutletRuntimeState = (outlet = {}, nowMs = Date.now()) => {
   };
 };
 
+/**
+ * Which way a command in flight is moving, or null if nothing is in flight.
+ *
+ * Same two rules liveUsage.js applies, because the dashboard card and the
+ * live-appliance rows read the same documents and must not disagree about
+ * whether a relay is mid-move. Kept here rather than in liveUsage.js only
+ * because this hook derives `isOn` differently - it folds in the optimistic
+ * override, so the card can say "Switching off..." on the tap rather than one
+ * round trip later.
+ *
+ * @param {object} outlet Raw outlet document.
+ * @param {object} args
+ * @param {boolean} args.isOn      Effective commanded state, optimistic override included.
+ * @param {boolean} args.isDrawing Fresh reading above the load floor.
+ * @param {number} args.nowMs
+ * @returns {'on'|'off'|null}
+ */
+export const resolveSwitchingTo = (outlet = {}, { isOn, isDrawing, nowMs = Date.now() } = {}) => {
+  // Keyed on the contradiction itself, not on a pending marker: an auto-cutoff
+  // opens no pending window, so a card would otherwise read "Off" beside a fan
+  // that is still turning. Current flowing through an outlet the document calls
+  // off cannot be a resting state whatever caused it.
+  if (!isOn && isDrawing) return 'off';
+
+  // The `on` direction has no contradiction to key on - an outlet switched on
+  // with nothing plugged in is perfectly ordinary - so only the pending window
+  // separates a relay that has yet to close from an empty outlet. Deliberately
+  // NOT keyed on the local optimistic override as well: that clears on the next
+  // snapshot, but if none ever arrived the card would sit claiming a transition
+  // forever, which is the failure this window exists to bound.
+  const pendingStatus = String(outlet.pendingStatus || '').trim().toLowerCase();
+  const pendingUntilMs = toMetricNumber(outlet.pendingStatusUntilMs);
+  const isPendingOn = pendingStatus === 'on' && pendingUntilMs > nowMs;
+
+  if (isPendingOn && !isDrawing) return 'on';
+
+  return null;
+};
+
 export { LIVE_POWER_THRESHOLD_W };

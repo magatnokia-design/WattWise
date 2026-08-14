@@ -5,6 +5,7 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { calculatePelcoIIIBill, marginalRatePerKwh } from '../../../utils/billing';
 import {
   deriveOutletRuntimeState,
+  resolveSwitchingTo,
   toEpochMs,
   LIVE_POWER_THRESHOLD_W,
   HARDWARE_STALE_THRESHOLD_MS,
@@ -297,6 +298,7 @@ export const useOutletControl = () => {
           suggestion: { ...EMPTY_OUTLET_SUGGESTION },
           hasLoad: false,
           hasReading: false,
+          switchingTo: null,
         };
       }
 
@@ -331,6 +333,13 @@ export const useOutletControl = () => {
           : { ...suggestion, showBadge: false, canAccept: false },
         hasLoad: runtimeState.hasLoad,
         hasReading: runtimeState.hasFreshTelemetry,
+        // Uses the effective status, override included, so the badge turns over
+        // on the tap rather than after the callable has reached asia-southeast1.
+        switchingTo: resolveSwitchingTo(outlet, {
+          isOn: status,
+          isDrawing: runtimeState.hasLoad,
+          nowMs,
+        }),
       };
     };
 
@@ -349,6 +358,8 @@ export const useOutletControl = () => {
   const outlet2HasLoad = derived[2].hasLoad;
   const outlet1HasReading = derived[1].hasReading;
   const outlet2HasReading = derived[2].hasReading;
+  const outlet1SwitchingTo = derived[1].switchingTo;
+  const outlet2SwitchingTo = derived[2].switchingTo;
 
   // Load outlet data on mount
   useEffect(() => {
@@ -518,6 +529,8 @@ export const useOutletControl = () => {
     outlet2HasLoad,
     outlet1HasReading,
     outlet2HasReading,
+    outlet1SwitchingTo,
+    outlet2SwitchingTo,
     isLoadingOutlets,
     totalEnergyKwh,
     totalPowerW,

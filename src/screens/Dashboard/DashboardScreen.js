@@ -20,6 +20,7 @@ import { useDismissibleNotice } from '../../hooks/useDismissibleNotice';
 import OutletControlModal from './components/OutletControlModal';
 import ApplianceSuggestion from './components/ApplianceSuggestion';
 import { useOutletControl } from './hooks/useOutletControl';
+import { resolveOutletBadge } from './utils/outletBadge';
 import { budgetService } from '../../services/firebase';
 import { auth } from '../../services/firebase/config';
 
@@ -117,6 +118,26 @@ const formatPeso = (value) => {
   return Number.isFinite(parsed) ? parsed.toFixed(2) : '0.00';
 };
 
+/**
+ * The status pill. `resolveOutletBadge` decides what it says; this only decides
+ * what colour that is. The tone lookup is read at render rather than built at
+ * module level because `styles` is defined further down the file.
+ */
+const StatusBadge = ({ badge }) => {
+  const tone = badge.tone === 'good'
+    ? { pill: styles.statusOn, dot: styles.dotOn, label: styles.statusTextOn }
+    : badge.tone === 'warn'
+      ? { pill: styles.statusWarn, dot: styles.dotWarn, label: styles.statusTextWarn }
+      : { pill: styles.statusOff, dot: styles.dotOff, label: styles.statusTextOff };
+
+  return (
+    <View style={[styles.statusBadge, tone.pill]}>
+      <View style={[styles.statusDot, tone.dot]} />
+      <Text style={[styles.statusText, tone.label]}>{badge.text}</Text>
+    </View>
+  );
+};
+
 export const DashboardScreen = ({ navigation }) => {
   const [notificationVisible, setNotificationVisible] = useState(false);
   const [expandedSuggestionOutlet, setExpandedSuggestionOutlet] = useState(null);
@@ -139,6 +160,8 @@ export const DashboardScreen = ({ navigation }) => {
     outlet2HasLoad,
     outlet1HasReading,
     outlet2HasReading,
+    outlet1SwitchingTo,
+    outlet2SwitchingTo,
     isLoadingOutlets,
     totalEnergyKwh,
     totalPowerW,
@@ -172,6 +195,23 @@ export const DashboardScreen = ({ navigation }) => {
     unsupported: outlet2Suggestion.unsupported,
     unsupportedReason: outlet2Suggestion.unsupportedReason,
     measuredPowerW: outlet2Suggestion.measuredPowerW,
+  });
+
+  // Shared with the web client, byte-identical, so the same outlet never reads
+  // "ON" on the phone and "Switching off..." in the browser. The old badge said
+  // only ON or OFF, which during the poll window asserted a relay position the
+  // meter was actively contradicting.
+  const outlet1Badge = resolveOutletBadge({
+    isOn: outlet1Status,
+    isDrawing: outlet1HasLoad,
+    telemetryFresh: outlet1HasReading,
+    switchingTo: outlet1SwitchingTo,
+  });
+  const outlet2Badge = resolveOutletBadge({
+    isOn: outlet2Status,
+    isDrawing: outlet2HasLoad,
+    telemetryFresh: outlet2HasReading,
+    switchingTo: outlet2SwitchingTo,
   });
 
   const activeOutletsCount = (outlet1Status === true ? 1 : 0) + (outlet2Status === true ? 1 : 0);
@@ -366,7 +406,7 @@ export const DashboardScreen = ({ navigation }) => {
           {/* Outlet 1 */}
           <View style={styles.outletCard}>
             <View style={styles.outletHeader}>
-              <View>
+              <View style={styles.outletHeaderInfo}>
                 <Text style={styles.outletTitle}>{outlet1Label}</Text>
                 <View style={styles.applianceRow}>
                   <Text style={styles.applianceLabel}>Appliance:</Text>
@@ -381,12 +421,7 @@ export const DashboardScreen = ({ navigation }) => {
                   </Text>
                 </View>
               </View>
-              <View style={[styles.statusBadge, outlet1Status ? styles.statusOn : styles.statusOff]}>
-                <View style={[styles.statusDot, outlet1Status ? styles.dotOn : styles.dotOff]} />
-                <Text style={[styles.statusText, outlet1Status ? styles.statusTextOn : styles.statusTextOff]}>
-                  {outlet1Status ? 'ON' : 'OFF'}
-                </Text>
-              </View>
+              <StatusBadge badge={outlet1Badge} />
             </View>
 
             <View style={styles.metricsGrid}>
@@ -439,7 +474,7 @@ export const DashboardScreen = ({ navigation }) => {
           {/* Outlet 2 */}
           <View style={styles.outletCard}>
             <View style={styles.outletHeader}>
-              <View>
+              <View style={styles.outletHeaderInfo}>
                 <Text style={styles.outletTitle}>{outlet2Label}</Text>
                 <View style={styles.applianceRow}>
                   <Text style={styles.applianceLabel}>Appliance:</Text>
@@ -454,12 +489,7 @@ export const DashboardScreen = ({ navigation }) => {
                   </Text>
                 </View>
               </View>
-              <View style={[styles.statusBadge, outlet2Status ? styles.statusOn : styles.statusOff]}>
-                <View style={[styles.statusDot, outlet2Status ? styles.dotOn : styles.dotOff]} />
-                <Text style={[styles.statusText, outlet2Status ? styles.statusTextOn : styles.statusTextOff]}>
-                  {outlet2Status ? 'ON' : 'OFF'}
-                </Text>
-              </View>
+              <StatusBadge badge={outlet2Badge} />
             </View>
 
             <View style={styles.metricsGrid}>
@@ -737,6 +767,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'flex-start',
     marginBottom: 16,
+    gap: 8,
+  },
+  // The appliance line is the part that may wrap; the pill keeps its width.
+  outletHeaderInfo: {
+    flex: 1,
   },
   outletTitle: {
     ...FONTS.h4,
@@ -776,12 +811,28 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 12,
     gap: 4,
+    // The pill used to hold two characters and now holds "Switching off..." and
+    // "On - no reading". Without this the header row lets both children size to
+    // content and overflow into each other, which is what jammed the label and
+    // value together on the comparison card.
+    flexShrink: 0,
   },
   statusOn: {
     backgroundColor: COLORS.success + '20',
   },
   statusOff: {
     backgroundColor: COLORS.textLight + '20',
+  },
+  // Amber, the tone this app already uses for "in flight or needs attention,
+  // not broken" - the same treatment as the swapped-appliance notice.
+  statusWarn: {
+    backgroundColor: '#FFFBEB',
+  },
+  dotWarn: {
+    backgroundColor: '#B45309',
+  },
+  statusTextWarn: {
+    color: '#B45309',
   },
   statusDot: {
     width: 6,

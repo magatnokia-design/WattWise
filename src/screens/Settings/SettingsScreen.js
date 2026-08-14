@@ -431,18 +431,30 @@ const SettingsScreen = ({ navigation }) => {
               was - he did the right thing on instinct - but nothing on screen
               said so, and hesitating there is the difference between naming an
               appliance and abandoning the flow. */}
-          <Separator />
           <View style={styles.namingGuidance}>
-            <Text style={styles.namingGuidanceTitle}>Not seeing your appliance?</Text>
+            <View style={styles.namingGuidanceHeader}>
+              <Text style={styles.namingGuidanceIcon}>💡</Text>
+              <Text style={styles.namingGuidanceTitle}>Not seeing your appliance?</Text>
+            </View>
+
+            {/* The instruction gets its own line. It was previously the middle
+                sentence of a five-line paragraph, which is where the one piece
+                of text the reader had to act on is least likely to be read. */}
+            <Text style={styles.namingGuidanceAction}>
+              Pick whichever is closest, then rename it.
+            </Text>
+
             <Text style={styles.namingGuidanceText}>
-              These eight are the only names WattWise can guess from wattage alone.{' '}
-              <Text style={styles.namingGuidanceStrong}>
-                Pick whichever is closest, then rename it.
-              </Text>{' '}
-              The signature it saves is measured from your appliance, so the name
-              it started from stops mattering — a 14 W ceiling fan will suggest
-              LED Lamp, and once renamed it is a ceiling fan every time it comes
-              back.
+              These eight names are all WattWise can guess from wattage alone. The
+              signature it saves is measured from your appliance, so the name it
+              started from stops mattering.
+            </Text>
+
+            <View style={styles.namingGuidanceDivider} />
+
+            <Text style={styles.namingGuidanceExample}>
+              A 14 W ceiling fan will suggest LED Lamp. Rename it once and it is a
+              ceiling fan every time it comes back.
             </Text>
           </View>
         </SectionCard>
@@ -584,24 +596,57 @@ const styles = StyleSheet.create({
     lineHeight: 19,
     color: COLORS.textLight,
   },
+  // Its own tinted block rather than a bare paragraph flush against the list.
+  // Sitting inside the card with the same padding as the rows above it, this
+  // read as one more list entry that happened to be long; the border and the
+  // green tint mark it as help about the list rather than part of it.
   namingGuidance: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    marginHorizontal: 12,
+    marginTop: 4,
+    marginBottom: 12,
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.primary + '33',
+    backgroundColor: COLORS.primary + '0D',
+  },
+  namingGuidanceHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    marginBottom: 8,
+  },
+  namingGuidanceIcon: {
+    fontSize: 14,
   },
   namingGuidanceTitle: {
-    fontSize: 13,
+    flex: 1,
+    fontSize: 13.5,
     fontWeight: '700',
     color: COLORS.textDark,
-    marginBottom: 4,
+  },
+  namingGuidanceAction: {
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: '700',
+    color: COLORS.primary,
+    marginBottom: 6,
   },
   namingGuidanceText: {
-    fontSize: 13,
-    lineHeight: 19,
+    fontSize: 12.5,
+    lineHeight: 18,
     color: COLORS.textLight,
   },
-  namingGuidanceStrong: {
-    fontWeight: '700',
-    color: COLORS.textDark,
+  namingGuidanceDivider: {
+    height: 1,
+    backgroundColor: COLORS.primary + '26',
+    marginVertical: 10,
+  },
+  namingGuidanceExample: {
+    fontSize: 12,
+    lineHeight: 17,
+    color: COLORS.textLight,
+    fontStyle: 'italic',
   },
   header: {
     paddingHorizontal: 16,
