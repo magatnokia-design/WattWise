@@ -61,6 +61,10 @@ const SOURCE_LABELS = {
   schedule: { label: 'Schedule', tone: 'info' },
   auto_cutoff: { label: 'Auto-cutoff', tone: 'danger' },
   timer: { label: 'Timer', tone: 'info' },
+  // A relay moved without WattWise ordering it - a power-cycle is the ordinary
+  // cause, since the ESP32 boots with both relays open. Named for what is known
+  // rather than for the presumed cause.
+  device: { label: 'Device', tone: 'info' },
 };
 
 export const describeLogSource = (source) => {

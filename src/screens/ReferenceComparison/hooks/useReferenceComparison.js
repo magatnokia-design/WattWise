@@ -35,6 +35,9 @@ const useReferenceComparison = () => {
   const [totalsA, setTotalsA] = useState(emptyMonthTotals);
   const [totalsB, setTotalsB] = useState(emptyMonthTotals);
   const [actualBill, setActualBill] = useState(null);
+  // The user's own PELCO III rates, kept so the accuracy check can re-price the
+  // bill's own kWh with the same tariff the months were priced with.
+  const [rates, setRates] = useState({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -95,6 +98,10 @@ const useReferenceComparison = () => {
       setTotalsA(nextA);
       setTotalsB(nextB);
 
+      // The accuracy check re-prices the bill's own kWh, so it needs the same
+      // rates the months were priced with.
+      setRates(rates);
+
       const bill = billResult.success ? billResult.data : null;
       // A stored row of all zeroes is the same as no bill on file.
       setActualBill(bill && (bill.totalCost > 0 || bill.totalKWh > 0) ? bill : null);
@@ -117,8 +124,8 @@ const useReferenceComparison = () => {
   );
 
   const accuracy = useMemo(
-    () => compareToActualBill(totalsA, actualBill),
-    [totalsA, actualBill]
+    () => compareToActualBill(totalsA, actualBill, rates),
+    [totalsA, actualBill, rates]
   );
 
   // Picking the same month on both sides compares nothing, so the other side

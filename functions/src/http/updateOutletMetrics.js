@@ -9,6 +9,7 @@ const {
   enforceMetricsRateAndReplayGuards,
 } = require('../lib/deviceSecurity');
 const {
+  MODEL_VERSION,
   normalizeDetectionState,
   updateDetectionState,
   shouldEvaluateLive,
@@ -16,9 +17,10 @@ const {
   matchNamedAppliance,
   buildApplianceIdentity,
   isPlaceholderLabel,
+  resolveOutletLogName,
 } = require('../lib/applianceDetector');
 const { dispatchDeviceCommand } = require('../lib/deviceCommandDispatcher');
-const { resolveOutletStatus } = require('../lib/outletStatus');
+const { resolveOutletStatus, isUncommandedStatusChange } = require('../lib/outletStatus');
 const { deriveOutletEnergy } = require('../lib/energyAccounting');
 const { evaluateSafety } = require('../lib/powerSafety');
 
@@ -169,6 +171,9 @@ async function updateOutletMetrics(req, res) {
     const batch = db.batch();
 
     const dispatchedOutletIds = new Set();
+    // Relay positions the device reports that WattWise never asked for; written
+    // to history after the loop so they ride the same batch.
+    const uncommandedChanges = [];
 
     for (const outlet of validOutlets) {
       const { number, voltage, current, power, status, energy, isOverPower } = outlet;
@@ -236,6 +241,19 @@ async function updateOutletMetrics(req, res) {
       // telemetry still reporting the old relay state.
       const statusResolution = resolveOutletStatus(previousOutletData, status, now);
 
+      // The Activity log promises "every switch, wherever it came from", and a
+      // power-cycle went straight past it: the ESP32 returns with both relays
+      // open - correct, that is the module's default - and two outlets changed
+      // state with nothing written, because only commands write history.
+      if (isUncommandedStatusChange(previousOutletData, status)) {
+        uncommandedChanges.push({
+          number,
+          outletName: resolveOutletLogName(previousOutletData, number),
+          action: statusResolution.status,
+          power,
+        });
+      }
+
       const outletUpdate = {
         outletId: `outlet${number}`,
         outletNumber: number,
@@ -283,18 +301,37 @@ async function updateOutletMetrics(req, res) {
         outletUpdate.applianceIdentity = admin.firestore.FieldValue.delete();
       }
 
-      if (detectionResult?.unsupported) {
+      // Over the hardware limit is out of scope by definition on a low-voltage
+      // system, and the answer cannot come from the detector even in principle.
+      // The firmware opens the relay after OVERPOWER_GRACE_MS (3 s) while posting
+      // every METRICS_INTERVAL_ACTIVE_MS (1.5 s), so a run like this is two or
+      // three samples long against a MIN_SAMPLE_COUNT of 4:
+      // detectApplianceFromRunState returns at its sample guard and never reaches
+      // the branch that sets `unsupported`. So the one state built to say "this
+      // is outside what WattWise monitors" was unreachable for precisely the
+      // appliances most obviously outside it - an iron, a kettle, a microwave all
+      // read "Detecting..." indefinitely, which is indistinguishable from a
+      // measurement still in progress. It only ever fired in the 230-500 W band.
+      //
+      // No sampling is required to know a 1030 W load is not a laptop charger.
+      const outOfScopeByPower = isOverPower;
+
+      if (detectionResult?.unsupported || outOfScopeByPower) {
         // Measured, scored against every profile, and matched by none. There is
         // no name to offer, but staying silent about it is what made an
         // out-of-scope load look identical to one still being measured.
         outletUpdate.autoDetectedAppliance = '';
         outletUpdate.applianceDetection = {
-          modelVersion: detectionResult.modelVersion,
+          modelVersion: detectionResult?.modelVersion || MODEL_VERSION,
           confidence: 0,
           candidates: [],
           matchSource: 'none',
           unsupported: true,
-          features: detectionResult.features,
+          // Why it is out of scope, so the clients can say "draws too much" for
+          // the over-power case rather than the vaguer "not recognised".
+          unsupportedReason: detectionResult?.unsupported ? 'no_match' : 'over_power',
+          ...(outOfScopeByPower ? { measuredPowerW: Number(power.toFixed(1)) } : {}),
+          features: detectionResult?.features || null,
           updatedAtMs: now,
         };
       } else if (detectionResult) {
@@ -481,6 +518,20 @@ async function updateOutletMetrics(req, res) {
           lastSeenAt: admin.firestore.FieldValue.serverTimestamp(),
         },
       }, { merge: true });
+    }
+
+    // A relay moved without WattWise ordering it - a power-cycle is the ordinary
+    // cause, and the ESP32 booting with both relays open is correct behaviour.
+    // The log records what happened rather than claiming to know why.
+    for (const change of uncommandedChanges) {
+      batch.set(db.collection(`users/${userId}/history_logs`).doc(), {
+        timestamp: admin.firestore.FieldValue.serverTimestamp(),
+        outlet: change.number,
+        outletName: change.outletName,
+        action: change.action,
+        source: 'device',
+        power: change.power,
+      });
     }
 
     // Commit batch write

@@ -212,18 +212,36 @@ const ReferenceComparisonScreen = ({ navigation }) => {
                 <Text style={styles.accuracyValue}>{formatPeso(accuracy.estimatedCost)}</Text>
               </View>
               <View style={styles.accuracyDivider} />
+              {/* The scope gap, stated plainly and not graded. The bill covers
+                  the apartment and WattWise covers two outlets, so this is
+                  always large and always expected - colouring it as a failure
+                  put a permanent warning on a card whose own paragraph
+                  explained the gap was normal. */}
               <View style={styles.accuracyRow}>
-                <Text style={styles.accuracyLabel}>Difference</Text>
-                <Text
-                  style={[
-                    styles.accuracyValueStrong,
-                    { color: accuracy.isClose ? COLORS.success : COLORS.warning },
-                  ]}
-                >
+                <Text style={styles.accuracyLabel}>Not measured by WattWise</Text>
+                <Text style={styles.accuracyValue}>
                   {formatPeso(accuracy.absolute)} {accuracy.direction}
                   {' '}({accuracy.absolutePercent.toFixed(1)}%)
                 </Text>
               </View>
+              {/* The check that can actually fail: the bill's own kWh priced
+                  with WattWise's tariff, against what the bill charged. */}
+              {accuracy.modelCheck ? (
+                <View style={styles.accuracyRow}>
+                  <Text style={styles.accuracyLabel}>
+                    Rate accuracy on {accuracy.modelCheck.billedKWh.toFixed(0)} kWh
+                  </Text>
+                  <Text
+                    style={[
+                      styles.accuracyValueStrong,
+                      { color: accuracy.modelCheck.isClose ? COLORS.success : COLORS.warning },
+                    ]}
+                  >
+                    {accuracy.modelCheck.absolutePercent.toFixed(1)}%
+                    {' '}{accuracy.modelCheck.direction}
+                  </Text>
+                </View>
+              ) : null}
               <Text style={styles.accuracyNote}>{explainAccuracy(accuracy, labelA)}</Text>
               <TouchableOpacity
                 style={styles.secondaryButton}

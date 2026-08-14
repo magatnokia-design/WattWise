@@ -47,4 +47,39 @@ const resolveOutletStatus = (previous, reportedStatus, nowMs = Date.now()) => {
   return { status: pending, clearPending: false, pendingHonoured: true };
 };
 
-module.exports = { PENDING_STATUS_WINDOW_MS, resolveOutletStatus };
+/**
+ * Whether the device is reporting a relay position WattWise never asked for.
+ *
+ * The Activity log's subtitle promises "every switch, wherever it came from",
+ * and a power-cycle slipped straight past it: the ESP32 comes back with both
+ * relays open, which is the module's default and correct behaviour, but two
+ * outlets went from on to off with nothing written. Only commands write history,
+ * and no command was issued.
+ *
+ * Requires the absence of a pending marker rather than just a lapsed one. A
+ * command that was issued and never executed is a different event with its own
+ * reporting - handleDeviceCommandEmails and the failure notification - and
+ * logging it here as well would report one failure twice under two names.
+ *
+ * @param {object} previous Stored outlet document.
+ * @param {string} reportedStatus Status from this telemetry payload.
+ * @returns {boolean}
+ */
+const isUncommandedStatusChange = (previous, reportedStatus) => {
+  const stored = String(previous?.status || '').trim().toLowerCase();
+  const reported = String(reportedStatus || '').trim().toLowerCase();
+  const pending = String(previous?.pendingStatus || '').trim().toLowerCase();
+
+  // Nothing stored yet: this is the first telemetry for the outlet, not a change.
+  if (stored !== 'on' && stored !== 'off') return false;
+  if (reported !== 'on' && reported !== 'off') return false;
+  if (pending) return false;
+
+  return stored !== reported;
+};
+
+module.exports = {
+  PENDING_STATUS_WINDOW_MS,
+  resolveOutletStatus,
+  isUncommandedStatusChange,
+};

@@ -199,7 +199,7 @@ export const buildVerdict = (comparison, monthALabel, monthBLabel) => {
  * This is the only check in the app that grades the billing model against
  * reality rather than against another app-computed figure.
  */
-export const compareToActualBill = (totals, actualBill) => {
+export const compareToActualBill = (totals, actualBill, options = {}) => {
   if (!actualBill) return null;
 
   const estimatedCost = toNumber(totals?.cost);
@@ -209,18 +209,69 @@ export const compareToActualBill = (totals, actualBill) => {
   const difference = estimatedCost - actualCost;
   const percent = (difference / actualCost) * 100;
 
+  // The tariff graded on its own terms: the bill's *own* kWh run through
+  // calculatePelcoIIIBill, against the pesos the bill actually charged.
+  //
+  // The 5% band used to be applied to the comparison above, which grades pesos
+  // measured over different energy - the bill covers a whole apartment, WattWise
+  // covers two outlets. That can never pass. The owner's card read
+  // "-P1173.85 (99.2%) - Outside the expected 5% band" directly above a
+  // paragraph explaining the gap is expected, and it would have read that way
+  // every month for every user, since nobody's bill covers only these two
+  // outlets.
+  //
+  // Feeding the bill's kWh through the tariff separates the two questions: "we
+  // measured less" (scope, always true, not a fault) from "our arithmetic is
+  // wrong" (real, and previously invisible behind a warning that was always on).
+  // Graded against a real 116 kWh / P1183.00 bill, the model lands within 1.8%.
+  const actualKWh = toNumber(actualBill.totalKWh);
+  let modelCheck = null;
+
+  if (actualKWh > 0) {
+    const modelled = calculatePelcoIIIBill(actualKWh, {
+      supplyRates: options.supplyRates || null,
+      profileId: options.profileId || null,
+      isLifeline: options.isLifeline === true,
+    });
+    const modelledCost = toNumber(modelled?.totals?.total);
+
+    if (modelledCost > 0) {
+      const modelDifference = modelledCost - actualCost;
+      const modelPercent = (modelDifference / actualCost) * 100;
+
+      modelCheck = {
+        billedKWh: actualKWh,
+        billedCost: actualCost,
+        modelledCost,
+        difference: modelDifference,
+        absolute: Math.abs(modelDifference),
+        percent: modelPercent,
+        absolutePercent: Math.abs(modelPercent),
+        // Under 5% is the band the billing spec expects, given the EVAT
+        // supply-side factor is the model's one approximation.
+        isClose: Math.abs(modelPercent) <= 5,
+        direction: modelDifference >= 0 ? 'over' : 'under',
+      };
+    }
+  }
+
   return {
     estimatedCost,
     actualCost,
     estimatedKWh: toNumber(totals?.kWh),
-    actualKWh: toNumber(actualBill.totalKWh),
+    actualKWh,
     difference,
     absolute: Math.abs(difference),
     percent,
     absolutePercent: Math.abs(percent),
-    // Under 5% is the band the billing spec expects, given the EVAT supply-side
-    // factor is the model's one approximation.
-    isClose: Math.abs(percent) <= 5,
+    // Whether the tariff is right, which is what the badge was always meant to
+    // say. Null when the bill carries no kWh figure to grade against - there is
+    // no check to report then, rather than a failed one.
+    modelCheck,
+    isClose: modelCheck ? modelCheck.isClose : null,
+    // The scope gap, reported as a fact rather than as a failure. Two outlets
+    // measuring less than a whole apartment is the expected result.
+    measuresLessThanBill: toNumber(totals?.kWh) < actualKWh,
     direction: difference >= 0 ? 'over' : 'under',
   };
 };
@@ -244,8 +295,22 @@ export const compareToActualBill = (totals, actualBill) => {
 export const explainAccuracy = (accuracy, monthLabel) => {
   const percent = accuracy.absolutePercent.toFixed(1);
 
-  if (accuracy.isClose) {
-    return `WattWise is tracking your ${monthLabel} bill closely.`;
+  // The tariff check first, because it is the one that can actually fail for a
+  // reason worth acting on. The scope gap below is expected and permanent.
+  if (accuracy.modelCheck && !accuracy.modelCheck.isClose) {
+    return `Priced against the ${monthLabel} bill's own `
+      + `${accuracy.modelCheck.billedKWh.toFixed(0)} kWh, WattWise's rates come to `
+      + `₱${accuracy.modelCheck.modelledCost.toFixed(2)} against ₱${accuracy.actualCost.toFixed(2)} `
+      + `charged - ${accuracy.modelCheck.absolutePercent.toFixed(1)}% ${accuracy.modelCheck.direction}. `
+      + 'Check that your generation rate in Settings matches that month\'s bill.';
+  }
+
+  if (accuracy.modelCheck) {
+    return `Priced against the ${monthLabel} bill's own `
+      + `${accuracy.modelCheck.billedKWh.toFixed(0)} kWh, WattWise's rates land within `
+      + `${accuracy.modelCheck.absolutePercent.toFixed(1)}% of what you were charged. `
+      + 'It measured less than the bill because the bill covers the whole apartment '
+      + 'and WattWise covers outlet 1 and outlet 2.';
   }
 
   if (accuracy.direction === 'under') {
