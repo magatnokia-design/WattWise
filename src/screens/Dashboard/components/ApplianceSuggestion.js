@@ -9,6 +9,7 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../../../constants/colors';
 import { FONTS } from '../../../constants/theme';
+import { resolveSuggestionTrust, describeUncertainty } from '../utils/loadStability';
 
 const toMetricNumber = (value) => {
   const parsed = Number(value);
@@ -111,16 +112,30 @@ const ApplianceSuggestion = ({
     (candidate) => candidate.name !== suggestion.name
   );
 
-  // Same-wattage appliances: show the choices immediately rather than making
-  // the user open "Why" to discover the suggestion was a coin flip.
-  const showPickerInline = suggestion.ambiguous && alternatives.length > 0;
+  // Whether the top match is a finding or a guess. An iPhone on its charge taper
+  // scored Monitor 50 / Speaker 45 / Electric Fan 39 / Laptop Charger 37 - four
+  // profiles inside thirteen points - and the card asserted the first of them.
+  const trust = resolveSuggestionTrust({
+    confidencePercent: suggestion.confidencePercent,
+    candidates: suggestion.candidates,
+    suggestedName: suggestion.name,
+    ambiguous: suggestion.ambiguous,
+    meanPowerW: suggestion.meanPowerW,
+    stdDevPowerW: suggestion.stdDevPowerW,
+  });
+
+  // Show the choices immediately rather than making the user open "Why" to
+  // discover the suggestion was a coin flip.
+  const showPickerInline = !trust.trusted && alternatives.length > 0;
 
   return (
     <>
       {suggestionIsStale ? <StaleRunNotice /> : null}
 
-      <View style={styles.row}>
-        <Text style={styles.headline}>{formatHeadline(suggestion)}</Text>
+      <View style={[styles.row, !trust.trusted && styles.rowUnsure]}>
+        <Text style={styles.headline}>
+          {trust.trusted ? formatHeadline(suggestion) : 'WattWise is not sure what this is'}
+        </Text>
         <View style={styles.actions}>
           <TouchableOpacity
             style={[styles.metaButton, expanded && styles.metaButtonActive]}
@@ -129,21 +144,42 @@ const ApplianceSuggestion = ({
             <Ionicons name="information-circle-outline" size={14} color={COLORS.primary} />
             <Text style={styles.metaText}>Why</Text>
           </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.action, disabled && styles.actionDisabled]}
-            onPress={() => onChoose(suggestion.name)}
-            disabled={disabled}
-          >
-            <Text style={styles.actionText}>Accept</Text>
-          </TouchableOpacity>
+          {/* No primary button under a stated doubt. Offering "Accept" beneath
+              "WattWise is not sure" contradicts itself; the names below are all
+              equally on offer, so the user picks one rather than confirming a
+              guess the card has just disowned. */}
+          {trust.trusted ? (
+            <TouchableOpacity
+              style={[styles.action, disabled && styles.actionDisabled]}
+              onPress={() => onChoose(suggestion.name)}
+              disabled={disabled}
+            >
+              <Text style={styles.actionText}>Accept</Text>
+            </TouchableOpacity>
+          ) : null}
         </View>
       </View>
 
-      {showPickerInline ? (
+      {!trust.trusted ? (
         <View style={styles.ambiguousNotice}>
           <Ionicons name="help-circle-outline" size={14} color={COLORS.textDark} />
           <Text style={styles.ambiguousText}>
-            Similar wattage — tap the right one and it will be remembered.
+            {describeUncertainty({
+              varying: trust.varying,
+              swingW: trust.swingW,
+              meanPowerW: suggestion.meanPowerW,
+            })}
+          </Text>
+        </View>
+      ) : null}
+
+      {showPickerInline ? (
+        <View style={styles.ambiguousNotice}>
+          <Ionicons name="pricetag-outline" size={14} color={COLORS.textLight} />
+          <Text style={styles.ambiguousText}>
+            Not one of these? Pick the closest anyway, then rename it under
+            Settings. WattWise saves how <Text style={styles.emphasis}>this</Text>{' '}
+            appliance draws power, not the name it started from.
           </Text>
         </View>
       ) : null}
@@ -267,6 +303,16 @@ const styles = StyleSheet.create({
     flex: 1,
     ...FONTS.small,
     color: COLORS.textLight,
+  },
+  emphasis: {
+    fontStyle: 'italic',
+    fontWeight: '600',
+  },
+  // Amber rather than the confident green: the card is stating a doubt, and the
+  // container should not read as an offer while the text says otherwise.
+  rowUnsure: {
+    backgroundColor: '#FFFBEB',
+    borderColor: '#FDE68A',
   },
   chipRow: {
     flexDirection: 'row',

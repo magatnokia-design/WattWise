@@ -177,6 +177,19 @@ const ProtectionSettings = ({ enabled, onToggle, thresholds, onSaveThresholds })
                 {thresholds.power.max}W
               </Text>
             </View>
+
+            {/* The threshold that binds while both outlets are individually
+                legal, and the only one the screen never mentioned. 400 W + 400 W
+                trips it with neither outlet anywhere near its own limit, so a
+                user reading 500 and 1000 has no way to predict the warning they
+                will get. It warns; it does not cut. */}
+            <Text style={styles.limitsNote}>
+              The firmware enforces 500 W per outlet and 1000 W combined whatever
+              is set here. Between those, a combined draw over{' '}
+              <Text style={styles.limitsNoteStrong}>800 W</Text> raises a warning
+              without cutting power — 400 W on each outlet is enough to reach it,
+              with neither one over its own limit.
+            </Text>
           </View>
         )}
       </View>
@@ -263,6 +276,16 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: COLORS.primary,
+  },
+  limitsNote: {
+    marginTop: 12,
+    fontSize: 12.5,
+    lineHeight: 18,
+    color: COLORS.textLight,
+  },
+  limitsNoteStrong: {
+    fontWeight: '700',
+    color: COLORS.textDark,
   },
   inputRow: {
     flexDirection: 'row',

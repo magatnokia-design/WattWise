@@ -423,6 +423,28 @@ const SettingsScreen = ({ navigation }) => {
               </React.Fragment>
             ))
           )}
+
+          {/* Written as an instruction, and placed where the choice is being
+              reconsidered rather than after it. The owner plugged in a ceiling
+              fan, was offered LED Lamp, scanned for "Ceiling Fan", did not find
+              it, and stopped to ask whether picking LED Lamp was allowed. It
+              was - he did the right thing on instinct - but nothing on screen
+              said so, and hesitating there is the difference between naming an
+              appliance and abandoning the flow. */}
+          <Separator />
+          <View style={styles.namingGuidance}>
+            <Text style={styles.namingGuidanceTitle}>Not seeing your appliance?</Text>
+            <Text style={styles.namingGuidanceText}>
+              These eight are the only names WattWise can guess from wattage alone.{' '}
+              <Text style={styles.namingGuidanceStrong}>
+                Pick whichever is closest, then rename it.
+              </Text>{' '}
+              The signature it saves is measured from your appliance, so the name
+              it started from stops mattering — a 14 W ceiling fan will suggest
+              LED Lamp, and once renamed it is a ceiling fan every time it comes
+              back.
+            </Text>
+          </View>
         </SectionCard>
 
         {/* Preferences */}
@@ -561,6 +583,25 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 19,
     color: COLORS.textLight,
+  },
+  namingGuidance: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  namingGuidanceTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.textDark,
+    marginBottom: 4,
+  },
+  namingGuidanceText: {
+    fontSize: 13,
+    lineHeight: 19,
+    color: COLORS.textLight,
+  },
+  namingGuidanceStrong: {
+    fontWeight: '700',
+    color: COLORS.textDark,
   },
   header: {
     paddingHorizontal: 16,
