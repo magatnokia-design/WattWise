@@ -67,7 +67,7 @@ const PowerSafetyScreen = ({ navigation }) => {
         }
       >
         {/* Current Safety Stage */}
-        <SafetyStatusCard stage={safetyStage} />
+        <SafetyStatusCard stage={safetyStage} readingsAreStale={readingsAreStale} />
 
         {/* Outlet Status Cards */}
         <View style={styles.section}>

@@ -273,7 +273,15 @@ export const useOutletControl = () => {
       }
 
       const runtimeState = deriveOutletRuntimeState(outlet, nowMs);
-      const reportedStatus = runtimeState.hasFreshTelemetry ? resolveOutletStatus(outlet) : false;
+      // Ungated on telemetry, deliberately. `status` is the *commanded* state -
+      // written by processOutletToggle and by the device's ack, and held in
+      // Firestore - so the hardware going quiet says nothing about whether that
+      // write happened. Gating it did not degrade to "unknown"; it substituted a
+      // confident "off" for a value that was never telemetry-derived, which is
+      // the failure most likely to produce a bad action: the user sees off,
+      // believes the fan is off, and walks away. liveUsage.js reads the same
+      // field with no gate, and the two should not disagree about it.
+      const reportedStatus = resolveOutletStatus(outlet);
       const optimisticStatus = pendingToggle[outletNumber];
       const status = optimisticStatus === null ? reportedStatus : optimisticStatus;
 

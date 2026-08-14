@@ -15,46 +15,24 @@
  * `nowMs`, and the caller re-runs it on a timer rather than on data.
  */
 
-const LIVE_POWER_THRESHOLD_W = 0.5;
+import {
+  getTelemetryUpdatedAtMs,
+  hasFreshTelemetry,
+  toEpochMs,
+  HARDWARE_STALE_THRESHOLD_MS,
+} from '../../../utils/liveUsage';
 
-// Telemetry older than this is not evidence of anything. Matches the web
-// client's own threshold and the interval the ESP32 posts at when active.
-export const HARDWARE_STALE_THRESHOLD_MS = 12000;
+const LIVE_POWER_THRESHOLD_W = 0.5;
 
 const toMetricNumber = (value) => {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
 };
 
-export const toEpochMs = (value) => {
-  if (!value) return 0;
-  if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
-  if (typeof value?.toMillis === 'function') return value.toMillis();
-  if (typeof value?.toDate === 'function') return value.toDate().getTime();
-
-  const parsed = new Date(value).getTime();
-  return Number.isFinite(parsed) ? parsed : 0;
-};
-
-/** When this outlet last posted telemetry, across the field names in use. */
-export const getTelemetryUpdatedAtMs = (outlet = {}) => {
-  const explicitTelemetryMs = toEpochMs(
-    outlet.metricsUpdatedAtMs ||
-    outlet.lastMetricsAtMs ||
-    outlet.lastTelemetryAtMs
-  );
-
-  if (explicitTelemetryMs > 0) {
-    return explicitTelemetryMs;
-  }
-
-  return toEpochMs(
-    outlet.metricsUpdatedAt ||
-    outlet.lastMetricsAt ||
-    outlet.lastTelemetryAt ||
-    outlet.lastUpdated
-  );
-};
+// One definition of "still reporting", in the copy-rule file, so the dashboard
+// card and the live-appliance rows cannot disagree about whether the hardware is
+// talking. They read the same documents; they were deciding this separately.
+export { getTelemetryUpdatedAtMs, toEpochMs, HARDWARE_STALE_THRESHOLD_MS };
 
 /**
  * @param {object} outlet Raw outlet document.
@@ -70,15 +48,14 @@ export const deriveOutletRuntimeState = (outlet = {}, nowMs = Date.now()) => {
   const hasLiveLoad = toMetricNumber(outlet.power) >= LIVE_POWER_THRESHOLD_W;
 
   const lastUpdatedMs = getTelemetryUpdatedAtMs(outlet);
-  const hasFreshTelemetry =
-    lastUpdatedMs > 0 && (nowMs - lastUpdatedMs) <= HARDWARE_STALE_THRESHOLD_MS;
+  const isFresh = hasFreshTelemetry(outlet, nowMs);
 
   return {
     hasLiveLoad,
-    hasFreshTelemetry,
+    hasFreshTelemetry: isFresh,
     // Something is plugged in and running. Requires a reading to say so: with no
     // telemetry we do not know, which is a different answer from "nothing".
-    hasLoad: hasFreshTelemetry && hasLiveLoad,
+    hasLoad: isFresh && hasLiveLoad,
     lastUpdatedMs,
   };
 };

@@ -12,6 +12,36 @@ const MANILA_OFFSET_MS = 8 * 60 * 60 * 1000;
 // Below this the PZEM is reporting its own noise floor, not an appliance.
 const LIVE_LOAD_FLOOR_W = 0.5;
 
+// Telemetry older than this is not evidence of anything.
+export const HARDWARE_STALE_THRESHOLD_MS = 12000;
+
+export const toEpochMs = (value) => {
+  if (!value) return 0;
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+  if (typeof value?.toMillis === 'function') return value.toMillis();
+  if (typeof value?.toDate === 'function') return value.toDate().getTime();
+
+  const parsed = new Date(value).getTime();
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+/** When this outlet last posted telemetry, across the field names in use. */
+export const getTelemetryUpdatedAtMs = (outlet = {}) => {
+  const explicit = toEpochMs(
+    outlet.metricsUpdatedAtMs || outlet.lastMetricsAtMs || outlet.lastTelemetryAtMs
+  );
+  if (explicit > 0) return explicit;
+
+  return toEpochMs(
+    outlet.metricsUpdatedAt || outlet.lastMetricsAt || outlet.lastTelemetryAt || outlet.lastUpdated
+  );
+};
+
+export const hasFreshTelemetry = (outlet = {}, nowMs = Date.now()) => {
+  const lastUpdatedMs = getTelemetryUpdatedAtMs(outlet);
+  return lastUpdatedMs > 0 && (nowMs - lastUpdatedMs) <= HARDWARE_STALE_THRESHOLD_MS;
+};
+
 const pad = (value) => String(value).padStart(2, '0');
 
 const toNumber = (value) => {
@@ -239,7 +269,14 @@ export const buildLiveAppliances = (
     // combined line under it read "Drawing 0.0 W" while a fan ran, and the
     // per-hour cost it drives went to zero with it. The 0.5 W floor already
     // rejects sensor noise; `isOn` was doing nothing the threshold did not.
-    const isDrawing = powerW > LIVE_LOAD_FLOOR_W;
+    //
+    // Freshness is required because `power` freezes when the ESP32 stops
+    // posting, and a frozen field reads as a live one. Without this an outlet
+    // commanded off reported "Switching off..." against a 27-second-old wattage
+    // and would have said it forever - which is what convinced the owner a
+    // countdown timer had failed when it had in fact fired correctly.
+    const hasReading = hasFreshTelemetry(outlet, nowMs);
+    const isDrawing = hasReading && powerW > LIVE_LOAD_FLOOR_W;
 
     // Keyed on the contradiction itself rather than on a pending command. An
     // auto-cutoff never opens a pending window - updateOutletMetrics references
@@ -266,10 +303,15 @@ export const buildLiveAppliances = (
       energyKwh,
       costToday: energyKwh * perKwhRate,
       costPerHour: (powerW / 1000) * perKwhRate,
-      // What the outlet was told to be.
+      // What the outlet was told to be. Never gated on telemetry: this is the
+      // commanded state from Firestore, and the hardware going quiet says
+      // nothing about whether the command was written.
       isOn,
-      // What the meter says it is doing.
+      // What the meter says it is doing, and only while it is still saying it.
       isDrawing,
+      // Lets a caller tell "nothing is drawing" from "we cannot see". Without
+      // it the two collapse, and the collapse always reads as the confident one.
+      hasReading,
       // Set while the two disagree because the device has not polled yet, so a
       // caller can say "Switching off..." rather than asserting either one.
       isSwitching: switchingTo !== null,

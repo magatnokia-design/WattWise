@@ -4,8 +4,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../../../constants/colors';
 import { getSafetyStageConfig } from '../utils/safetyHelpers';
 
-const SafetyStatusCard = ({ stage }) => {
-  const config = getSafetyStageConfig(stage);
+const SafetyStatusCard = ({ stage, readingsAreStale = false }) => {
+  const config = getSafetyStageConfig(stage, readingsAreStale);
+  // While readings are stale the stage is not a current fact, so the bar shows
+  // no segment rather than lighting the one that was true before the hardware
+  // went quiet.
+  const gradedStage = config.stale ? null : stage;
 
   return (
     <View style={[styles.container, { backgroundColor: config.bgColor }]}>
@@ -25,10 +29,10 @@ const SafetyStatusCard = ({ stage }) => {
 
       {/* Status Indicator Bar */}
       <View style={styles.indicatorBar}>
-        <View style={[styles.indicator, stage === 'normal' && styles.indicatorActive]} />
-        <View style={[styles.indicator, stage === 'warning' && styles.indicatorActive]} />
-        <View style={[styles.indicator, stage === 'limit' && styles.indicatorActive]} />
-        <View style={[styles.indicator, stage === 'cutoff' && styles.indicatorActive]} />
+        <View style={[styles.indicator, gradedStage === 'normal' && styles.indicatorActive]} />
+        <View style={[styles.indicator, gradedStage === 'warning' && styles.indicatorActive]} />
+        <View style={[styles.indicator, gradedStage === 'limit' && styles.indicatorActive]} />
+        <View style={[styles.indicator, gradedStage === 'cutoff' && styles.indicatorActive]} />
       </View>
       
       <View style={styles.labelContainer}>

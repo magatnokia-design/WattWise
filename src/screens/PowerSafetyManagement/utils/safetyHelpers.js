@@ -1,7 +1,30 @@
 import { COLORS } from '../../../constants/colors';
 import { formatRelativeTime } from '../../../utils/datetime';
 
-export const getSafetyStageConfig = (stage) => {
+/**
+ * @param {string} stage Last stage the backend graded.
+ * @param {boolean} [readingsAreStale] Whether the hardware has stopped
+ *   reporting. A stage is a verdict on readings; with no readings there is no
+ *   verdict, and this used to fall through `configs[stage] || configs.normal`
+ *   to the greenest, largest element on the screen. With the ESP32 unplugged
+ *   the page said, at once: six chips "No reading", both cards "Waiting for the
+ *   ESP32 to report", and this banner "All systems operating within safe
+ *   parameters" - three admissions of ignorance and one assertion of safety, on
+ *   the single element a user reads to decide whether anything is wrong.
+ */
+export const getSafetyStageConfig = (stage, readingsAreStale = false) => {
+  if (readingsAreStale) {
+    return {
+      label: 'No readings',
+      description: 'The ESP32 has stopped reporting, so nothing can be graded right now',
+      icon: 'help-circle',
+      color: COLORS.textLight,
+      bgColor: '#F9FAFB',
+      // No stage is asserted, so no segment on the bar lights up.
+      stale: true,
+    };
+  }
+
   const configs = {
     normal: {
       label: 'Normal',
