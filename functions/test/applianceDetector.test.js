@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 
 const {
   MODEL_VERSION,
+  MIN_SAMPLE_COUNT,
   normalizeDetectionState,
   updateDetectionState,
   shouldEvaluateLive,
@@ -597,4 +598,36 @@ test('nothing measured means nothing to suggest', () => {
 
   const nothing = buildApplianceIdentity(identityFor('unknown'), null, 'Speaker');
   assert.equal(nothing.suggestionPending, false);
+});
+
+/**
+ * Why `unsupported` is written onto applianceDetection rather than
+ * applianceIdentity, and why a client must read it there.
+ *
+ * The firmware opens the relay after OVERPOWER_GRACE_MS (3 s) while posting
+ * every METRICS_INTERVAL_ACTIVE_MS (1.5 s), so an over-power run is two or three
+ * samples long. That is below MIN_SAMPLE_COUNT, so the detector scores nothing
+ * and returns null - and buildApplianceIdentity derives its own `unsupported`
+ * from that null verdict. A client reading only the identity would leave a
+ * 900 W kettle on "Detecting..." until it was unplugged, which is the exact
+ * silence the flag was added to end.
+ */
+test('an over-power run is too short for the detector to reach a verdict', () => {
+  const state = buildRunState({ powerStart: 912, sampleCount: 2 });
+
+  assert.equal(state.sampleCount < MIN_SAMPLE_COUNT, true, 'two samples, four required');
+  assert.equal(detectApplianceFromRunState(state), null, 'no verdict, not an unsupported one');
+});
+
+test('applianceIdentity cannot carry the over-power verdict', () => {
+  const match = { state: 'unnamed', score: 0 };
+
+  // The detector returned null above, so this is what the identity is built from.
+  const identity = buildApplianceIdentity(match, null, '');
+
+  assert.equal(
+    identity.unsupported,
+    false,
+    'false rather than true - so applianceDetection.unsupported is the field to read'
+  );
 });

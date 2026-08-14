@@ -30,6 +30,17 @@ const EMPTY_OUTLET_SUGGESTION = {
   ambiguous: false,
   identityState: 'unknown',
   recognised: false,
+  // Read from applianceDetection, never from applianceIdentity. In the
+  // over-power case the identity is not merely false, it is absent:
+  // buildApplianceIdentity derives `unsupported` from the detector's own verdict,
+  // and the detector never returns one for a load rejected on wattage alone -
+  // the relay opens after three seconds, which is fewer than the four samples
+  // matchNamedAppliance needs to evaluate anything at all. A client reading the
+  // identity would leave a 900 W kettle on "Detecting..." until it was unplugged,
+  // which is the exact silence this field was added to end.
+  unsupported: false,
+  unsupportedReason: '',
+  measuredPowerW: null,
   showBadge: false,
   canAccept: false,
 };
@@ -111,8 +122,19 @@ const buildOutletSuggestion = (outlet = {}, applianceName = '', runtimeState = {
   // is named. Returning early there reported no suggestion AND no doubt, so the
   // stale name was displayed as fact - exactly the bug this is meant to catch.
   const identityState = String(identity?.state || 'unknown');
+  const detection = outlet.applianceDetection || null;
+  // Carried through every early return below, because the out-of-scope verdict
+  // arrives precisely when there is no name, no candidates and no identity - so
+  // every path that returns "nothing to suggest" is a path that still has this
+  // to say.
+  const scope = {
+    unsupported: detection?.unsupported === true,
+    unsupportedReason: String(detection?.unsupportedReason || ''),
+    measuredPowerW: toOptionalNumber(detection?.measuredPowerW),
+  };
   const withIdentity = (base) => ({
     ...base,
+    ...scope,
     identityState,
     recognised: identity?.recognised === true,
   });
@@ -160,6 +182,7 @@ const buildOutletSuggestion = (outlet = {}, applianceName = '', runtimeState = {
 
   return {
     ...EMPTY_OUTLET_SUGGESTION,
+    ...scope,
     name: suggestedName,
     confidencePercent: toConfidencePercent(outlet.applianceDetection?.confidence),
     modelVersion: String(outlet.applianceDetection?.modelVersion || '').trim(),

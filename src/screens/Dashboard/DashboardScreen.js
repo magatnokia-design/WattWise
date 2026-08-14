@@ -62,7 +62,16 @@ const formatEnergyKwh = (value) => {
  */
 const formatApplianceName = (
   name,
-  { hasLoad, hasReading, isLoading, identityState, recognised }
+  {
+    hasLoad,
+    hasReading,
+    isLoading,
+    identityState,
+    recognised,
+    unsupported,
+    unsupportedReason,
+    measuredPowerW,
+  }
 ) => {
   if (isLoading) return '—';
 
@@ -73,6 +82,18 @@ const formatApplianceName = (
   // exactly the same as an unplugged one. Report the half still known.
   if (!hasReading) return 'No reading';
   if (!hasLoad) return 'Nothing plugged in';
+
+  // Before the name, deliberately. An outlet named "LED Lamp" with a kettle on
+  // it should not go on saying "LED Lamp" - the load is out of scope whatever
+  // the outlet is called, and that is the more useful thing to know.
+  if (unsupported) {
+    if (unsupportedReason === 'over_power') {
+      return typeof measuredPowerW === 'number'
+        ? `Draws more than WattWise supports · ${measuredPowerW.toFixed(0)} W`
+        : 'Draws more than WattWise supports';
+    }
+    return 'Not something WattWise monitors';
+  }
 
   const normalized = String(name || '').trim();
   if (!normalized) return 'Not set';
@@ -138,6 +159,9 @@ export const DashboardScreen = ({ navigation }) => {
     isLoading: isLoadingOutlets,
     identityState: outlet1Suggestion.identityState,
     recognised: outlet1Suggestion.recognised,
+    unsupported: outlet1Suggestion.unsupported,
+    unsupportedReason: outlet1Suggestion.unsupportedReason,
+    measuredPowerW: outlet1Suggestion.measuredPowerW,
   });
   const outlet2ApplianceLabel = formatApplianceName(outlet2ApplianceName, {
     hasLoad: outlet2HasLoad,
@@ -145,6 +169,9 @@ export const DashboardScreen = ({ navigation }) => {
     isLoading: isLoadingOutlets,
     identityState: outlet2Suggestion.identityState,
     recognised: outlet2Suggestion.recognised,
+    unsupported: outlet2Suggestion.unsupported,
+    unsupportedReason: outlet2Suggestion.unsupportedReason,
+    measuredPowerW: outlet2Suggestion.measuredPowerW,
   });
 
   const activeOutletsCount = (outlet1Status === true ? 1 : 0) + (outlet2Status === true ? 1 : 0);
