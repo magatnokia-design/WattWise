@@ -91,14 +91,33 @@ const APPLIANCE_PROFILES = [
   },
   {
     label: 'Electric Fan',
-    meanPower: [22, 95],
-    peakPower: [28, 130],
+    // The 22 W floor was set for AC induction fans and excluded the efficient
+    // ones outright. The owner's ceiling fan runs at 14.1 W and was routed to
+    // LED Lamp, which is the correct answer to the wrong question - it is not a
+    // lamp, it just draws like one. DC and inverter ceiling fans commonly sit
+    // between 5 and 35 W, and the low end of that overlaps lighting no matter
+    // where the boundary is drawn; runtime, activeRatio and peak-to-mean are
+    // what separate them, not the floor.
+    meanPower: [8, 95],
+    peakPower: [12, 130],
     // Fixed-speed motor: steady once spun up.
     stdDevPower: [0, 9],
     runtimeSec: [120, 43200],
     activeRatio: [0.7, 1],
     highRatio: [0, 0.03],
-    lowRatio: [0, 0.3],
+    // Widened with the floor above, and this is the half that actually mattered.
+    // lowRatio counts samples under LOW_POWER_THRESHOLD_W (20 W), so a 14 W fan
+    // scores 1.0 on it - a perfect match for LED Lamp's [0.7, 1] and a maximal
+    // miss against the old [0, 0.3]. Widening meanPower alone left the fan
+    // excluded by this instead, which is why the owner's ceiling fan still came
+    // back a lamp.
+    //
+    // Below 20 W the feature carries no information about what the appliance is,
+    // only that it is small - so it is not allowed to argue either way here.
+    // A 14 W fan and a 14 W lamp then land close together and the run comes back
+    // ambiguous, which is the honest answer: nothing in these measurements
+    // separates them, and the user picking is how the account learns which it is.
+    lowRatio: [0, 1],
   },
   {
     label: 'Laptop Charger',
@@ -458,6 +477,74 @@ const scoreUserProfile = (features, profile) => {
   };
 };
 
+/**
+ * One appliance, several operating regimes.
+ *
+ * An iPhone charging through its CC-CV taper sweeps from about 30 W to about
+ * 10 W over half an hour. A three-speed fan has three steady states. Stored as
+ * one averaged signature, such an appliance is described by a number it never
+ * actually draws: the mean of a 30->10 W sweep is 21 W, which is why that charge
+ * came back as Monitor 50% / Speaker 45% / Electric Fan 39% / Laptop Charger 37%
+ * - four profiles inside thirteen points, none of them wrong about the mean and
+ * none of them right about the appliance.
+ *
+ * So a label holds up to this many clusters and a match against any one of them
+ * is a match. Four covers a three-speed fan with room to spare, and bounds what
+ * one appliance can take from the shared MAX_USER_PROFILES budget.
+ *
+ * Held as repeated entries in the same flat array rather than a nested
+ * `signatures` field: a document written before this change is already valid
+ * under it - one entry is simply one cluster - so there is no migration, no
+ * version flag, and no read path that has to understand two shapes.
+ */
+const MAX_SIGNATURES_PER_APPLIANCE = 4;
+
+const sameLabel = (a, b) =>
+  String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase();
+
+/**
+ * Folds a freshly measured signature into the stored set.
+ *
+ * Near an existing cluster of the same appliance it refines that cluster, since
+ * a newer measurement of the same regime is the better one. Far from all of
+ * them it becomes an additional cluster, which is how one appliance comes to
+ * hold several.
+ *
+ * "Near" is USER_PROFILE_MAX_SCORE - the same threshold that decides whether a
+ * run matches a saved signature at all. That is the point: an appliance gains a
+ * cluster exactly when its existing ones would have failed to recognise it.
+ */
+const mergeSignatureIntoProfiles = (rawProfiles, signature, nowMs = Date.now()) => {
+  const existing = normalizeUserProfiles(rawProfiles);
+  if (!signature?.label) return existing;
+
+  const stamped = { ...signature, updatedAtMs: nowMs };
+  const mine = existing.filter((entry) => sameLabel(entry.label, signature.label));
+  const others = existing.filter((entry) => !sameLabel(entry.label, signature.label));
+
+  const nearest = mine
+    .map((cluster, index) => ({ index, score: scoreUserProfile(signature, cluster).score }))
+    .sort((a, b) => a.score - b.score)[0];
+
+  let nextMine;
+
+  if (nearest && nearest.score <= USER_PROFILE_MAX_SCORE) {
+    nextMine = mine.map((cluster, index) => (index === nearest.index ? stamped : cluster));
+  } else if (mine.length < MAX_SIGNATURES_PER_APPLIANCE) {
+    nextMine = [stamped, ...mine];
+  } else {
+    // At the cap. The least recently seen regime is the one likeliest to have
+    // stopped being how this appliance is actually used.
+    const oldest = mine.reduce(
+      (acc, cluster, index) => (cluster.updatedAtMs < mine[acc].updatedAtMs ? index : acc),
+      0
+    );
+    nextMine = mine.map((cluster, index) => (index === oldest ? stamped : cluster));
+  }
+
+  return [...nextMine, ...others].slice(0, MAX_USER_PROFILES);
+};
+
 // Snapshot of a completed/among-run measurement, stored so a confirmed
 // appliance can be recognised on later runs.
 const buildApplianceSignature = (runState, label) => {
@@ -523,17 +610,25 @@ const matchNamedAppliance = (runState, label, userProfiles) => {
     return { state: 'unknown', score: null };
   }
 
-  const profile = normalizeUserProfiles(userProfiles).find(
-    (entry) => entry.label.toLowerCase() === normalizedLabel.toLowerCase()
+  const clusters = normalizeUserProfiles(userProfiles).filter(
+    (entry) => sameLabel(entry.label, normalizedLabel)
   );
 
   // Named but never learned. The user typed a label; that is a claim, not a
   // measurement, and there is nothing to check it against.
-  if (!profile) {
+  if (clusters.length === 0) {
     return { state: 'unknown', score: null };
   }
 
-  const { score } = scoreUserProfile(features, profile);
+  // Best of the appliance's regimes: matching any one of them is matching the
+  // appliance. Scored against a single averaged signature, a phone on the flat
+  // end of its charge curve reads as 'changed' because the run that named it was
+  // the steep end - the outlet then reports "Not Nokia's Iphone" about the phone
+  // that is plugged into it.
+  const score = clusters.reduce(
+    (best, cluster) => Math.min(best, scoreUserProfile(features, cluster).score),
+    Infinity
+  );
 
   return {
     state: score <= USER_PROFILE_MAX_SCORE ? 'confirmed' : 'changed',
@@ -632,9 +727,19 @@ const detectApplianceFromRunState = (runState, options = {}) => {
   // The user's own confirmed signatures are matched first: they describe the
   // exact appliances on this account, so they beat the generic power ranges
   // whenever they are close enough.
+  // One entry per appliance, not per cluster: an appliance with three learned
+  // regimes must not appear three times in the candidate list, and the regime it
+  // actually matches is the one worth reporting.
+  const seenLearnedLabels = new Set();
   const learnedRanked = normalizeUserProfiles(options.userProfiles)
     .map((profile) => scoreUserProfile(features, profile))
-    .sort((a, b) => a.score - b.score);
+    .sort((a, b) => a.score - b.score)
+    .filter((entry) => {
+      const key = entry.label.toLowerCase();
+      if (seenLearnedLabels.has(key)) return false;
+      seenLearnedLabels.add(key);
+      return true;
+    });
 
   const bestLearned = learnedRanked[0] || null;
   const eligibleLearned = bestLearned && bestLearned.score <= USER_PROFILE_MAX_SCORE
@@ -748,6 +853,8 @@ const detectApplianceFromRunState = (runState, options = {}) => {
 module.exports = {
   MODEL_VERSION,
   MAX_USER_PROFILES,
+  MAX_SIGNATURES_PER_APPLIANCE,
+  mergeSignatureIntoProfiles,
   isPlaceholderLabel,
   MIN_SAMPLE_COUNT,
   LOAD_PRESENT_THRESHOLD_W,

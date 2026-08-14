@@ -166,12 +166,50 @@ test('renameApplianceProfile reports an unknown appliance', async () => {
   });
 });
 
-test('renameApplianceProfile refuses to collide with another signature', async () => {
-  await withFakeDb({ profiles: [LAMP, FAN] }, async () => {
-    await expectRejection(
-      renameApplianceProfile({ auth: AUTH, data: { from: 'LED Lamp', to: 'Electric Fan' } }),
-      'already-exists'
-    );
+/**
+ * This used to assert `already-exists`, and that was right while an appliance
+ * could hold one signature: two different measurements could not both be the
+ * same appliance, so one of them had to be wrong.
+ *
+ * With clusters they can be, and the rejection turns out to have been blocking
+ * the owner's real intent. He learned one phone twice - 28.8 W on the steep part
+ * of its charge curve and 10.5 W on the flat - and tried to rename the second
+ * onto the first to say they were the same thing. There was no way to express
+ * that, so the rename was the closest available action and it was refused.
+ */
+test('renaming onto an existing appliance merges into it', async () => {
+  await withFakeDb({ profiles: [LAMP, FAN] }, async (state) => {
+    const result = await renameApplianceProfile({
+      auth: AUTH,
+      data: { from: 'LED Lamp', to: 'Electric Fan' },
+    });
+
+    assert.equal(result.success, true);
+    assert.equal(result.merged, true, 'reported as a merge, not a plain rename');
+
+    const labels = state.user.applianceProfiles.map((profile) => profile.label);
+    assert.deepEqual(labels, ['Electric Fan', 'Electric Fan'], 'one appliance, two regimes');
+
+    // Both measurements survive: 16 W and 60 W are far apart, so they are
+    // different operating regimes rather than one to be replaced by the other.
+    const means = state.user.applianceProfiles.map((profile) => profile.meanPower).sort((a, b) => a - b);
+    assert.deepEqual(means, [16, 60]);
+  });
+});
+
+test('merging two measurements of one regime does not duplicate it', async () => {
+  // Near enough to be the same regime measured twice. Keeping both would spend
+  // the appliance's cluster budget on near-duplicates and teach it nothing.
+  const nearlyTheSameLamp = { label: 'Desk Lamp', meanPower: 16.2, peakPower: 16.6 };
+
+  await withFakeDb({ profiles: [LAMP, nearlyTheSameLamp] }, async (state) => {
+    await renameApplianceProfile({
+      auth: AUTH,
+      data: { from: 'LED Lamp', to: 'Desk Lamp' },
+    });
+
+    assert.equal(state.user.applianceProfiles.length, 1, 'collapsed into one cluster');
+    assert.equal(state.user.applianceProfiles[0].label, 'Desk Lamp');
   });
 });
 

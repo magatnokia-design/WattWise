@@ -53,6 +53,25 @@ infrastructure exists only under `functions/`.
   - don't relax these for convenience.
 - Appliance detection is **suggestion-first** - it never auto-renames or auto-acts without user
   confirmation. Resets go through the explicit `clearAutoDetection` callable, not ad hoc writes.
+- **What identification is claimed to do, and what it must never be load-bearing for.**
+  Appliance identification is reliable for steady-state loads and unreliable for loads that
+  change operating regime during a run. This affects per-appliance attribution only; total
+  energy, cost, and safety enforcement are measured directly and are unaffected.
+
+  That second sentence is a design constraint, not a disclaimer. Energy comes from the PZEM
+  counter, cost is PELCO III applied to that energy, and the cutoff compares measured watts
+  against a threshold - none of them read the appliance name. Identity feeds exactly one thing,
+  the per-appliance breakdown. **Do not add a code path where a bill, a budget, or a safety
+  decision depends on which appliance the detector thinks is plugged in.**
+
+  Why the first sentence is worded that way: an iPhone charging through its CC-CV taper sweeps
+  ~30 W to ~10 W and scored Monitor 50% / Speaker 45% / Electric Fan 39% / Laptop Charger 37% -
+  four profiles inside thirteen points. Nothing malfunctioned. Those are precisely the profiles
+  whose `stdDevPower` ranges tolerate a swinging load, and the mean of that sweep is 21 W, a
+  value the appliance never actually draws. `stdDevPower` is weighted 0.25 to choose *between*
+  profiles but never to decide whether any of them is a meaningful answer, so a load that moves
+  is never reported as unidentifiable - it is routed to whichever profile tolerates movement.
+  Multi-signature clustering (see `MAX_SIGNATURES_PER_APPLIANCE`) is the mitigation, not a cure.
 - A detection **run only ends when the outlet is switched off** (or the draw drops under 3 W for
   3 samples). Swapping appliances on a live outlet keeps one run going across both, so the mean
   and spread blend the two and the suggestion is confidently wrong - a 14 W lamp replaced by a

@@ -187,6 +187,11 @@ const buildOutletSuggestion = (outlet = {}, applianceName = '', runtimeState = {
     confidencePercent: toConfidencePercent(outlet.applianceDetection?.confidence),
     modelVersion: String(outlet.applianceDetection?.modelVersion || '').trim(),
     meanPowerW: toOptionalNumber(features.meanPower),
+    // How much the load moved during the run. Carried because a swinging draw
+    // is what makes a single name the wrong kind of answer - the detector
+    // weights this at 0.25 to choose between profiles, so a client presenting
+    // the choice needs it too.
+    stdDevPowerW: toOptionalNumber(features.stdDevPower),
     runtimeSeconds: toOptionalNumber(features.runtimeSec),
     sampleCount: toOptionalNumber(features.sampleCount),
     candidates,

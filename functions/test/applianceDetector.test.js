@@ -4,6 +4,8 @@ const assert = require('node:assert/strict');
 const {
   MODEL_VERSION,
   MIN_SAMPLE_COUNT,
+  MAX_SIGNATURES_PER_APPLIANCE,
+  mergeSignatureIntoProfiles,
   normalizeDetectionState,
   updateDetectionState,
   shouldEvaluateLive,
@@ -630,4 +632,156 @@ test('applianceIdentity cannot carry the over-power verdict', () => {
     false,
     'false rather than true - so applianceDetection.unsupported is the field to read'
   );
+});
+
+/**
+ * Multi-signature appliances.
+ *
+ * An iPhone charging through its CC-CV taper sweeps from about 30 W to about
+ * 10 W over half an hour, and came back as Monitor 50% / Speaker 45% /
+ * Electric Fan 39% / Laptop Charger 37% - four profiles inside thirteen points.
+ * None of them were wrong about the mean; the mean of a 30->10 W sweep is 21 W,
+ * a value the appliance never actually draws.
+ */
+
+const IPHONE_FAST = {
+  label: "Nokia's Iphone",
+  meanPower: 28.8,
+  peakPower: 30.2,
+  stdDevPower: 1.4,
+  activeRatio: 1,
+  lowRatio: 0,
+  updatedAtMs: 1000,
+};
+
+const IPHONE_TRICKLE = {
+  label: "Nokia's Iphone",
+  meanPower: 10.5,
+  peakPower: 11.2,
+  stdDevPower: 0.9,
+  activeRatio: 1,
+  lowRatio: 0,
+  updatedAtMs: 2000,
+};
+
+test('a second operating regime is added, not substituted for the first', () => {
+  const merged = mergeSignatureIntoProfiles([IPHONE_FAST], IPHONE_TRICKLE, 3000);
+
+  assert.equal(merged.length, 2, 'both regimes kept');
+  assert.deepEqual(
+    merged.map((entry) => entry.label),
+    ["Nokia's Iphone", "Nokia's Iphone"],
+    'under one name'
+  );
+});
+
+test('re-measuring a regime refines it rather than accumulating near-duplicates', () => {
+  const slightlyDifferent = { ...IPHONE_FAST, meanPower: 29.1, updatedAtMs: 4000 };
+  const merged = mergeSignatureIntoProfiles([IPHONE_FAST], slightlyDifferent, 4000);
+
+  assert.equal(merged.length, 1);
+  assert.equal(merged[0].meanPower, 29.1, 'the newer measurement of the same regime wins');
+});
+
+test('an appliance is recognised by any of its regimes', () => {
+  const profiles = [IPHONE_FAST, IPHONE_TRICKLE];
+
+  // The flat end of the charge curve, against an appliance first learned at the
+  // steep end. With one averaged signature this read 'changed' - the outlet
+  // reported "Not Nokia's Iphone" about the phone plugged into it.
+  const trickleRun = buildRunState({ powerStart: 10.6, jitter: 0.4 });
+  const trickle = matchNamedAppliance(trickleRun, "Nokia's Iphone", profiles);
+  assert.equal(trickle.state, 'confirmed');
+
+  const fastRun = buildRunState({ powerStart: 28.9, jitter: 1.2 });
+  const fast = matchNamedAppliance(fastRun, "Nokia's Iphone", profiles);
+  assert.equal(fast.state, 'confirmed', 'and still by the one it was taught first');
+});
+
+test('a genuinely different appliance still reads as changed', () => {
+  // The point of clusters is to stop false alarms, not to stop all alarms. A
+  // 60 W fan on an outlet named after a phone is a real contradiction.
+  const fanRun = buildRunState({ powerStart: 60, jitter: 2 });
+  const result = matchNamedAppliance(fanRun, "Nokia's Iphone", [IPHONE_FAST, IPHONE_TRICKLE]);
+
+  assert.equal(result.state, 'changed');
+});
+
+test('one appliance cannot spend the whole profile budget', () => {
+  // Spread wide in *relative* terms, because that is how the near/far rule
+  // measures. Doubling a large wattage is not far - 160 W and 240 W collapse
+  // into one cluster - which is a useful property in itself: an appliance
+  // accumulates a new regime only when the old ones genuinely would not have
+  // recognised it, so reaching the cap at all takes five distinct behaviours.
+  const spread = [6, 20, 70, 240, 800];
+  const profiles = spread.reduce(
+    (acc, meanPower, index) => mergeSignatureIntoProfiles(
+      acc,
+      { ...IPHONE_FAST, meanPower, peakPower: meanPower * 1.05 },
+      1000 + index
+    ),
+    []
+  );
+
+  assert.equal(profiles.length, MAX_SIGNATURES_PER_APPLIANCE);
+  assert.equal(profiles.some((entry) => entry.meanPower === 6), false, 'oldest evicted');
+  assert.equal(profiles.some((entry) => entry.meanPower === 800), true, 'newest kept');
+});
+
+test('clusters do not appear as separate candidates', () => {
+  // Three regimes of one appliance must not fill the suggestion list with three
+  // copies of the same name.
+  const state = buildRunState({ powerStart: 28.8, jitter: 1 });
+  const result = detectApplianceFromRunState(state, {
+    userProfiles: [IPHONE_FAST, IPHONE_TRICKLE, { ...IPHONE_FAST, meanPower: 20 }],
+  });
+
+  const names = (result?.candidates || []).map((candidate) => candidate.name);
+  assert.equal(new Set(names).size, names.length, 'no name appears twice');
+});
+
+/**
+ * The efficient ceiling fan, and the limit of what ranges can fix.
+ *
+ * The 22 W Electric Fan floor was set for AC induction motors and excluded DC
+ * and inverter fans outright; the owner's runs at 14.1 W and came back LED Lamp.
+ * Widening the floor to 8 W admits it - but it does not make it win, and this
+ * pins down why rather than leaving it to be rediscovered.
+ *
+ * At 14 W a DC fan and an LED lamp are the same measurement. Both draw a steady
+ * low wattage with almost no variance; lowRatio counts everything under 20 W, so
+ * it reads 1.0 for both and says only "this is small". The feature that would
+ * separate them - motor inrush at startup - is not extracted, and the run this
+ * detector sees begins after the load is already steady.
+ *
+ * So the honest output is not "Electric Fan". It is that this account has to say
+ * which one it is, once, after which the learned signature settles it - the
+ * suggestion-first contract doing exactly what it exists for.
+ */
+test('an efficient ceiling fan is no longer excluded on wattage alone', () => {
+  const state = buildRunState({ powerStart: 14.1, jitter: 0.6, sampleCount: 200 });
+  const result = detectApplianceFromRunState(state);
+
+  // It is inside the profile's ranges now, where it used to be 8 W below the
+  // floor. That is the range fix, and it is all the range fix can do.
+  const fan = APPLIANCE_PROFILES.find((profile) => profile.label === 'Electric Fan');
+  assert.ok(14.1 >= fan.meanPower[0], 'inside the meanPower range');
+  assert.ok(result, 'the run still resolves to something rather than nothing');
+});
+
+test('one correction settles the fan-or-lamp question permanently', () => {
+  // What actually fixes it, and the reason not to chase this with ranges: a
+  // range tuned until a 14 W fan outranks a lamp would break the owner's other
+  // appliance, which is a 16 W lamp.
+  const signature = buildApplianceSignature(
+    buildRunState({ powerStart: 14.1, jitter: 0.6, sampleCount: 200 }),
+    'Ceiling Fan'
+  );
+
+  const laterRun = buildRunState({ powerStart: 14.3, jitter: 0.5, sampleCount: 200 });
+  const result = detectApplianceFromRunState(laterRun, { userProfiles: [signature] });
+
+  assert.equal(result.appliance, 'Ceiling Fan');
+  assert.equal(result.matchSource, 'learned');
+  assert.ok(result.confidence >= 0.8, `expected a strong learned match, got ${result.confidence}`);
 });

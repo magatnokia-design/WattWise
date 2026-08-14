@@ -1,7 +1,11 @@
 const admin = require('firebase-admin');
 const logger = require('firebase-functions/logger');
 const { HttpsError } = require('firebase-functions/v2/https');
-const { normalizeUserProfiles, isPlaceholderLabel } = require('../lib/applianceDetector');
+const {
+  normalizeUserProfiles,
+  mergeSignatureIntoProfiles,
+  isPlaceholderLabel,
+} = require('../lib/applianceDetector');
 
 const VALID_OUTLET_IDS = ['outlet1', 'outlet2'];
 const MAX_LABEL_LENGTH = 40;
@@ -67,44 +71,45 @@ async function renameApplianceProfile(request) {
       const userDoc = await tx.get(userRef);
       const existing = normalizeUserProfiles((userDoc.data() || {}).applianceProfiles);
 
-      const targetIndex = existing.findIndex(
-        (profile) => profile.label.toLowerCase() === fromLabel.toLowerCase()
-      );
+      const matchesFrom = (profile) => profile.label.toLowerCase() === fromLabel.toLowerCase();
+      const matchesTo = (profile) => profile.label.toLowerCase() === toLabel.toLowerCase();
 
-      if (targetIndex === -1) {
+      if (!existing.some(matchesFrom)) {
         return { renamed: false, reason: 'not-found' };
       }
 
-      // A rename that only changes capitalisation is a correction, not a
-      // collision with itself.
-      const collision = existing.some(
-        (profile, index) =>
-          index !== targetIndex && profile.label.toLowerCase() === toLabel.toLowerCase()
-      );
+      // Renaming onto a name that already exists is a merge, not a collision.
+      //
+      // It used to be rejected with `already-exists`, and that was correct while
+      // an appliance could hold only one signature: two different measurements
+      // could not both be "Nokia's Iphone", so one of them had to be wrong. With
+      // clusters they can, and the owner's blocked action turns out to have been
+      // the right one all along - he had learned the same phone twice, at 28.8 W
+      // and 10.5 W, and was trying to say they were the same appliance. There was
+      // no way to express that; the rename was the closest thing available and it
+      // was refused.
+      //
+      // The merge runs through the same near/far rule as a fresh confirmation, so
+      // two measurements of one regime collapse into one cluster rather than
+      // filling the appliance's budget with near-duplicates.
+      const merging = existing.some((profile) => matchesTo(profile) && !matchesFrom(profile));
+      const nowMs = Date.now();
 
-      if (collision) {
-        return { renamed: false, reason: 'already-exists' };
-      }
+      const renamedClusters = existing
+        .filter(matchesFrom)
+        .map((profile) => ({ ...profile, label: toLabel, updatedAtMs: nowMs }));
 
-      const next = existing.map((profile, index) =>
-        index === targetIndex
-          ? { ...profile, label: toLabel, updatedAtMs: Date.now() }
-          : profile
+      const next = renamedClusters.reduce(
+        (profiles, cluster) => mergeSignatureIntoProfiles(profiles, cluster, nowMs),
+        existing.filter((profile) => !matchesFrom(profile))
       );
 
       tx.set(userRef, { applianceProfiles: next }, { merge: true });
-      return { renamed: true, profiles: next };
+      return { renamed: true, merged: merging, profiles: next };
     });
 
     if (!result.renamed && result.reason === 'not-found') {
       throw new HttpsError('not-found', `No saved appliance named "${fromLabel}"`);
-    }
-
-    if (!result.renamed && result.reason === 'already-exists') {
-      throw new HttpsError(
-        'already-exists',
-        `A saved appliance is already named "${toLabel}"`
-      );
     }
 
     // Carry the new name onto any outlet wearing the old one. Done after the
@@ -151,6 +156,9 @@ async function renameApplianceProfile(request) {
       from: fromLabel,
       to: toLabel,
       renamedOutlets,
+      // True when the target name already existed: the caller asked to rename and
+      // got a merge, which is a different thing to report back.
+      merged: result.merged === true,
       profiles: result.profiles.length,
     };
   } catch (error) {

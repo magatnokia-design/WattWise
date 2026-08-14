@@ -2,9 +2,8 @@ const admin = require('firebase-admin');
 const logger = require('firebase-functions/logger');
 const { HttpsError } = require('firebase-functions/v2/https');
 const {
-  MAX_USER_PROFILES,
-  normalizeUserProfiles,
   buildApplianceSignature,
+  mergeSignatureIntoProfiles,
 } = require('../lib/applianceDetector');
 
 const VALID_OUTLET_IDS = new Set(['outlet1', 'outlet2']);
@@ -108,17 +107,19 @@ async function registerApplianceProfile(request) {
 
     // Only the user doc is transactional; it is no longer written by telemetry,
     // so this stays contention-free.
+    // Confirming the same appliance in a different operating regime used to
+    // replace what was learned before, so an iPhone taught at 28.8 W and then
+    // confirmed again at 10.5 W kept only the last one and stopped recognising
+    // itself at the other end of its own charge curve. mergeSignatureIntoProfiles
+    // refines the nearest cluster when the measurement is close to one, and adds
+    // a cluster when it is not.
     await db.runTransaction(async (tx) => {
       const userDoc = await tx.get(userRef);
-      const existing = normalizeUserProfiles((userDoc.data() || {}).applianceProfiles);
-      const withoutSameLabel = existing.filter(
-        (profile) => profile.label.toLowerCase() !== label.toLowerCase()
+      const nextProfiles = mergeSignatureIntoProfiles(
+        (userDoc.data() || {}).applianceProfiles,
+        signature,
+        Date.now()
       );
-
-      const nextProfiles = [
-        { ...signature, updatedAtMs: Date.now() },
-        ...withoutSameLabel,
-      ].slice(0, MAX_USER_PROFILES);
 
       tx.set(userRef, { applianceProfiles: nextProfiles }, { merge: true });
     });
