@@ -21,7 +21,7 @@ import OutletControlModal from './components/OutletControlModal';
 import ApplianceSuggestion from './components/ApplianceSuggestion';
 import { useOutletControl } from './hooks/useOutletControl';
 import { resolveOutletBadge } from './utils/outletBadge';
-import usePowerSafety from '../PowerSafetyManagement/hooks/usePowerSafety';
+import { useSafetyStage } from './hooks/useSafetyStage';
 import { getSafetyStageConfig } from '../PowerSafetyManagement/utils/safetyHelpers';
 import { budgetService } from '../../services/firebase';
 import { auth } from '../../services/firebase/config';
@@ -150,8 +150,7 @@ export const DashboardScreen = ({ navigation }) => {
 
   // The card below used to be two hardcoded strings. It read the same document
   // the Power Safety screen does - it just never asked for it.
-  const { safetyStage, readingsAreStale } = usePowerSafety();
-  const safetyConfig = getSafetyStageConfig(safetyStage, readingsAreStale);
+  const safetyStage = useSafetyStage();
 
   // Outlet control hook
   const {
@@ -220,6 +219,17 @@ export const DashboardScreen = ({ navigation }) => {
     telemetryFresh: outlet2HasReading,
     switchingTo: outlet2SwitchingTo,
   });
+
+  // Staleness comes from the outlets, not from the safety document's own
+  // 40-second rule. Both live on this screen now, and with two different
+  // definitions the card read "All systems operating within safe parameters"
+  // beside an outlet badge reading "On - no reading". The safety doc is written
+  // every 15s so it needs the wider window on its own screen; here the outlets
+  // are the same signal the badges use, so the screen cannot contradict itself.
+  const safetyConfig = getSafetyStageConfig(
+    safetyStage,
+    !outlet1HasReading && !outlet2HasReading
+  );
 
   const activeOutletsCount = (outlet1Status === true ? 1 : 0) + (outlet2Status === true ? 1 : 0);
 
