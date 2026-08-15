@@ -4,6 +4,39 @@ import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../../../constants/colors';
 import { getStatusColor, getWorstStatus } from '../utils/safetyHelpers';
 
+/**
+ * One metric, carrying its own grade.
+ *
+ * These rows used to print a value and a limit with no grading at all, which
+ * left the header badge as the only verdict on the card - and a badge that is
+ * the sole grade is a surface a wrong answer can hide on. It did: the badge
+ * tracked voltage alone for months, and nothing beneath it could contradict it.
+ * The web client avoids this by having no summary badge and three per-metric
+ * chips instead; this keeps the badge, because with two outlets the at-a-glance
+ * verdict is worth having, but makes it a summary of grades that are visible
+ * individually rather than an opaque one.
+ *
+ * Only exceptions are coloured. Painting all three green on every healthy
+ * reading would make the normal case shout and the exception blend in.
+ */
+const MetricRow = ({ label, value, limit, grade, isStale }) => (
+  <View style={styles.metricRow}>
+    <View style={styles.metricInfo}>
+      <Text style={styles.metricLabel}>{label}</Text>
+      <Text style={[
+        styles.metricValue,
+        !isStale && grade.label !== 'Normal' && { color: grade.color },
+      ]}>
+        {value}
+      </Text>
+    </View>
+    <View style={styles.thresholdInfo}>
+      <Text style={styles.thresholdLabel}>Limit</Text>
+      <Text style={styles.thresholdValue}>{limit}</Text>
+    </View>
+  </View>
+);
+
 const ThresholdCard = ({ outletName, status, thresholds, isStale = false }) => {
   const voltageStatus = getStatusColor(status.voltage, thresholds.voltage);
   const currentStatus = getStatusColor(status.current, thresholds.current);
@@ -42,53 +75,27 @@ const ThresholdCard = ({ outletName, status, thresholds, isStale = false }) => {
       </View>
 
       <View style={styles.metricsContainer}>
-        {/* Voltage */}
-        <View style={styles.metricRow}>
-          <View style={styles.metricInfo}>
-            <Text style={styles.metricLabel}>Voltage</Text>
-            <Text style={styles.metricValue}>
-              {showValue(`${status.voltage.toFixed(1)} V`)}
-            </Text>
-          </View>
-          <View style={styles.thresholdInfo}>
-            <Text style={styles.thresholdLabel}>Limit</Text>
-            <Text style={styles.thresholdValue}>
-              {thresholds.voltage.max} V
-            </Text>
-          </View>
-        </View>
-
-        {/* Current */}
-        <View style={styles.metricRow}>
-          <View style={styles.metricInfo}>
-            <Text style={styles.metricLabel}>Current</Text>
-            <Text style={styles.metricValue}>
-              {showValue(`${status.current.toFixed(2)} A`)}
-            </Text>
-          </View>
-          <View style={styles.thresholdInfo}>
-            <Text style={styles.thresholdLabel}>Limit</Text>
-            <Text style={styles.thresholdValue}>
-              {thresholds.current.max} A
-            </Text>
-          </View>
-        </View>
-
-        {/* Power */}
-        <View style={styles.metricRow}>
-          <View style={styles.metricInfo}>
-            <Text style={styles.metricLabel}>Power</Text>
-            <Text style={styles.metricValue}>
-              {showValue(`${status.power.toFixed(1)} W`)}
-            </Text>
-          </View>
-          <View style={styles.thresholdInfo}>
-            <Text style={styles.thresholdLabel}>Limit</Text>
-            <Text style={styles.thresholdValue}>
-              {thresholds.power.max} W
-            </Text>
-          </View>
-        </View>
+        <MetricRow
+          label="Voltage"
+          value={showValue(`${status.voltage.toFixed(1)} V`)}
+          limit={`${thresholds.voltage.max} V`}
+          grade={voltageStatus}
+          isStale={isStale}
+        />
+        <MetricRow
+          label="Current"
+          value={showValue(`${status.current.toFixed(2)} A`)}
+          limit={`${thresholds.current.max} A`}
+          grade={currentStatus}
+          isStale={isStale}
+        />
+        <MetricRow
+          label="Power"
+          value={showValue(`${status.power.toFixed(1)} W`)}
+          limit={`${thresholds.power.max} W`}
+          grade={powerStatus}
+          isStale={isStale}
+        />
       </View>
     </View>
   );
