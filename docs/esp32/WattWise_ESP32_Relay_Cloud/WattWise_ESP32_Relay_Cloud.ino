@@ -84,7 +84,7 @@ const IPAddress WIFI_DNS_PRIMARY(1, 1, 1, 1);
 const IPAddress WIFI_DNS_SECONDARY(8, 8, 8, 8);
 
 // Controller metadata
-static const char* FIRMWARE_VERSION = "relay-cloud-dualpzem-1.2.6";
+static const char* FIRMWARE_VERSION = "relay-cloud-dualpzem-1.2.7";
 
 bool relay1On = false;
 bool relay2On = false;
@@ -493,7 +493,17 @@ void printControllerStatus() {
   Serial.print("  Relay2=");
   Serial.print(relay2On ? "ON" : "OFF");
   Serial.print("  TelemetryMode=");
-  Serial.println(simulatedTelemetryEnabled ? "SIMULATED" : "PZEM");
+  Serial.print(simulatedTelemetryEnabled ? "SIMULATED" : "PZEM");
+  // Heap, so connection churn is visible rather than inferred. `largest`
+  // falling while `free` holds steady is fragmentation, which is what repeated
+  // TLS setup and teardown produces. RSSI worse than about -75 dBm makes every
+  // request slow and failure-prone on its own.
+  Serial.print("  Heap=");
+  Serial.print(ESP.getFreeHeap());
+  Serial.print("  Largest=");
+  Serial.print(ESP.getMaxAllocHeap());
+  Serial.print("  RSSI=");
+  Serial.println(WiFi.RSSI());
 }
 
 void handleSerialCommand(const String& rawCommand) {
@@ -963,6 +973,36 @@ void syncTime() {
   Serial.println("[NTP] Time sync failed. Cloud requests may be rejected.");
 }
 
+/*
+ * One TLS connection, reused.
+ *
+ * These were local: a WiFiClientSecure built and destroyed on every call, so
+ * every metrics post, every command poll and every retry performed a complete
+ * TLS handshake from scratch. At the intervals this firmware runs - a command
+ * poll every 400 ms and a metrics post every 1.5 s while active - that is
+ * roughly three new TLS sessions per second. An ESP32 handshake costs tens of
+ * kilobytes of heap and several hundred milliseconds of CPU, so the device
+ * could not keep up with its own schedule, and the server began refusing the
+ * connection churn outright:
+ *
+ *   [HTTP] POST transport error code=-11 (read Timeout)
+ *   [HTTP] POST transport error code=-1  (connection refused)
+ *
+ * All three endpoints share one host, so a single session serves all of them.
+ * setReuse(true) makes end() leave the TCP connection open for the next
+ * request rather than tearing it down.
+ */
+static WiFiClientSecure sharedTlsClient;
+static bool sharedTlsClientReady = false;
+
+// A transport error may leave the connection half-open; the next request would
+// then fail on a socket that looks usable and is not. Drop it and let the next
+// begin() build a fresh one.
+void resetSharedTlsClient() {
+  sharedTlsClient.stop();
+  sharedTlsClientReady = false;
+}
+
 bool postJson(const char* url, const String& payload, int& statusCode, String& responseBody, uint16_t timeoutMs) {
   statusCode = 0;
   responseBody = "";
@@ -972,6 +1012,8 @@ bool postJson(const char* url, const String& payload, int& statusCode, String& r
       connectWiFi();
       if (WiFi.status() != WL_CONNECTED) {
         statusCode = -1000;
+        // The socket cannot have survived the drop.
+        resetSharedTlsClient();
         if (attempt < HTTP_MAX_RETRIES) {
           delay(HTTP_RETRY_DELAY_MS);
           continue;
@@ -980,12 +1022,20 @@ bool postJson(const char* url, const String& payload, int& statusCode, String& r
       }
     }
 
-    WiFiClientSecure client;
-    client.setInsecure();
+    if (!sharedTlsClientReady) {
+      sharedTlsClient.setInsecure();
+      sharedTlsClientReady = true;
+    }
 
-    HTTPClient https;
-    if (!https.begin(client, url)) {
+    // Static as well as the client, and this part is not optional: on the ESP32
+    // core ~HTTPClient() calls _client->stop(), so a local HTTPClient would
+    // close the shared socket on every return and reuse would never happen.
+    // Both objects have to outlive the request for the connection to survive it.
+    static HTTPClient https;
+    https.setReuse(true);
+    if (!https.begin(sharedTlsClient, url)) {
       statusCode = -1001;
+      resetSharedTlsClient();
       if (attempt < HTTP_MAX_RETRIES) {
         delay(HTTP_RETRY_DELAY_MS);
         continue;
@@ -1000,6 +1050,8 @@ bool postJson(const char* url, const String& payload, int& statusCode, String& r
 
     statusCode = https.POST(payload);
     responseBody = https.getString();
+    // With setReuse(true) this releases the request but leaves the TCP/TLS
+    // connection open for the next one.
     https.end();
 
     if (statusCode > 0) {
@@ -1020,6 +1072,9 @@ bool postJson(const char* url, const String& payload, int& statusCode, String& r
     Serial.print(attempt);
     Serial.print("/");
     Serial.println(HTTP_MAX_RETRIES);
+
+    // Whatever went wrong, the reused socket is now suspect.
+    resetSharedTlsClient();
 
     if (attempt < HTTP_MAX_RETRIES) {
       delay(HTTP_RETRY_DELAY_MS);
