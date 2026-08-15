@@ -21,6 +21,8 @@ import OutletControlModal from './components/OutletControlModal';
 import ApplianceSuggestion from './components/ApplianceSuggestion';
 import { useOutletControl } from './hooks/useOutletControl';
 import { resolveOutletBadge } from './utils/outletBadge';
+import usePowerSafety from '../PowerSafetyManagement/hooks/usePowerSafety';
+import { getSafetyStageConfig } from '../PowerSafetyManagement/utils/safetyHelpers';
 import { budgetService } from '../../services/firebase';
 import { auth } from '../../services/firebase/config';
 
@@ -145,6 +147,11 @@ export const DashboardScreen = ({ navigation }) => {
   // Only the count is used here - the panel loads its own list when opened.
   const { unreadCount } = useNotifications();
   const rateNotice = useDismissibleNotice('rate-notice');
+
+  // The card below used to be two hardcoded strings. It read the same document
+  // the Power Safety screen does - it just never asked for it.
+  const { safetyStage, readingsAreStale } = usePowerSafety();
+  const safetyConfig = getSafetyStageConfig(safetyStage, readingsAreStale);
 
   // Outlet control hook
   const {
@@ -388,10 +395,14 @@ export const DashboardScreen = ({ navigation }) => {
           <Text style={styles.safetyIcon}>🛡️</Text>
           <View style={styles.safetyInfo}>
             <Text style={styles.safetyTitle}>Power Safety Status</Text>
-            <Text style={styles.safetyStatus}>Normal</Text>
+            <Text style={styles.safetyStatus}>{safetyConfig.description}</Text>
           </View>
-          <View style={styles.safetyBadge}>
-            <Text style={styles.safetyBadgeText}>Safe</Text>
+          {/* "Normal" and "Safe" were literals here, so this card asserted the
+              system was safe during an active cutoff - with the cutoff's own
+              push notification on screen directly above it, and the Power
+              Safety screen one tap away reading "Cut-off Active". */}
+          <View style={[styles.safetyBadge, { backgroundColor: safetyConfig.color }]}>
+            <Text style={styles.safetyBadgeText}>{safetyConfig.label}</Text>
           </View>
         </TouchableOpacity>
 
@@ -704,6 +715,7 @@ const styles = StyleSheet.create({
     marginBottom: 24,
     borderWidth: 1,
     borderColor: COLORS.border,
+    gap: 8,
   },
   safetyIcon: {
     fontSize: 32,
@@ -723,10 +735,13 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   safetyBadge: {
+    // Colour now comes from the stage config; this is the fallback only.
     backgroundColor: COLORS.primaryLight,
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 20,
+    // "Cut-off Active" and "No readings" are longer than "Safe" ever was.
+    flexShrink: 0,
   },
   safetyBadgeText: {
     ...FONTS.small,

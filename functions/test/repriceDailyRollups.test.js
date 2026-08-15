@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { wasPricedWithPeriodFlats } = require('../src/http/repriceDailyRollups');
+const { wasPricedWithPeriodFlats } = require('../src/lib/repriceDaily');
 const { calculatePelcoIIIBill } = require('../src/lib/billing');
 
 test('a row recording includePeriodFlats false is left alone', () => {
@@ -45,4 +45,59 @@ test('repricing is idempotent', () => {
   const once = calculatePelcoIIIBill(0.07, { includePeriodFlats: false });
   const twice = calculatePelcoIIIBill(once.kwh, { includePeriodFlats: false });
   assert.equal(twice.totals.total, once.totals.total);
+});
+
+test('a whole row is repriced without its energy moving', () => {
+  const { repriceDailyRow } = require('../src/lib/repriceDaily');
+
+  // Shaped like the 11 Aug row: 0.14 kWh across both outlets, priced at P6.97.
+  const row = {
+    date: '2026-08-11',
+    totalEnergy: 0.14,
+    outlet1Energy: 0.1,
+    outlet2Energy: 0.04,
+    cost: 6.97,
+    bill: { includePeriodFlats: true },
+    applianceBreakdown: [
+      { name: "Nokia's Fan", energy: 0.1, cost: 4.98, outlet: 1 },
+      { name: 'Nokia Charger', energy: 0.04, cost: 1.99, outlet: 2 },
+    ],
+  };
+
+  const result = repriceDailyRow(row);
+  assert.ok(result, 'the row still charged the flats, so it is repriced');
+
+  const { update, change } = result;
+
+  assert.equal(change.previousCost, 6.97, 'what the row said before');
+
+  // Priced at the default profile, because this fixture carries no rates of its
+  // own - so the drop is measured against the same profile rather than against
+  // the stored 6.97, which came from the account's own rates.
+  const expected = calculatePelcoIIIBill(0.14, { includePeriodFlats: false }).totals.total;
+  assert.equal(update.cost, expected);
+  assert.ok(update.cost < 2, 'centavos of electricity, not pesos of fees');
+
+  // The energy is never rewritten - only money is in the update.
+  assert.equal(update.totalEnergy, undefined);
+  assert.equal(update.outlet1Energy, undefined);
+
+  // The split still adds up to the whole.
+  assert.equal(
+    Number((update.outlet1Cost + update.outlet2Cost).toFixed(2)),
+    Number(update.cost.toFixed(2))
+  );
+
+  // Breakdown entries keep their names and energy, and are recosted.
+  assert.equal(update.applianceBreakdown.length, 2);
+  assert.equal(update.applianceBreakdown[0].name, "Nokia's Fan");
+  assert.equal(update.applianceBreakdown[0].energy, 0.1);
+  assert.ok(update.applianceBreakdown[0].cost < 4.98);
+});
+
+test('a row already priced without the flats is left untouched', () => {
+  const { repriceDailyRow } = require('../src/lib/repriceDaily');
+
+  const clean = { totalEnergy: 0.5, cost: 4.94, bill: { includePeriodFlats: false } };
+  assert.equal(repriceDailyRow(clean), null, 'the nightly sweep must be a no-op here');
 });

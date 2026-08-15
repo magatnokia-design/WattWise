@@ -10,6 +10,7 @@ const {
 } = require('../lib/manilaTime');
 const { resolveEnergyForDate, resolvePeakForDate } = require('../lib/energyAccounting');
 const { upsertInvoice } = require('./processMonthlyInvoice');
+const { repriceUserDailyRows } = require('../lib/repriceDaily');
 
 const upsertApplianceBreakdown = (items, applianceName, energyKwh, cost, outletNumber) => {
   const normalizedName = String(applianceName || '').trim();
@@ -265,6 +266,30 @@ async function processDailyRollup() {
         });
 
         await recomputeMonthlyBudget({ db, userId, monthString, userData });
+
+        // Repair any earlier rows still carrying the once-a-month metering flat.
+        // A rollup only ever runs for yesterday, so rows written before that fix
+        // would never be revisited - 10 and 11 Aug 2026 sat at P6.25 for 0.07 kWh
+        // and P6.97 for 0.14 kWh, P5.60 of each being a monthly fee charged
+        // again. A no-op once every row records includePeriodFlats: false.
+        try {
+          const { changes } = await repriceUserDailyRows({
+            db,
+            userId,
+            userData,
+            apply: true,
+          });
+
+          if (changes.length > 0) {
+            logger.info('Repriced pre-fix daily rows', { userId, count: changes.length });
+          }
+        } catch (repriceError) {
+          // Never fails the rollup: the day just written is correct either way.
+          logger.warn('Daily rollup completed but repricing sweep failed', {
+            userId,
+            message: repriceError?.message,
+          });
+        }
 
         // The daily counters are not reset here. updateOutletMetrics rolls them
         // over on the first sample of a new Manila day, and a reset written here
