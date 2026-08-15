@@ -33,6 +33,7 @@ const { sendInvoiceEmail } = require('./src/http/sendInvoiceEmail');
 const { processDailyRollup } = require('./src/scheduled/processDailyRollup');
 const { processMonthlyInvoice } = require('./src/scheduled/processMonthlyInvoice');
 const { finalizeInvoice } = require('./src/http/finalizeInvoice');
+const { repriceDailyRollups } = require('./src/http/repriceDailyRollups');
 const { checkScheduledTimers } = require('./src/scheduled/checkScheduledTimers');
 const { markStaleDeviceCommands } = require('./src/scheduled/markStaleDeviceCommands');
 const { checkPushReceipts } = require('./src/scheduled/checkPushReceipts');
@@ -136,6 +137,20 @@ exports.finalizeInvoice = onCall(
     maxInstances: 10,
   },
   finalizeInvoice
+);
+
+/**
+ * Callable function to strip the once-a-month metering flat from daily rows
+ * that were priced before a day stopped being treated as a billing period.
+ * Reprices from each row's stored energy; never re-derives the energy itself.
+ * Idempotent - rows already priced without the flats are skipped.
+ * Called from: maintenance, with { apply: true } to commit
+ */
+exports.repriceDailyRollups = onCall(
+  {
+    maxInstances: 10,
+  },
+  repriceDailyRollups
 );
 
 /**
