@@ -41,8 +41,18 @@ infrastructure exists only under `functions/`.
 
 - Exactly **2 outlets** (`outlet1`, `outlet2`), stable IDs, never more.
 - **Low-voltage appliances only** (chargers, laptops, fans, TVs, LED lamps, consoles).
-- `outlet1` -> relay CH2 -> **GPIO22**. `outlet2` -> relay CH1 -> **GPIO23**. Do not swap these
-  (see `docs/esp32/WattWise_ESP32_Relay_Cloud/WattWise_ESP32_Relay_Cloud.ino`).
+- `outlet1` -> relay CH1 -> **GPIO23**. `outlet2` -> relay CH2 -> **GPIO22**. Do not swap these
+  (see `docs/esp32/WattWise_ESP32_Relay_Cloud/WattWise_ESP32_Relay_Cloud.ino`, lines 38-41).
+
+  This entry read the other way round until 15 Aug 2026, when the running device
+  settled it by printing `[Relay] outlet1 relayCH=1 pin=23 meter=PZEM2 => ON` to
+  serial. The firmware source agrees: *"Keep labels one-to-one: outlet1->relay
+  CH1, outlet2->relay CH2."*
+
+  The likely source of the old error is the line below, which really is crossed:
+  **the PZEM channels are swapped on purpose.** `outlet1` reads PZEM channel 2
+  and `outlet2` reads channel 1 (`OUTLET_1_PZEM_CHANNEL = 2`), because the sensor
+  wiring is crossed on this build. Sensors crossed, relays not.
 - Theme is green/white only, from `src/constants/colors.js`. Primary `#10B981`. UI is minimal:
   white cards, rounded corners, subdued borders, dim-overlay modals, emoji bottom-tab icons.
 - **No mock/dummy data with intervals.** Use `0` or real Firebase data.
