@@ -47,15 +47,20 @@ const formatMetric = (value, unit, decimals = 1) => {
  * Below 1 kWh the third decimal is the only one carrying information, so it is
  * shown; above that it is noise on a figure people read in whole kWh.
  */
+// Built once each, not per call. `toLocaleString` with options constructs an
+// Intl.NumberFormat internally every time, which is one of the more expensive
+// things available in Hermes - and this runs three times per render on a screen
+// that re-renders with every telemetry post.
+const KWH_FORMATTERS = {
+  2: new Intl.NumberFormat(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
+  3: new Intl.NumberFormat(undefined, { minimumFractionDigits: 3, maximumFractionDigits: 3 }),
+};
+
 const formatEnergyKwh = (value) => {
   const parsed = toMetricNumber(value);
   const decimals = parsed > 0 && Math.abs(parsed) < 1 ? 3 : 2;
 
-  const formatted = parsed.toLocaleString(undefined, {
-    minimumFractionDigits: decimals,
-    maximumFractionDigits: decimals,
-  });
-  return `${formatted} kWh`;
+  return `${KWH_FORMATTERS[decimals].format(parsed)} kWh`;
 };
 
 /**

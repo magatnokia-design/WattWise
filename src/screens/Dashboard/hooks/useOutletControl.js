@@ -1,4 +1,5 @@
-import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
+import { useIsFocused } from '@react-navigation/native';
 import { outletService, userService } from '../../../services/firebase';
 import { auth } from '../../../services/firebase/config';
 import { onAuthStateChanged } from 'firebase/auth';
@@ -243,6 +244,7 @@ export const useOutletControl = () => {
   // handler only runs when data arrives. When the ESP32 goes quiet no data
   // arrives, so a value computed there freezes at its last reading and goes on
   // presenting it as current.
+  const isFocused = useIsFocused();
   const [outletDocs, setOutletDocs] = useState({ 1: null, 2: null });
   // Optimistic toggle and rename, each held only until the next snapshot for
   // that outlet. Kept beside the documents rather than written over the derived
@@ -259,19 +261,57 @@ export const useOutletControl = () => {
   const [supplyRates, setSupplyRates] = useState(null);
   const [hasSupplyRates, setHasSupplyRates] = useState(true);
 
+  /*
+   * A tab navigator keeps every screen mounted, and React Native runs all of
+   * them on one JS thread. The ESP32 posts telemetry roughly every 1.5 seconds,
+   * so this listener kept re-rendering the whole Dashboard - both outlet cards,
+   * every metric, the suggestion block - while the user was sitting on Settings
+   * looking at none of it. That is why Settings felt slow only while the
+   * hardware was online: Settings was not doing the work, the Dashboard was, on
+   * the thread Settings needed.
+   *
+   * Snapshots still arrive and are still kept; they are held in a ref while the
+   * screen is off-screen and applied the moment it comes back, so returning to
+   * Home shows current data rather than a gap.
+   */
+  const isFocusedRef = useRef(true);
+  const latestDocsRef = useRef({ 1: null, 2: null });
+  const hasBufferedRef = useRef(false);
+
   // Half the staleness threshold, so an outlet is reported stale within about
   // six seconds of the readings stopping rather than whenever something else
-  // happens to re-render.
+  // happens to re-render. Paused off-screen: nothing is displaying the result.
   useEffect(() => {
+    if (!isFocused) return undefined;
+
     const timer = setInterval(() => setNowMs(Date.now()), HARDWARE_STALE_THRESHOLD_MS / 2);
     return () => clearInterval(timer);
-  }, []);
+  }, [isFocused]);
+
+  useEffect(() => {
+    isFocusedRef.current = isFocused;
+    if (!isFocused || !hasBufferedRef.current) return;
+
+    // Came back with telemetry that arrived while away.
+    hasBufferedRef.current = false;
+    setOutletDocs({ ...latestDocsRef.current });
+    setPendingToggle({ 1: null, 2: null });
+    setPendingRename({ 1: null, 2: null });
+    setNowMs(Date.now());
+  }, [isFocused]);
 
   const applyOutletData = useCallback((outlet) => {
     if (!outlet || !outlet.outletNumber) return;
 
     const outletNumber = Number(outlet.outletNumber);
     if (outletNumber !== 1 && outletNumber !== 2) return;
+
+    latestDocsRef.current = { ...latestDocsRef.current, [outletNumber]: outlet };
+
+    if (!isFocusedRef.current) {
+      hasBufferedRef.current = true;
+      return;
+    }
 
     setOutletDocs((previous) => ({ ...previous, [outletNumber]: outlet }));
     // The document now says what the relay is doing, so the optimistic value
@@ -498,11 +538,17 @@ export const useOutletControl = () => {
   // matching processDailyRollup and the live History row. Including the
   // once-a-month P5.00 metering charge here showed "Est. cost P5.61" beside
   // "0.00 kWh", which is a true bill line answering a question nobody asked.
-  const bill = calculatePelcoIIIBill(totalEnergyKwh, {
-    supplyRates,
-    profileId: rateProfileId,
-    includePeriodFlats: false,
-  });
+  // Memoised on what it actually depends on. This builds the full PELCO III
+  // line-item breakdown - three arrays, every tariff component, rounded - and
+  // ran on every render, which on this screen means every telemetry post.
+  const bill = useMemo(
+    () => calculatePelcoIIIBill(totalEnergyKwh, {
+      supplyRates,
+      profileId: rateProfileId,
+      includePeriodFlats: false,
+    }),
+    [totalEnergyKwh, supplyRates, rateProfileId]
+  );
   const estimatedCost = toMetricNumber(bill?.totals?.total);
 
   // The marginal rate, never `bill.effectiveRate`. The latter divides the whole
@@ -511,8 +557,9 @@ export const useOutletControl = () => {
   // 0.001 kWh gave an "effective" P5,610/kWh, and a 15.9 W lamp was reported as
   // costing P89.20 an hour. Pricing an hour of draw is a marginal question, so it
   // takes the marginal rate.
-  const perKwhRate = toMetricNumber(
-    marginalRatePerKwh({ supplyRates, profileId: rateProfileId })
+  const perKwhRate = useMemo(
+    () => toMetricNumber(marginalRatePerKwh({ supplyRates, profileId: rateProfileId })),
+    [supplyRates, rateProfileId]
   );
   const estimatedCostPerHour = (totalPowerW / 1000) * perKwhRate;
 
