@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import {
   getStatusColor,
   getSafetyStageConfig,
+  getWorstStatus,
 } from '../src/screens/PowerSafetyManagement/utils/safetyHelpers.js';
 
 // The owner's configured band, and the readings their mains actually produces.
@@ -62,4 +63,43 @@ test('a stale device is not graded as safe', () => {
   assert.equal(stale.stale, true);
   assert.equal(getSafetyStageConfig('normal', false).label, 'Normal');
   assert.equal(getSafetyStageConfig('cutoff', false).label, 'Cut-off Active');
+});
+
+/*
+ * The per-outlet badge summarises three metrics at once. It graded all three
+ * and rendered only the voltage one, so the observed cutoff - outlet 1 at
+ * 53.0 W against its own 45 W limit - badged "Normal" underneath a banner
+ * reading "Cut-off Active".
+ */
+
+test('the outlet badge reports the worst metric, not the voltage one', () => {
+  const voltage = getStatusColor(237.1, { min: 190, max: 250 });
+  const current = getStatusColor(0.23, { max: 10 });
+  const power = getStatusColor(53.0, { max: 45 });
+
+  assert.equal(voltage.label, 'Normal', 'mains was in band, which is why this hid');
+  assert.equal(power.label, 'Critical', '53 W is 118% of a 45 W limit');
+
+  assert.equal(getWorstStatus(voltage, current, power).label, 'Critical');
+});
+
+test('a warning on one metric outranks normal on the others', () => {
+  const voltage = getStatusColor(237.1, { min: 190, max: 250 });
+  const power = getStatusColor(38, { max: 45 });  // 84% - warning band
+
+  assert.equal(power.label, 'Warning');
+  assert.equal(getWorstStatus(voltage, power).label, 'Warning');
+});
+
+test('all clear stays normal', () => {
+  const voltage = getStatusColor(237.1, { min: 190, max: 250 });
+  const current = getStatusColor(0.23, { max: 10 });
+  const power = getStatusColor(20, { max: 45 });
+
+  assert.equal(getWorstStatus(voltage, current, power).label, 'Normal');
+});
+
+test('worst-of with nothing to grade is normal rather than undefined', () => {
+  assert.equal(getWorstStatus().label, 'Normal');
+  assert.equal(getWorstStatus(null, undefined).label, 'Normal');
 });

@@ -71,6 +71,29 @@ const CRITICAL = { label: 'Critical', color: COLORS.error, bg: '#FEF2F2' };
 const WARNING = { label: 'Warning', color: '#F59E0B', bg: '#FFFBEB' };
 const NORMAL = { label: 'Normal', color: COLORS.success, bg: '#ECFDF5' };
 
+// Severity order, so a card summarising several metrics can report the worst of
+// them rather than whichever one it happened to be written against.
+const SEVERITY = { Normal: 0, Warning: 1, Critical: 2 };
+
+/**
+ * The worst of several metric gradings.
+ *
+ * A per-outlet badge summarises voltage, current and power at once, and a
+ * summary that tracks only one of them is not a summary. ThresholdCard graded
+ * all three and then rendered the voltage one, so an outlet drawing 53.0 W
+ * against its own 45 W limit displayed "Normal" - directly beneath a banner
+ * reading "Cut-off Active", because the backend had cut the power off over
+ * exactly that reading.
+ */
+export const getWorstStatus = (...statuses) => statuses
+  .filter(Boolean)
+  .reduce(
+    (worst, candidate) => (
+      (SEVERITY[candidate.label] ?? 0) > (SEVERITY[worst.label] ?? 0) ? candidate : worst
+    ),
+    NORMAL
+  );
+
 export const getStatusColor = (value, threshold) => {
   // Voltage: a band, graded in or out, with no margin either side.
   //

@@ -2,12 +2,18 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../../../constants/colors';
-import { getStatusColor } from '../utils/safetyHelpers';
+import { getStatusColor, getWorstStatus } from '../utils/safetyHelpers';
 
 const ThresholdCard = ({ outletName, status, thresholds, isStale = false }) => {
   const voltageStatus = getStatusColor(status.voltage, thresholds.voltage);
   const currentStatus = getStatusColor(status.current, thresholds.current);
   const powerStatus = getStatusColor(status.power, thresholds.power);
+
+  // All three, not just voltage. These were each computed and then only the
+  // voltage one was rendered, so an outlet at 53.0 W against a 45 W limit
+  // badged "Normal" while the banner above it read "Cut-off Active" - the
+  // cutoff having fired on that very reading.
+  const outletStatus = getWorstStatus(voltageStatus, currentStatus, powerStatus);
 
   // Nothing recent enough to grade. Showing the last values received would
   // claim the hardware is in a state nobody has confirmed, and grading them
@@ -24,13 +30,13 @@ const ThresholdCard = ({ outletName, status, thresholds, isStale = false }) => {
         </View>
         <View style={[
           styles.statusBadge,
-          { backgroundColor: isStale ? COLORS.border : voltageStatus.bg },
+          { backgroundColor: isStale ? COLORS.border : outletStatus.bg },
         ]}>
           <Text style={[
             styles.statusText,
-            { color: isStale ? COLORS.textLight : voltageStatus.color },
+            { color: isStale ? COLORS.textLight : outletStatus.color },
           ]}>
-            {isStale ? 'No reading' : voltageStatus.label}
+            {isStale ? 'No reading' : outletStatus.label}
           </Text>
         </View>
       </View>
