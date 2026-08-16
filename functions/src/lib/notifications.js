@@ -12,6 +12,9 @@ const NOTIFICATION_TYPES = new Set([
   'budget',
   'schedule',
   'device',
+  // A charge that has finished, reported by chargingState.js. Informational -
+  // it never accompanies an action, unlike 'cutoff'.
+  'charge',
   'receipt',
   'invoice',
 ]);

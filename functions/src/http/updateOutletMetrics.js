@@ -19,6 +19,8 @@ const {
   isPlaceholderLabel,
   resolveOutletLogName,
 } = require('../lib/applianceDetector');
+const { updateChargingState, describeSettledCharge } = require('../lib/chargingState');
+const { createNotification } = require('../lib/notifications');
 const { dispatchDeviceCommand } = require('../lib/deviceCommandDispatcher');
 const { resolveOutletStatus, isUncommandedStatusChange } = require('../lib/outletStatus');
 const { deriveOutletEnergy } = require('../lib/energyAccounting');
@@ -174,6 +176,10 @@ async function updateOutletMetrics(req, res) {
     // Relay positions the device reports that WattWise never asked for; written
     // to history after the loop so they ride the same batch.
     const uncommandedChanges = [];
+    // Charges that finished on this post. Notified after the batch commits, so
+    // a failed write never produces a notification about state that was not
+    // saved - the next sample would then report it a second time.
+    const chargeCompletions = [];
 
     for (const outlet of validOutlets) {
       const { number, voltage, current, power, status, energy, isOverPower } = outlet;
@@ -254,6 +260,23 @@ async function updateOutletMetrics(req, res) {
         });
       }
 
+      // Reports a finished charge; never acts on one. See chargingState.js -
+      // nothing downstream of this reads it except the notification below and
+      // the card on each client.
+      const nextChargingState = updateChargingState(previousOutletData.chargingState, {
+        status: statusResolution.status,
+        powerW: power,
+        timestampMs: now,
+      });
+
+      if (nextChargingState.justSettled) {
+        chargeCompletions.push({
+          number,
+          peakW: nextChargingState.peakW,
+          powerW: power,
+        });
+      }
+
       const outletUpdate = {
         outletId: `outlet${number}`,
         outletNumber: number,
@@ -280,6 +303,14 @@ async function updateOutletMetrics(req, res) {
         totalEnergy: energyState.totalEnergy,
         deviceId: normalizedDeviceId,
         detectionState: nextDetectionState,
+        chargingState: {
+          state: nextChargingState.state,
+          peakW: nextChargingState.peakW,
+          runStartedAtMs: nextChargingState.runStartedAtMs,
+          settledSinceMs: nextChargingState.settledSinceMs,
+          notifiedAtMs: nextChargingState.notifiedAtMs,
+          lastSampleAtMs: nextChargingState.lastSampleAtMs,
+        },
         metricsUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
         metricsUpdatedAtMs: now,
         lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
@@ -536,6 +567,24 @@ async function updateOutletMetrics(req, res) {
 
     // Commit batch write
     await batch.commit();
+
+    // Says what it measured and leaves the decision alone: no relay is touched
+    // here. A charger left plugged in keeps drawing its standby watts, and the
+    // user is the one who decides whether that matters.
+    for (const completion of chargeCompletions) {
+      await createNotification({
+        userId,
+        type: 'charge',
+        title: '🔋 Charging looks finished',
+        message: `Outlet ${completion.number}: ${describeSettledCharge(completion)}`,
+        outlet: completion.number,
+        metadata: {
+          type: 'charge_complete',
+          peakPowerW: completion.peakW,
+          restingPowerW: completion.powerW,
+        },
+      });
+    }
 
     logger.info('Outlet metrics updated', {
       userId,

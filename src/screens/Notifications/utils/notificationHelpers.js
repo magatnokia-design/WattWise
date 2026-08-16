@@ -46,6 +46,7 @@ export const getNotificationIcon = (type) => {
     case 'budget': return '💰';
     case 'schedule': return '⏱️';
     case 'device': return '🔌';
+    case 'charge': return '🔋';
     case 'receipt': return '🧾';
     case 'invoice': return '📄';
     default: return '🔔';
@@ -195,6 +196,9 @@ export const getNotificationColor = (type) => {
     case 'budget': return '#8B5CF6';
     case 'schedule': return '#10B981';
     case 'device': return '#3B82F6';
+    // Green: a finished charge is a good outcome, not something to act on
+    // urgently. Deliberately not the amber used for high usage.
+    case 'charge': return '#10B981';
     case 'receipt': return '#14B8A6';
     case 'invoice': return '#6366F1';
     default: return '#6B7280';
