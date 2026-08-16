@@ -3,6 +3,8 @@ const assert = require('node:assert/strict');
 
 const {
   updateChargingState,
+  SETTLED_RATIO,
+  SETTLED_RATIO_FLOOR_W,
   SETTLED_HOLD_MS,
   RESUME_HOLD_MS,
   MIN_RUN_MS,
@@ -83,6 +85,36 @@ test('a brief blip is not a charge', () => {
   assert.equal(settledAt.length, 0);
   assert.ok(MIN_RUN_MS > 2 * MINUTE, 'the guard is what rejects this');
   assert.equal(state.state, 'charging');
+});
+
+test('a small top-up is not held to an impossible bar', () => {
+  // Measured 16 Aug 2026: topping a phone up from 92% peaked at 11.6 W, which
+  // put the proportional bar at 2.90 W. It rested at 2.4 W and qualified by
+  // 0.1 W. From a higher starting charge the peak is lower again and a finished
+  // charge would sit above its own threshold forever. The floor is what stops
+  // the bar tightening as the charge gets smaller.
+  // Peak 10 W puts the proportional bar at 2.5 W, so a charger resting at 2.8 W
+  // sits above its own threshold and would never have been reported.
+  const { state, settledAt } = run([
+    [0, 10], [2, 9], [4, 7], [6, 5],
+    [8, 2.8], [10, 2.8], [14, 2.8], [16, 2.8],
+  ]);
+
+  assert.equal(state.state, 'settled');
+  assert.equal(settledAt.length, 1);
+  assert.ok(2.8 > 10 * SETTLED_RATIO, 'the proportional bar alone would have rejected this');
+  assert.ok(2.8 <= SETTLED_RATIO_FLOOR_W, 'the floor is what lets it through');
+});
+
+test('a big load dropping to a few watts is still not a finished charge', () => {
+  // The floor must not become a way in for something the ceiling was keeping
+  // out. A fan at 56 W dropped to a lower speed is 35 W - above the 5 W ceiling,
+  // which still binds however the floor moves.
+  const { settledAt } = run([
+    [0, 56], [5, 56], [10, 35], [30, 35], [90, 35],
+  ]);
+
+  assert.equal(settledAt.length, 0);
 });
 
 test('a top-off pulse does not reset the hold', () => {

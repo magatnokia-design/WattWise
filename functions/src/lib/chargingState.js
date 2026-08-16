@@ -46,6 +46,24 @@ const MIN_CHARGE_PEAK_W = 8;
 const SETTLED_MAX_W = 5;
 const SETTLED_RATIO = 0.25;
 
+// Floor under the proportional half.
+//
+// Scaling the settle level to the run's own peak is right for a full charge and
+// wrong for a top-up. What a charger draws at rest is a property of the brick,
+// not of how much charging it just did - a couple of watts whether it peaked at
+// 35 W or at 11 W. Without a floor, the smaller the top-up the harder it
+// becomes to ever be called finished, which is backwards.
+//
+// Measured 16 Aug 2026: topping up from 92% peaked at 11.6 W, putting the bar at
+// 2.90 W. The charger rested at 2.4 W and qualified - by 0.1 W. Starting from
+// 97% the peak would have been lower again, and a genuinely finished charge
+// would have sat above its own threshold indefinitely.
+//
+// 3 W rather than an arbitrary number: the appliance detector already treats a
+// run under 3 W as not meaningfully drawing (MIN_DETECTABLE_MEAN_POWER_W), so
+// this is the same idea of "resting" the rest of the system uses.
+const SETTLED_RATIO_FLOOR_W = 3;
+
 // How long the settled level has to hold. A taper passes through these values
 // on its way down, so without this the notification fires mid-charge.
 const SETTLED_HOLD_MS = 5 * 60 * 1000;
@@ -139,7 +157,15 @@ const updateChargingState = (previous, sample = {}) => {
     };
   }
 
-  const isSettledLevel = powerW <= SETTLED_MAX_W && powerW <= peakW * SETTLED_RATIO;
+  // The proportional bar, never tighter than the floor, and never looser than
+  // the absolute ceiling. The ceiling is what keeps a big load out; the floor is
+  // what keeps a small charge reachable.
+  const settledCeilingW = Math.min(
+    SETTLED_MAX_W,
+    Math.max(peakW * SETTLED_RATIO, SETTLED_RATIO_FLOOR_W)
+  );
+
+  const isSettledLevel = powerW <= settledCeilingW;
 
   if (!isSettledLevel) {
     // Above the settled level. That is either a charge picking back up - a
@@ -197,6 +223,7 @@ module.exports = {
   MIN_CHARGE_PEAK_W,
   SETTLED_MAX_W,
   SETTLED_RATIO,
+  SETTLED_RATIO_FLOOR_W,
   SETTLED_HOLD_MS,
   RESUME_HOLD_MS,
   MIN_RUN_MS,

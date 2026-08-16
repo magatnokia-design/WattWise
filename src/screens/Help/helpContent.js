@@ -152,7 +152,8 @@ export const HELP_SECTIONS = [
         answer: [
           'WattWise watches the wattage curve. When a charge tapers off and then rests at a low level for several minutes, it tells you the battery has most likely finished.',
           'It only tells you. It never switches the outlet off by itself - that decision stays with you.',
-          'It stays quiet in one case on purpose: if a charger rests below what the meter can detect, that looks identical to you having unplugged the device, so WattWise says nothing rather than claim something it cannot see.',
+          'It stays quiet in two cases on purpose. If a charger rests below what the meter can detect, that looks identical to you having unplugged the device, so WattWise says nothing rather than claim something it cannot see.',
+          'And a run has to have drawn real power to count as a charge at all. Topping up a nearly full battery may never draw enough for WattWise to call it charging, so no notification follows. Missing one is the intended trade: the alternative is announcing a finished charge to someone who simply unplugged their phone.',
         ],
       },
       {
