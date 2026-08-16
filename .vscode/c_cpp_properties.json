@@ -6,15 +6,36 @@
       "intelliSenseMode": "windows-gcc-x64",
       "cStandard": "c11",
       "cppStandard": "c++17",
+
+      // Version is a single `*` rather than a pinned number. This config was
+      // pinned to core 2.0.14, which stopped existing when the core moved to
+      // 3.x - IntelliSense then resolved no Arduino header at all, and the
+      // errors cascaded into every file the sketch includes. A glob survives
+      // the next upgrade.
       "includePath": [
         "${workspaceFolder}/**",
-        "${env:LOCALAPPDATA}/Arduino15/packages/esp32/hardware/esp32/2.0.14/**",
-        "${env:LOCALAPPDATA}/Arduino15/packages/esp32/tools/**",
-        "${env:OneDrive}/Documents/Arduino/**",
-        "${env:OneDrive}/Documents/Arduino/libraries/**"
+
+        // Sketch libraries. The Arduino IDE injects this path; the CLI needs it
+        // passed as --libraries, and IntelliSense needs it listed here. It was
+        // missing from this file entirely.
+        "${env:LOCALAPPDATA}/Arduino15/libraries/**",
+
+        // ESP32 Arduino core.
+        "${env:LOCALAPPDATA}/Arduino15/packages/esp32/hardware/esp32/*/cores/esp32",
+        "${env:LOCALAPPDATA}/Arduino15/packages/esp32/hardware/esp32/*/libraries/**",
+        "${env:LOCALAPPDATA}/Arduino15/packages/esp32/hardware/esp32/*/variants/esp32",
+
+        // ESP-IDF headers. On core 3.x these live under tools/esp32-libs, not
+        // in the hardware tree - this is where esp_mac.h comes from, which
+        // wifiProvisioning.h includes directly.
+        "${env:LOCALAPPDATA}/Arduino15/packages/esp32/tools/esp32-libs/*/include/**"
       ],
+
+      // 10607 is what arduino-cli actually passes (-DARDUINO=10607, confirmed
+      // in the build's compile_commands.json). The previous 10819 was the
+      // Arduino IDE 1.8.19 version number and matched nothing in this build.
       "defines": [
-        "ARDUINO=10819",
+        "ARDUINO=10607",
         "ESP32",
         "ARDUINO_ARCH_ESP32"
       ]

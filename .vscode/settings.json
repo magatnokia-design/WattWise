@@ -2,15 +2,23 @@
 	"files.associations": {
 		"*.ino": "cpp"
 	},
+
+	// Kept in step with .vscode/c_cpp_properties.json. Both pointed at ESP32
+	// core 2.0.14 and at C:/Users/IDEAPAD/Documents/Arduino, neither of which
+	// exists on this machine - the installed core is 3.x and the libraries are
+	// under AppData/Local/Arduino15. With nothing resolving, every Arduino
+	// include went red and the errors spread into the headers the sketch pulls
+	// in, secrets.h among them.
 	"C_Cpp.default.includePath": [
 		"${workspaceFolder}/**",
-		"C:/Users/IDEAPAD/AppData/Local/Arduino15/packages/esp32/hardware/esp32/2.0.14/**",
-		"C:/Users/IDEAPAD/AppData/Local/Arduino15/packages/esp32/tools/**",
-		"C:/Users/IDEAPAD/Documents/Arduino/**",
-		"C:/Users/IDEAPAD/Documents/Arduino/libraries/**"
+		"C:/Users/IDEAPAD/AppData/Local/Arduino15/libraries/**",
+		"C:/Users/IDEAPAD/AppData/Local/Arduino15/packages/esp32/hardware/esp32/*/cores/esp32",
+		"C:/Users/IDEAPAD/AppData/Local/Arduino15/packages/esp32/hardware/esp32/*/libraries/**",
+		"C:/Users/IDEAPAD/AppData/Local/Arduino15/packages/esp32/hardware/esp32/*/variants/esp32",
+		"C:/Users/IDEAPAD/AppData/Local/Arduino15/packages/esp32/tools/esp32-libs/*/include/**"
 	],
 	"C_Cpp.default.defines": [
-		"ARDUINO=10819",
+		"ARDUINO=10607",
 		"ESP32",
 		"ARDUINO_ARCH_ESP32"
 	],
