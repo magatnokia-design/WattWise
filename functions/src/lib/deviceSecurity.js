@@ -1,3 +1,5 @@
+const { recordSecurityEvent, EVENT_TYPES } = require('./securityEvents');
+
 const MAX_TIMESTAMP_SKEW_MS = 60000;
 
 class DeviceRequestError extends Error {
@@ -193,6 +195,23 @@ const validateDeviceRequest = async ({
   }
 
   if (expectedTokens.size > 0 && !expectedTokens.has(normalizedToken)) {
+    /*
+     * The one failure here that reads as an attack rather than a mistake.
+     *
+     * A missing token is a misconfigured unit; a wrong one, against a device
+     * that IS registered to this account, means something presented a guess.
+     * Recorded under the owner so they can see it, with the deviceId but
+     * obviously not the token - sanitizeDetail would strip it by key name
+     * anyway, which is the point of doing it there rather than here.
+     *
+     * Not awaited: authentication must reject at the same speed whether the
+     * write succeeds, or the timing itself becomes a signal.
+     */
+    recordSecurityEvent(userId, EVENT_TYPES.DEVICE_AUTH_FAILED, {
+      deviceId: normalizedDeviceId,
+      reason: 'invalid_token',
+    }).catch(() => {});
+
     throw new DeviceRequestError(401, 'Invalid device token');
   }
 

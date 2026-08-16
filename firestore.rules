@@ -146,6 +146,18 @@ service cloud.firestore {
         // ✅ OPEN: Users can fully manage their reference bills
         allow read, write: if isOwner(userId);
       }
+
+      // Security event log. Readable by its owner so they can see what happened
+      // to their own account; writable by nobody.
+      //
+      // `allow write: if false` is the whole value of an audit log: an actor who
+      // could add entries could forge an alibi, and one who could delete them
+      // could erase the record of what they did. Cloud Functions write these
+      // through the Admin SDK, which bypasses these rules.
+      match /security_events/{eventId} {
+        allow read: if isOwner(userId);
+        allow write: if false;
+      }
     }
 
     // Rate-limit counters, written only by Cloud Functions through the Admin

@@ -1,6 +1,7 @@
 const admin = require('firebase-admin');
 const logger = require('firebase-functions/logger');
 const { HttpsError } = require('firebase-functions/v2/https');
+const { recordSecurityEvent, EVENT_TYPES } = require('./securityEvents');
 
 /**
  * Per-caller rate limiting for the HTTPS callables.
@@ -193,6 +194,17 @@ const enforceRateLimit = async (request, policy, options = {}) => {
     limit: policy.limit,
     windowMs: policy.windowMs,
   });
+
+  // Only signed-in callers get an event, because the log lives under a user and
+  // an anonymous caller has no user to file it against. Deliberately not
+  // awaited: a limit rejection must return immediately, and the write failing
+  // must not turn into a second error on top of the first.
+  if (request?.auth?.uid) {
+    recordSecurityEvent(request.auth.uid, EVENT_TYPES.RATE_LIMIT_EXCEEDED, {
+      action: policy.action,
+      limit: policy.limit,
+    }).catch(() => {});
+  }
 
   throw new HttpsError(
     'resource-exhausted',
