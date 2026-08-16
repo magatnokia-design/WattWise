@@ -579,15 +579,21 @@ export const useOutletControl = () => {
     outlet1SwitchingTo,
     outlet2SwitchingTo,
     isLoadingOutlets,
-    // No outlet document has ever existed for this account, so no device has
-    // ever reported. Registration does not seed these - `updateOutletMetrics`
-    // creates them on the first telemetry post - which makes their absence the
-    // one reliable signal that setup has not happened yet.
+    // No telemetry has ever arrived for this account.
+    //
+    // Keyed on `deviceId`, which only `updateOutletMetrics` writes. Document
+    // existence looked like the obvious signal and is wrong:
+    // `initializationService` calls `ensureOutletsExist` at registration, so
+    // both documents are already there - status 'off', every metric zero -
+    // before any hardware has been near the account. A brand-new user saw two
+    // fully rendered outlet cards reading 0.0 W and no setup prompt at all.
     //
     // Distinct from `hasReading`, which goes false whenever telemetry merely
     // goes quiet. A dropped wi-fi connection must not be presented as "you have
     // not set up your device".
-    hasNeverReported: !isLoadingOutlets && !outletDocs[1] && !outletDocs[2],
+    hasNeverReported: !isLoadingOutlets
+      && !outletDocs[1]?.deviceId
+      && !outletDocs[2]?.deviceId,
     totalEnergyKwh,
     totalPowerW,
     estimatedCost,

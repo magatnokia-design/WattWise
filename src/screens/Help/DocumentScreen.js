@@ -9,7 +9,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../../constants/colors';
-import { ABOUT_SECTIONS, PRIVACY_SECTIONS } from './legalContent';
+import { ABOUT_SECTIONS, PRIVACY_SECTIONS, TERMS_SECTIONS } from './legalContent';
 
 /**
  * Renders About and Privacy from the same section shape.
@@ -23,6 +23,7 @@ import { ABOUT_SECTIONS, PRIVACY_SECTIONS } from './legalContent';
 const DOCUMENTS = {
   about: { title: 'About WattWise', sections: ABOUT_SECTIONS },
   privacy: { title: 'Privacy Policy', sections: PRIVACY_SECTIONS },
+  terms: { title: 'Terms & Conditions', sections: TERMS_SECTIONS },
 };
 
 export const DocumentScreen = ({ navigation, route }) => {

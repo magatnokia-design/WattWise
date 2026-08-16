@@ -230,7 +230,18 @@ const handleRegister = async () => {
                 {acceptedTerms && <Text style={styles.checkmark}>✓</Text>}
               </View>
               <Text style={styles.termsText}>
-                I agree to the <Text style={styles.termsLink}>Terms & Conditions</Text>
+                I agree to the{' '}
+                {/* Its own press target. Styled as a link since the start with
+                    nothing behind it, so tapping it silently toggled the
+                    checkbox - agreement collected for a document that could not
+                    be read. */}
+                <Text
+                  style={styles.termsLink}
+                  onPress={() => navigation.navigate('Document', { document: 'terms' })}
+                  suppressHighlighting
+                >
+                  Terms &amp; Conditions
+                </Text>
               </Text>
             </TouchableOpacity>
 

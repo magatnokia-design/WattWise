@@ -70,6 +70,58 @@ export const ABOUT_SECTIONS = [
   },
 ];
 
+/**
+ * Registration asks the user to tick "I agree to the Terms & Conditions", and
+ * the link was styled as a link with no handler behind it - tapping it toggled
+ * the checkbox. Agreement was being collected for a document that could not be
+ * read, which is the one thing a terms checkbox must not do.
+ */
+export const TERMS_SECTIONS = [
+  {
+    id: 'what',
+    title: 'What you are agreeing to',
+    body: [
+      'WattWise is a capstone project, provided as it is, for monitoring and switching two low-voltage outlets. Using it means accepting the limits below.',
+      'It is not a commercial product and carries no warranty or service guarantee.',
+    ],
+  },
+  {
+    id: 'safe-use',
+    title: 'Safe use — the part that matters',
+    tone: 'warning',
+    body: [
+      `Low-voltage appliances only. Maximum ${MAX_OUTLET_POWER_W} W per outlet and ${MAX_TOTAL_POWER_W} W combined. Do not connect air conditioners, heaters, irons, kettles, or anything with a large motor.`,
+      'WattWise is a monitoring aid, not certified electrical protective equipment. The automatic cut-off is a convenience layer. It is not a substitute for your building\'s circuit breaker, for sound wiring, or for your own judgement about what is safe to plug in.',
+      'You remain responsible for what you connect to the outlets and for the condition of your electrical installation.',
+    ],
+  },
+  {
+    id: 'accuracy',
+    title: 'What the numbers mean',
+    body: [
+      'Energy figures are measured at your two outlets. They describe those outlets only, not your whole electricity use, so they will not match your utility bill unless everything you use runs through them.',
+      'Costs are estimates calculated from the PELCO III residential tariff using rates you enter. They are not a bill and carry no authority — the amount you owe is whatever your electricity provider charges.',
+      'Appliance identification is a suggestion. It is reliable for steady loads and unreliable for loads that change while they run, and it never affects your measured energy, your costs or the safety cut-off.',
+    ],
+  },
+  {
+    id: 'account',
+    title: 'Your account',
+    body: [
+      'Keep your sign-in details to yourself. Anyone signed in to your account can switch your outlets.',
+      'Use an email address you can actually reach — statements, receipts and safety alerts are sent there.',
+      'You can delete your account and all its data at any time from Settings. Deletion is permanent.',
+    ],
+  },
+  {
+    id: 'data',
+    title: 'Your data',
+    body: [
+      'What is stored, why, and who can read it is set out in the Privacy Policy, which forms part of these terms.',
+    ],
+  },
+];
+
 export const PRIVACY_SECTIONS = [
   {
     id: 'summary',

@@ -436,10 +436,14 @@ export const DashboardScreen = ({ navigation }) => {
           <View style={styles.setupCard}>
             <Text style={styles.setupIcon}>🔌</Text>
             <Text style={styles.setupTitle}>Link your WattWise unit</Text>
+            {/* Worded to cover both cases: never scanned, and scanned but the
+                unit has not reported yet. Claiming "nothing is paired" would be
+                wrong for the second, and that is the case where a user is most
+                likely to think the app is broken. */}
             <Text style={styles.setupText}>
-              Nothing is paired to this account yet, so there are no readings to
-              show. Scan the QR code on your WattWise unit and both outlets will
-              appear here within a few seconds.
+              No readings have arrived from a WattWise unit yet. Scan the QR code
+              on your unit in Settings, then check it is powered and on wi-fi —
+              both outlets appear here within a few seconds of it reporting.
             </Text>
             <TouchableOpacity
               style={styles.setupButton}
