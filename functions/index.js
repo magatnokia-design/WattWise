@@ -17,6 +17,12 @@ setGlobalOptions({
 });
 
 // Import function modules
+// Per-caller limits for the callables. Applied here rather than inside each
+// handler so the whole policy is visible next to the trigger config, and so it
+// is obvious that the three ESP32 onRequest endpoints below are deliberately
+// NOT wrapped - the hardware cannot back off, and deviceSecurity.js already
+// guards those with token, freshness and replay checks of its own.
+const { withRateLimit, RATE_LIMITS } = require('./src/lib/rateLimiter');
 const { updateOutletMetrics } = require('./src/http/updateOutletMetrics');
 const { ackDeviceCommand } = require('./src/http/ackDeviceCommand');
 const { getDeviceCommand } = require('./src/http/getDeviceCommand');
@@ -103,7 +109,7 @@ exports.processOutletToggle = onCall(
     // that latency: the switch moves immediately and reconciles when the write
     // lands. Revisit only if the project ever has room for always-on cost.
   },
-  processOutletToggle
+  withRateLimit(processOutletToggle, RATE_LIMITS.processOutletToggle)
 );
 
 /**
@@ -114,7 +120,7 @@ exports.clearAutoDetection = onCall(
   {
     maxInstances: 10,
   },
-  clearAutoDetection
+  withRateLimit(clearAutoDetection, RATE_LIMITS.clearAutoDetection)
 );
 
 /**
@@ -126,7 +132,7 @@ exports.registerApplianceProfile = onCall(
   {
     maxInstances: 10,
   },
-  registerApplianceProfile
+  withRateLimit(registerApplianceProfile, RATE_LIMITS.registerApplianceProfile)
 );
 
 /**
@@ -137,7 +143,7 @@ exports.finalizeInvoice = onCall(
   {
     maxInstances: 10,
   },
-  finalizeInvoice
+  withRateLimit(finalizeInvoice, RATE_LIMITS.finalizeInvoice)
 );
 
 /**
@@ -151,7 +157,7 @@ exports.repriceDailyRollups = onCall(
   {
     maxInstances: 10,
   },
-  repriceDailyRollups
+  withRateLimit(repriceDailyRollups, RATE_LIMITS.repriceDailyRollups)
 );
 
 /**
@@ -167,7 +173,7 @@ exports.deleteAccount = onCall(
     // enough to be sure it finishes.
     timeoutSeconds: 300,
   },
-  deleteAccount
+  withRateLimit(deleteAccount, RATE_LIMITS.deleteAccount)
 );
 
 /**
@@ -178,7 +184,7 @@ exports.removeApplianceProfile = onCall(
   {
     maxInstances: 10,
   },
-  removeApplianceProfile
+  withRateLimit(removeApplianceProfile, RATE_LIMITS.removeApplianceProfile)
 );
 
 /**
@@ -190,7 +196,7 @@ exports.renameApplianceProfile = onCall(
   {
     maxInstances: 10,
   },
-  renameApplianceProfile
+  withRateLimit(renameApplianceProfile, RATE_LIMITS.renameApplianceProfile)
 );
 
 /**
@@ -202,7 +208,7 @@ exports.linkDeviceToAccount = onCall(
   {
     maxInstances: 10,
   },
-  linkDeviceToAccount
+  withRateLimit(linkDeviceToAccount, RATE_LIMITS.linkDeviceToAccount)
 );
 
 /**
@@ -213,7 +219,7 @@ exports.checkUserExistsByEmail = onCall(
   {
     maxInstances: 10,
   },
-  checkUserExistsByEmail
+  withRateLimit(checkUserExistsByEmail, RATE_LIMITS.checkUserExistsByEmail)
 );
 
 /**
@@ -227,7 +233,7 @@ exports.sendPasswordResetEmail = onCall(
   {
     maxInstances: 10,
   },
-  sendPasswordResetEmail
+  withRateLimit(sendPasswordResetEmail, RATE_LIMITS.sendPasswordResetEmail)
 );
 
 /**
@@ -238,7 +244,7 @@ exports.sendVerificationEmail = onCall(
   {
     maxInstances: 10,
   },
-  sendVerificationEmail
+  withRateLimit(sendVerificationEmail, RATE_LIMITS.sendVerificationEmail)
 );
 
 /**
@@ -257,7 +263,7 @@ exports.sendInvoiceEmail = onCall(
     memory: '512MiB',
     timeoutSeconds: 120,
   },
-  sendInvoiceEmail
+  withRateLimit(sendInvoiceEmail, RATE_LIMITS.sendInvoiceEmail)
 );
 
 // ===========================

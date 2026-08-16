@@ -147,5 +147,17 @@ service cloud.firestore {
         allow read, write: if isOwner(userId);
       }
     }
+
+    // Rate-limit counters, written only by Cloud Functions through the Admin
+    // SDK, which bypasses these rules entirely.
+    //
+    // Firestore already denies anything no rule matches, so this block changes
+    // nothing today. It is here because a client that could read these would
+    // learn how close it is to a limit, and one that could write them could
+    // reset its own counter - which is the whole defence. Stating it means a
+    // later broadening of the rules cannot expose them by accident.
+    match /rate_limits/{limitId} {
+      allow read, write: if false;
+    }
   }
 }
