@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WattWise Hub Booklet</title>
+
+<!--
+  ===========================================================================
+  GENERATED FILE — do not edit by hand.
+
+  Source template + build script live in the scratchpad. The logo is inline SVG
+  — the same bolt path as BoltMark.jsx and the site favicon — so the booklet is
+  one self-contained file with no external assets to lose.
+
+  HOW TO USE
+    1. Open in a browser (double-click).
+    2. Click any dotted field and type. Paste the QR image into the slot on
+       page 5 (Ctrl+V embeds it).
+    3. Print. Set Paper size: A5 — or A4 with "2 pages per sheet".
+
+  WHERE YOUR VALUES ARE STORED
+    Browser local storage for this file only — never in the file itself, so
+    the template stays blank in git and a token cannot be committed by
+    accident. "Clear saved entries" wipes them.
+  ===========================================================================
+-->
+
+<style>
+  /* Single accent. Every hierarchy cue also survives greyscale, because this
+     gets printed on a mono office printer more often than not. */
+  :root {
+    --ink:        #111827;
+    --ink-soft:   #374151;
+    --muted:      #6B7280;
+    --rule:       #E5E7EB;
+    --rule-mid:   #D1D5DB;
+    --green:      #059669;
+    --green-deep: #047857;
+    --green-wash: #ECFDF5;
+    --warn-wash:  #FEF3C7;
+    --warn-ink:   #92400E;
+    --fill-wash:  #F3F4F6;
+
+    --page-w: 148mm;
+    --page-h: 210mm;
+    --pad: 11mm;
+  }
+
+  * { box-sizing: border-box; }
+
+  /* Painted on both, explicitly. The booklet is deliberately single-theme —
+     it is paper — so it must not borrow a dark ground from its host. */
+  html, body { background: #9CA3AF; }
+
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    color: var(--ink);
+    line-height: 1.45;
+    font-size: 9pt;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  code, [contenteditable] {
+    font-family: ui-monospace, "Cascadia Code", "SF Mono", Consolas, "Courier New", monospace;
+  }
+
+  /* ---------- toolbar (screen only) ---------- */
+  .toolbar {
+    position: sticky; top: 0; z-index: 50;
+    background: var(--ink); color: #fff;
+    padding: 9px 16px;
+    display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px;
+    font-size: 12px;
+  }
+  .toolbar .hint { color: #9CA3AF; line-height: 1.4; }
+  .toolbar button {
+    font: inherit; font-weight: 650; border: 0; border-radius: 6px;
+    padding: 7px 14px; cursor: pointer; background: #10B981; color: #062B20;
+  }
+  .toolbar button.ghost { background: transparent; color: #E5E7EB; border: 1px solid #4B5563; }
+  .toolbar button:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+  .saved-note { color: #34D399; font-size: 11px; }
+  .grow { flex: 1; }
+
+  /* ---------- page shell ---------- */
+  .book { padding: 20px 0 48px; }
+
+  .page {
+    width: var(--page-w); height: var(--page-h);
+    margin: 0 auto 16px;
+    background: #fff;
+    padding: var(--pad);
+    position: relative; overflow: hidden;
+    box-shadow: 0 3px 14px rgba(0,0,0,.25);
+    display: flex; flex-direction: column;
+  }
+
+  .folio {
+    position: absolute; left: var(--pad); right: var(--pad); bottom: 7mm;
+    display: flex; justify-content: space-between;
+    font-size: 6.5pt; letter-spacing: .07em; text-transform: uppercase;
+    color: var(--muted);
+    border-top: 1px solid var(--rule); padding-top: 2mm;
+  }
+
+  /* ---------- type ---------- */
+  .kicker {
+    font-size: 6.8pt; letter-spacing: .16em; text-transform: uppercase;
+    font-weight: 700; color: var(--green); margin: 0 0 2.5mm;
+  }
+  h2 { font-size: 12.5pt; line-height: 1.15; font-weight: 700; letter-spacing: -.01em; margin: 0 0 2mm; }
+  h3 {
+    font-size: 7pt; letter-spacing: .13em; text-transform: uppercase;
+    font-weight: 700; color: var(--muted); margin: 0 0 2mm;
+  }
+  p { margin: 0 0 2mm; }
+  .small { font-size: 7.6pt; color: var(--muted); line-height: 1.42; }
+
+  code { background: var(--fill-wash); border-radius: 2px; padding: .3mm 1mm; font-size: .92em; word-break: break-word; }
+
+  ul.plain { margin: 0 0 2mm; padding-left: 4.5mm; }
+  ul.plain li { margin-bottom: 1mm; }
+  ul.plain li::marker { color: var(--green); }
+
+  .grow-fill { flex: 1; }
+
+  /* ---------- steps ---------- */
+  .step { display: grid; grid-template-columns: 8mm 1fr; gap: 0 3mm; margin-bottom: 4mm; }
+  .step:last-child { margin-bottom: 0; }
+  .step-n { font-size: 15pt; font-weight: 800; line-height: 1; color: var(--green); letter-spacing: -.03em; padding-top: .3mm; }
+  .step-body h2 { font-size: 10.5pt; margin-bottom: 1.2mm; }
+  .step-body p { margin-bottom: 1.2mm; }
+  .step-body p:last-child { margin-bottom: 0; }
+
+  /* ---------- notes ---------- */
+  .note {
+    background: var(--green-wash); border: 1px solid var(--rule-mid);
+    border-radius: 1.5mm; padding: 2.2mm 2.8mm; margin: 2.5mm 0;
+    font-size: 7.6pt; line-height: 1.42;
+  }
+  .note p { margin: 0 0 1.5mm; }
+  .note p:last-child { margin-bottom: 0; }
+  .note .label {
+    display: block; font-size: 6.4pt; letter-spacing: .13em; text-transform: uppercase;
+    font-weight: 700; color: var(--green-deep); margin-bottom: 1mm;
+  }
+  .note.warn { background: var(--warn-wash); }
+  .note.warn .label { color: var(--warn-ink); }
+
+  /* ---------- fill-in fields ----------
+     Dotted on screen so they invite typing; a solid rule in print so the
+     finished booklet does not look like a draft. */
+  .creds {
+    border: 1px solid var(--rule-mid); border-radius: 1.5mm;
+    padding: 3mm 3.2mm; margin: 0 0 4mm;
+  }
+  .creds h3 { margin-bottom: 2.5mm; }
+  .field + .field { margin-top: 2.5mm; }
+  .field label {
+    display: block; font-size: 6.6pt; letter-spacing: .1em; text-transform: uppercase;
+    font-weight: 700; color: var(--muted); margin-bottom: .8mm;
+  }
+  [contenteditable] {
+    display: block; min-height: 5.6mm; padding: 1mm 1.5mm;
+    font-size: 9pt; color: var(--ink); background: var(--fill-wash);
+    border: 1px dashed var(--rule-mid); border-radius: 1mm;
+    outline: none; word-break: break-all; line-height: 1.35;
+  }
+  [contenteditable]:focus { background: #fff; border-color: var(--green); box-shadow: 0 0 0 2px var(--green-wash); }
+  [contenteditable]:empty::before { content: attr(data-placeholder); color: #9CA3AF; }
+  .field .hint { font-size: 6.8pt; color: var(--muted); margin: .6mm 0 0; line-height: 1.35; }
+
+  .qr-slot {
+    min-height: 78mm; display: flex; align-items: center; justify-content: center;
+    text-align: center; padding: 4mm; font-size: 8pt; color: var(--muted);
+  }
+  .qr-slot img { max-width: 100%; max-height: 74mm; display: block; margin: 0 auto; }
+
+  /* ---------- tables ---------- */
+  table { border-collapse: collapse; width: 100%; font-size: 7.4pt; }
+  th, td { text-align: left; padding: 1.5mm 1.5mm 1.5mm 0; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  th { font-size: 6.4pt; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+  tr:last-child td { border-bottom: none; }
+  td:first-child { width: 40%; font-weight: 600; padding-right: 3mm; }
+
+  /* ---------- cover ----------
+     Logo and wordmark are one locked group, optically centred. */
+  .cover { align-items: center; justify-content: center; text-align: center; }
+  .cover-lockup { display: flex; flex-direction: column; align-items: center; gap: 4mm; }
+  .cover-logo { width: 30mm; height: 30mm; display: block; }
+  .wordmark { font-size: 23pt; font-weight: 800; letter-spacing: -.025em; line-height: 1; margin: 0; }
+  .wordmark span { color: var(--green); }
+  .cover-rule { width: 16mm; height: 1.2mm; background: var(--green); border-radius: 1mm; }
+  .cover-sub { font-size: 10pt; color: var(--ink-soft); margin: 0; line-height: 1.4; }
+  .cover-foot {
+    position: absolute; left: var(--pad); right: var(--pad); bottom: 14mm;
+    text-align: center; font-size: 7.2pt; color: var(--muted);
+  }
+
+  /* ---------- print ---------- */
+  @page { size: A5 portrait; margin: 0; }
+
+  @media print {
+    html, body { background: #fff; }
+    .toolbar, .screen-only { display: none !important; }
+    .book { padding: 0; }
+    .page { margin: 0; box-shadow: none; page-break-after: always; break-after: page; }
+    .page:last-child { page-break-after: auto; break-after: auto; }
+
+    [contenteditable] {
+      background: transparent; border: 0; border-bottom: 1px solid var(--ink);
+      border-radius: 0; padding-left: 0; min-height: 5mm;
+    }
+    [contenteditable]:empty::before { content: ""; }
+    .qr-slot { border: 1px dashed var(--rule-mid); border-radius: 1.5mm; }
+
+    .note, .note.warn, .cover-rule, .cover-logo, .wordmark span, .step-n, .kicker {
+      -webkit-print-color-adjust: exact; print-color-adjust: exact;
+    }
+  }
+
+  @media screen and (max-width: 700px) {
+    :root { --page-w: 100%; --page-h: auto; --pad: 8mm; }
+    .page { min-height: 0; }
+  }
+</style>
+</head>
+<body>
+
+<div class="toolbar screen-only">
+  <strong>WattWise Hub booklet</strong>
+  <span class="hint">Click any dotted field to type · paste the QR image on page 5 ·
+  print at <strong>A5</strong>, or A4 with <strong>2 pages per sheet</strong></span>
+  <span class="grow"></span>
+  <span class="saved-note" id="savedNote"></span>
+  <button type="button" onclick="window.print()">Print</button>
+  <button type="button" class="ghost" id="clearBtn">Clear saved entries</button>
+</div>
+
+<div class="book">
+
+<!-- ============ 1 · COVER ============ -->
+<section class="page cover">
+  <div class="cover-lockup">
+    <!-- The mark exactly as the brand defines it: the bolt path from
+         BoltMark.jsx on the theme green, in the circle lockup the favicon uses.
+         Vector rather than a bitmap, so it stays sharp at any print size and
+         stays crisp on a mono printer. -->
+    <svg class="cover-logo" viewBox="0 0 100 100" role="img" aria-label="WattWise">
+      <circle cx="50" cy="50" r="50" fill="#10B981"/>
+      <path d="M17 0 L0 25 L10 25 L8 44 L26 18 L15 18 Z" fill="#ffffff"
+            transform="translate(35.23,25) scale(1.1364)"/>
+    </svg>
+    <p class="wordmark">Watt<span>Wise</span></p>
+    <div class="cover-rule"></div>
+    <p class="cover-sub"><strong>Hub</strong><br>Setup &amp; pairing guide</p>
+  </div>
+  <div class="cover-foot">Two parts, about ten minutes</div>
+  <div class="folio"><span>WattWise Hub</span><span>1</span></div>
+</section>
+
+<!-- ============ 2 · BEFORE YOU START ============ -->
+<section class="page">
+  <p class="kicker">Before you start</p>
+  <h2>What you need</h2>
+
+  <ul class="plain">
+    <li>The WattWise Hub</li>
+    <li>A USB-C power supply — provided by WattWise</li>
+    <li>Your 2.4&nbsp;GHz Wi-Fi name and password</li>
+    <li>A phone with the WattWise app installed</li>
+  </ul>
+
+  <div class="note warn">
+    <span class="label">Power over USB-C only</span>
+    <p><strong>Never wire this unit into a mains socket.</strong> The PZEM meter
+    terminals on this build are exposed, so mains wiring would put a live
+    conductor within reach. USB-C supplies everything the Hub needs.</p>
+    <p>WattWise is for <strong>low-voltage appliances only</strong> — chargers,
+    laptops, fans, TVs, LED lamps, consoles.</p>
+  </div>
+
+  <h3>How it works</h3>
+  <p class="small">A Hub with no Wi-Fi saved creates its own temporary network.
+  You join it with your phone, tell the Hub which router to use, and it restarts
+  onto your network. Then you pair it to your account in the app.</p>
+
+  <div class="note">
+    <span class="label">Nothing is pre-programmed</span>
+    <p>Your Wi-Fi password is never compiled into the firmware. It is entered
+    here, on the day, and stored on the unit — so the same firmware works on any
+    network without being rebuilt.</p>
+  </div>
+
+  <div class="folio"><span>Before you start</span><span>2</span></div>
+</section>
+
+<!-- ============ 3 · PART 1 · WI-FI ============ -->
+<section class="page">
+  <p class="kicker">Part 1 · Connect to Wi-Fi</p>
+
+  <div class="creds">
+    <h3>Wi-Fi credentials</h3>
+    <div class="field">
+      <label>Setup network name</label>
+      <div contenteditable="true" data-field="ap-name" data-placeholder="WattWise-Hub-XXXX"></div>
+      <p class="hint">Printed on the unit. The last four characters are unique to this Hub.</p>
+    </div>
+    <div class="field">
+      <label>Setup network password</label>
+      <div contenteditable="true" data-field="ap-pass" data-placeholder="from the unit sticker"></div>
+    </div>
+    <div class="field">
+      <label>Home Wi-Fi name (2.4 GHz)</label>
+      <div contenteditable="true" data-field="home-ssid" data-placeholder="your router's network name"></div>
+      <p class="hint">The Hub's radio is 2.4 GHz only. A 5 GHz network will not appear in the list.</p>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-n">1</div>
+    <div class="step-body">
+      <h2>Power on the Hub</h2>
+      <p class="small">Plug the USB-C cable in and wait about ten seconds. A Hub
+      that has never been set up creates its setup network automatically — there
+      is no button to press.</p>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-n">2</div>
+    <div class="step-body">
+      <h2>Join the setup network</h2>
+      <p class="small">In your phone's Wi-Fi settings, pick the setup network
+      above and enter its password. A “Sign in to network” notice appears within
+      seconds — tap it. If nothing appears, open a browser and go to
+      <code>http://192.168.4.1</code></p>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-n">3</div>
+    <div class="step-body">
+      <h2>Choose your network</h2>
+      <p class="small">The page lists what the Hub can see, with signal strength
+      beside each. Pick yours and type your Wi-Fi password. Nothing listed? Tap
+      <strong>Rescan networks</strong>. Hidden router? Type its name into the
+      <strong>hidden network</strong> box instead.</p>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-n">4</div>
+    <div class="step-body">
+      <h2>Save and connect</h2>
+      <p class="small">Tap <strong>Save and connect</strong>. The Hub restarts and
+      joins your network, and the setup network closes — reconnect your phone to
+      your normal Wi-Fi. If the password was wrong, the setup network reopens so
+      you can try again.</p>
+    </div>
+  </div>
+
+  <div class="folio"><span>Part 1 · Wi-Fi</span><span>3</span></div>
+</section>
+
+<!-- ============ 4 · PART 2 · PAIRING ============ -->
+<section class="page">
+  <p class="kicker">Part 2 · Pair with your account</p>
+
+  <div class="creds">
+    <h3>Device credentials</h3>
+    <div class="field">
+      <label>Device ID</label>
+      <div contenteditable="true" data-field="device-id" data-placeholder="ESP32_ROOM_A"></div>
+      <p class="hint">4–80 characters. Letters, numbers, <code>_</code> and <code>-</code> only.</p>
+    </div>
+    <div class="field">
+      <label>Device token</label>
+      <div contenteditable="true" data-field="device-token" data-placeholder="from the unit sticker"></div>
+      <p class="hint">At least 8 characters. Both fields are case-sensitive.</p>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-n">5</div>
+    <div class="step-body">
+      <h2>Open the app</h2>
+      <p class="small">Sign in, then go to <strong>Settings → WattWise Hub</strong>.</p>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-n">6</div>
+    <div class="step-body">
+      <h2>Scan the code on page 5</h2>
+      <p class="small">Choose <strong>Scan QR code</strong> and point the camera at
+      the next page. The app fills in both fields above and links the Hub. No
+      camera? Choose <strong>Enter manually</strong> and copy them by hand.</p>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-n">7</div>
+    <div class="step-body">
+      <h2>Check that it reports</h2>
+      <p class="small">The Hub card shows a status chip. Within a minute it should
+      read <strong>Online</strong>, and live readings should appear on the
+      Dashboard.</p>
+    </div>
+  </div>
+
+  <div class="note warn">
+    <span class="label">Keep the token private</span>
+    <p>The device token lets a caller submit readings as this Hub. Do not post it,
+    screenshot it, or send it in a message. If it gets out, issue a new one in the
+    app — the old token keeps working briefly so the Hub does not drop out
+    mid-change.</p>
+  </div>
+
+  <div class="folio"><span>Part 2 · Pairing</span><span>4</span></div>
+</section>
+
+<!-- ============ 5 · QR CODE ============ -->
+<section class="page">
+  <p class="kicker">Part 2 · Pair with your account</p>
+  <h2>Pairing code</h2>
+  <p class="small">Scan from <strong>Settings → WattWise Hub → Scan QR code</strong>.</p>
+
+  <div class="field" style="margin-top:3mm">
+    <div contenteditable="true" class="qr-slot" data-field="qr-image"
+         data-placeholder="Click here and paste your QR image (Ctrl+V)"></div>
+  </div>
+
+  <div class="note screen-only" style="margin-top:3mm">
+    <span class="label">Generating the code</span>
+    <p>Encode <em>one</em> of these three — the app accepts all of them:</p>
+    <p><code>{"deviceId":"ESP32_ROOM_A","token":"…"}</code></p>
+    <p><code>wattwise://device?deviceId=ESP32_ROOM_A&amp;token=…</code></p>
+    <p><code>ESP32_ROOM_A|…</code></p>
+    <p>Use a generator that runs offline — pasting a real token into a website
+    sends it to that website.</p>
+  </div>
+
+  <div class="grow-fill"></div>
+
+  <p class="small">Codes are per unit. A second Hub needs its own code, its own
+  Device ID and its own token.</p>
+
+  <div class="folio"><span>Pairing code</span><span>5</span></div>
+</section>
+
+<!-- ============ 6 · TROUBLESHOOTING ============ -->
+<section class="page">
+  <p class="kicker">If something goes wrong</p>
+  <h2>Troubleshooting</h2>
+
+  <table>
+    <thead><tr><th>What you see</th><th>What to do</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>Setup network not in the Wi-Fi list</td>
+        <td>Unplug the Hub, wait five seconds, plug it back in. A Hub that already
+        holds working Wi-Fi will not open one — reset it first (below).</td>
+      </tr>
+      <tr>
+        <td>The setup page never loads</td>
+        <td>Go to <code>http://192.168.4.1</code> directly. Turn mobile data off
+        first — some phones route around a network with no internet.</td>
+      </tr>
+      <tr>
+        <td>No networks in the list</td>
+        <td>Tap <strong>Rescan networks</strong>. The Hub sees 2.4 GHz only, so a
+        5 GHz-only network never appears.</td>
+      </tr>
+      <tr>
+        <td>Wrong Wi-Fi password entered</td>
+        <td>Nothing to undo. The Hub reopens its setup network — rejoin and enter
+        it again.</td>
+      </tr>
+      <tr>
+        <td>Setup network vanished mid-way</td>
+        <td>It closes after 10 minutes and the Hub restarts. Power-cycle and start
+        again from step 1.</td>
+      </tr>
+      <tr>
+        <td>Moving to a new router</td>
+        <td>Hold <strong>BOOT</strong> for 5 seconds. Saved Wi-Fi is cleared and the
+        setup network reopens. Pairing is not affected.</td>
+      </tr>
+      <tr>
+        <td>App shows the Hub offline</td>
+        <td>Check the Reason line on the Hub card, then confirm the Device ID and
+        token match page 4 exactly — both are case-sensitive.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="grow-fill"></div>
+
+  <p class="small">Firmware <code>relay-cloud-dualpzem-1.3.3</code></p>
+
+  <div class="folio"><span>Troubleshooting</span><span>6</span></div>
+</section>
+
+</div>
+
+<script>
+/* -----------------------------------------------------------------
+   Persistence.
+
+   Values live in this browser's local storage, never in the file, so the
+   template stays blank in git and a token cannot be committed by accident.
+   Best-effort: if storage is unavailable (some browsers restrict it for
+   file:// pages) typing and printing still work — only remembering does not.
+   ----------------------------------------------------------------- */
+(function () {
+  var KEY = 'wattwise-hub-booklet-v2';
+  var fields = Array.prototype.slice.call(document.querySelectorAll('[data-field]'));
+  var note = document.getElementById('savedNote');
+
+  function read() {
+    try { return JSON.parse(localStorage.getItem(KEY) || '{}'); } catch (e) { return {}; }
+  }
+
+  function flash(message) {
+    if (!note) return;
+    note.textContent = message;
+    clearTimeout(flash.timer);
+    flash.timer = setTimeout(function () { note.textContent = ''; }, 1600);
+  }
+
+  function save() {
+    var data = {};
+    fields.forEach(function (el) { data[el.dataset.field] = el.innerHTML; });
+    try {
+      localStorage.setItem(KEY, JSON.stringify(data));
+      flash('Saved');
+    } catch (e) {
+      flash('Not saved — storage unavailable');
+    }
+  }
+
+  var stored = read();
+  fields.forEach(function (el) {
+    if (stored[el.dataset.field]) el.innerHTML = stored[el.dataset.field];
+
+    el.addEventListener('input', function () {
+      clearTimeout(save.timer);
+      save.timer = setTimeout(save, 400);
+    });
+
+    /* Plain text on paste, so a value copied out of an editor does not drag its
+       font and colour in — except in the QR slot, where an image is the point. */
+    el.addEventListener('paste', function (event) {
+      if (el.dataset.field === 'qr-image') return;
+      event.preventDefault();
+      var text = (event.clipboardData || window.clipboardData).getData('text');
+      document.execCommand('insertText', false, text);
+    });
+  });
+
+  document.getElementById('clearBtn').addEventListener('click', function () {
+    if (!window.confirm('Clear every value you have typed into this booklet?')) return;
+    fields.forEach(function (el) { el.innerHTML = ''; });
+    try { localStorage.removeItem(KEY); } catch (e) { /* nothing to clear */ }
+    flash('Cleared');
+  });
+})();
+</script>
+
+</body>
+</html>
