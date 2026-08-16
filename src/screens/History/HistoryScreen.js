@@ -13,6 +13,7 @@ import ActivityLog from './components/ActivityLog';
 import UsageHistory from './components/UsageHistory';
 import DateRangeModal from './components/DateRangeModal';
 import { useHistory } from './hooks/useHistory';
+import ExportUsageCard from './components/ExportUsageCard';
 import { useAuth } from '../../hooks/useAuth';
 import { calculatePelcoIIIBill } from '../../utils/billing';
 import {
@@ -231,7 +232,12 @@ useEffect(() => {
             />
           </>
         ) : (
-          <UsageHistory usage={usageHistory} loading={loading} />
+          <>
+            {/* Above the list, because it exports what the list is showing and
+                the relationship should be visible without scrolling. */}
+            <ExportUsageCard usage={usageHistory} />
+            <UsageHistory usage={usageHistory} loading={loading} />
+          </>
         )}
       </ScrollView>
 
