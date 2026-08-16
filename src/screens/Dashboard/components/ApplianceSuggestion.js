@@ -108,10 +108,6 @@ const ApplianceSuggestion = ({
     return suggestionIsStale ? <StaleRunNotice /> : null;
   }
 
-  const alternatives = (suggestion.candidates || []).filter(
-    (candidate) => candidate.name !== suggestion.name
-  );
-
   // Whether the top match is a finding or a guess. An iPhone on its charge taper
   // scored Monitor 50 / Speaker 45 / Electric Fan 39 / Laptop Charger 37 - four
   // profiles inside thirteen points - and the card asserted the first of them.
@@ -123,6 +119,19 @@ const ApplianceSuggestion = ({
     meanPowerW: suggestion.meanPowerW,
     stdDevPowerW: suggestion.stdDevPowerW,
   });
+
+  // The leader is filtered out only when it has already been offered above.
+  // Where nothing was offered it belongs in the list like everything else - it
+  // is a candidate, not a verdict.
+  //
+  // Filtering it unconditionally meant the phone offered three choices where the
+  // web offered four, and the one it withheld was the highest scoring. Measured
+  // on the same run, 16 Aug 2026: the unsure card listed Monitor 42 / Electric
+  // Fan 38 / Laptop Charger 35 and silently dropped Speaker 53 - so the option
+  // the detector rated best was the one option the user could not pick.
+  const alternatives = (suggestion.candidates || []).filter(
+    (candidate) => !trust.trusted || candidate.name !== suggestion.name
+  );
 
   // Show the choices immediately rather than making the user open "Why" to
   // discover the suggestion was a coin flip.
