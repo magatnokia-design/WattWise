@@ -89,7 +89,7 @@ const IPAddress WIFI_DNS_PRIMARY(1, 1, 1, 1);
 const IPAddress WIFI_DNS_SECONDARY(8, 8, 8, 8);
 
 // Controller metadata
-static const char* FIRMWARE_VERSION = "relay-cloud-dualpzem-1.3.0";
+static const char* FIRMWARE_VERSION = "relay-cloud-dualpzem-1.3.1";
 
 bool relay1On = false;
 bool relay2On = false;
@@ -871,6 +871,12 @@ void connectWiFi() {
   Serial.print(provisionedSsid());
   int retries = 0;
   while (WiFi.status() != WL_CONNECTED && retries < 60) {
+    // Polled inside the wait, not just around it. This call blocks for up to
+    // 30s and loop() re-enters it immediately on failure, so a button checked
+    // only in loop() would be sampled about twice a minute - meaning a "5
+    // second" hold would really need close to sixty, in exactly the situation
+    // (wrong password, cannot connect) where someone is reaching for it.
+    pollFactoryResetButton();
     delay(500);
     Serial.print(".");
     retries++;
@@ -1479,6 +1485,26 @@ void setup() {
   }
 
   connectWiFi();
+
+  /*
+   * Failing to join a network we have never joined before means the password
+   * was almost certainly mistyped, so reopen setup rather than retrying a
+   * wrong answer forever. Failing on credentials that HAVE worked before means
+   * something external changed - the router is off, or out of range - and
+   * wiping them would turn a temporary outage into a manual re-setup.
+   *
+   * Same symptom, opposite correct response, which is the entire reason the
+   * verified flag exists.
+   */
+  if (WiFi.status() != WL_CONNECTED && !credentialsVerified()) {
+    Serial.println("[PROV] Never connected with these credentials - reopening setup.");
+    clearWifiCredentials();
+    runProvisioningPortal(PROVISION_AP_PASSWORD); // does not return
+  }
+
+  if (WiFi.status() == WL_CONNECTED) {
+    markCredentialsVerified();
+  }
   syncTime();
   printControllerStatus();
 

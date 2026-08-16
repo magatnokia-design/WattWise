@@ -42,6 +42,10 @@ static const unsigned long FACTORY_RESET_HOLD_MS = 5000;
 static const char* NVS_NAMESPACE = "wattwise";
 static const char* NVS_KEY_SSID = "wifi_ssid";
 static const char* NVS_KEY_PASSWORD = "wifi_pass";
+// Set only after credentials have actually worked once. This is what separates
+// "you mistyped the password" from "your router is switched off" - the two look
+// identical at the moment of failure but need opposite responses.
+static const char* NVS_KEY_VERIFIED = "wifi_ok";
 
 // A portal left up forever is an open door. If nobody provisions within this
 // window the Hub reboots and retries its stored network, so a transient outage
@@ -72,6 +76,8 @@ void saveWifiCredentials(const String& ssid, const String& password) {
   wifiPrefs.begin(NVS_NAMESPACE, false);
   wifiPrefs.putString(NVS_KEY_SSID, ssid);
   wifiPrefs.putString(NVS_KEY_PASSWORD, password);
+  // Unverified until proven: these have never been tried against a real router.
+  wifiPrefs.putBool(NVS_KEY_VERIFIED, false);
   wifiPrefs.end();
 
   storedSsid = ssid;
@@ -83,10 +89,35 @@ void saveWifiCredentials(const String& ssid, const String& password) {
   Serial.println(ssid);
 }
 
+bool credentialsVerified() {
+  wifiPrefs.begin(NVS_NAMESPACE, true);
+  const bool verified = wifiPrefs.getBool(NVS_KEY_VERIFIED, false);
+  wifiPrefs.end();
+  return verified;
+}
+
+/**
+ * Records that the stored credentials have joined a network at least once.
+ *
+ * Re-reads before writing because this runs on every successful boot and NVS
+ * has a finite erase budget - rewriting an unchanged `true` forever would spend
+ * flash cycles to store a value that never changes.
+ */
+void markCredentialsVerified() {
+  if (credentialsVerified()) return;
+
+  wifiPrefs.begin(NVS_NAMESPACE, false);
+  wifiPrefs.putBool(NVS_KEY_VERIFIED, true);
+  wifiPrefs.end();
+
+  Serial.println("[PROV] Credentials confirmed working.");
+}
+
 void clearWifiCredentials() {
   wifiPrefs.begin(NVS_NAMESPACE, false);
   wifiPrefs.remove(NVS_KEY_SSID);
   wifiPrefs.remove(NVS_KEY_PASSWORD);
+  wifiPrefs.remove(NVS_KEY_VERIFIED);
   wifiPrefs.end();
 
   storedSsid = "";
