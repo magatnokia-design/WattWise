@@ -223,9 +223,8 @@ const SettingsScreen = ({ navigation }) => {
   }, []);
 
   const handleHelp = useCallback(() => {
-    // TODO: Navigate to help screen or open URL
-    Alert.alert('Help', 'Help center coming soon.');
-  }, []);
+    navigation.navigate('HelpCenter');
+  }, [navigation]);
 
   const handlePrivacy = useCallback(() => {
     // TODO: Navigate to privacy policy

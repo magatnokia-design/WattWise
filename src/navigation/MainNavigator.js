@@ -12,6 +12,7 @@ import { COLORS } from '../constants/colors';
 import PowerSafetyScreen from '../screens/PowerSafetyManagement/PowerSafetyScreen';
 import BudgetTrackingScreen from '../screens/BudgetTracking/BudgetTrackingScreen';
 import ReferenceComparisonScreen from '../screens/ReferenceComparison/ReferenceComparisonScreen';
+import HelpCenterScreen from '../screens/Help/HelpCenterScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -114,6 +115,11 @@ export const MainNavigator = () => {
       <Stack.Screen
         name="ReferenceComparison"
         component={ReferenceComparisonScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="HelpCenter"
+        component={HelpCenterScreen}
         options={{ headerShown: false }}
       />
     </Stack.Navigator>
