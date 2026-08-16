@@ -18,6 +18,7 @@ import ProfileNameModal from './components/ProfileNameModal';
 import OutletNameModal from './components/OutletNameModal';
 import DeleteAccountModal from './components/DeleteAccountModal';
 import SecurityActivityModal from './components/SecurityActivityModal';
+import HubStatusCard from './components/HubStatusCard';
 import { useAuth } from '../../hooks/useAuth';
 import { securityService } from '../../services/firebase/securityService';
 import { summariseSecurityEvents } from '../../utils/securityActivity';
@@ -25,7 +26,6 @@ import { useSettings } from './hooks/useSettings';
 import {
   formatVersion,
   formatCurrency,
-  formatDeviceHealthValue,
 } from './utils/settingsHelpers';
 import { authService } from '../../services/firebase/authService';
 
@@ -397,7 +397,12 @@ const SettingsScreen = ({ navigation }) => {
         </SectionCard>
 
         {/* Device */}
-        <SectionHeader title="Device" />
+        <SectionHeader title="WattWise Hub" />
+
+        {/* State first, controls after. Device health is what someone opens this
+            section to check, and it used to be a value squeezed onto the right
+            edge of one row among four identical ones. */}
+        <HubStatusCard settings={settings} />
         <SectionCard>
           {/* Pairing is a single action: scan the QR on the unit. Scanning
               again simply re-pairs, which is why there is no unlink step. */}
@@ -407,12 +412,6 @@ const SettingsScreen = ({ navigation }) => {
             value={settings.esp32Linked ? settings.esp32DeviceId : 'Not linked'}
             showArrow
             onPress={handleScanDeviceQR}
-          />
-          <Separator />
-          <SettingsRow
-            icon="🩺"
-            label="Device Status"
-            value={formatDeviceHealthValue(settings.esp32HealthStatus, settings.esp32LastSeenAtMs)}
           />
           <Separator />
           <SettingsRow

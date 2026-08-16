@@ -16,7 +16,7 @@ export const getSafetyStageConfig = (stage, readingsAreStale = false) => {
   if (readingsAreStale) {
     return {
       label: 'No readings',
-      description: 'The ESP32 has stopped reporting, so nothing can be graded right now',
+      description: 'The WattWise Hub has stopped reporting, so nothing can be graded right now',
       icon: 'help-circle',
       color: COLORS.textLight,
       bgColor: '#F9FAFB',

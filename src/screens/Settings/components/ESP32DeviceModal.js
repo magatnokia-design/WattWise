@@ -130,7 +130,7 @@ const ESP32DeviceModal = ({
               setDeviceToken(text);
               setError('');
             }}
-            placeholder="Set a shared token for ESP32 requests"
+            placeholder="Set a shared token for Hub requests"
             placeholderTextColor={COLORS.textLight}
             autoCapitalize="none"
             autoCorrect={false}

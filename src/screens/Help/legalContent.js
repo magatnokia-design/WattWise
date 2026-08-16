@@ -25,7 +25,7 @@ export const ABOUT_SECTIONS = [
     id: 'what',
     title: 'What WattWise is',
     body: [
-      'WattWise is a smart energy monitoring system for apartment rooms. An ESP32 controller paired with PZEM-004T energy meters measures and switches two outlets, and this app is how you watch and control them.',
+      'WattWise is a smart energy monitoring system for apartment rooms. A WattWise Hub — an ESP32 controller paired with PZEM-004T energy meters — measures and switches two outlets, and this app is how you watch and control them.',
       'Everything the app reports is measured at those two outlets. Anything plugged in elsewhere in the room is invisible to WattWise, so its totals describe those two sockets rather than your whole electricity use.',
     ],
   },
