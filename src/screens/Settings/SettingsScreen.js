@@ -17,6 +17,10 @@ import DeviceQRScannerModal from './components/DeviceQRScannerModal';
 import ProfileNameModal from './components/ProfileNameModal';
 import OutletNameModal from './components/OutletNameModal';
 import DeleteAccountModal from './components/DeleteAccountModal';
+import SecurityActivityModal from './components/SecurityActivityModal';
+import { useAuth } from '../../hooks/useAuth';
+import { securityService } from '../../services/firebase/securityService';
+import { summariseSecurityEvents } from '../../utils/securityActivity';
 import { useSettings } from './hooks/useSettings';
 import {
   formatVersion,
@@ -47,6 +51,34 @@ const SettingsScreen = ({ navigation }) => {
   const [scannerVisible, setScannerVisible] = useState(false);
   const [nameModalVisible, setNameModalVisible] = useState(false);
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
+  const [securityModalVisible, setSecurityModalVisible] = useState(false);
+  const [securityEvents, setSecurityEvents] = useState([]);
+  const { user } = useAuth();
+
+  /*
+   * Fetched on focus rather than subscribed, because this only feeds the one
+   * summary line on the row. The modal opens its own live listener - a
+   * permanent one here would keep a read open on a screen most people leave
+   * immediately, to keep a sentence current that nobody is looking at.
+   */
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      if (!user?.uid) return undefined;
+
+      securityService
+        .getSecurityEvents(user.uid)
+        .then((events) => {
+          if (!cancelled) setSecurityEvents(events);
+        })
+        .catch(() => {
+          // The row falls back to "Nothing to report"; a failure to summarise
+          // must not stop the rest of Settings rendering.
+        });
+
+      return () => { cancelled = true; };
+    }, [user?.uid])
+  );
   // Which saved appliance is being renamed, or null. Holds the label rather than
   // a boolean so the modal knows what it is editing.
   const [renamingAppliance, setRenamingAppliance] = useState(null);
@@ -390,6 +422,16 @@ const SettingsScreen = ({ navigation }) => {
             onPress={handleESP32Settings}
           />
           <Separator />
+          {/* Sits under Device rather than Account: everything it can currently
+              report is about a unit — a refused token, a link, a transfer. */}
+          <SettingsRow
+            icon="🛡️"
+            label="Security activity"
+            value={summariseSecurityEvents(securityEvents)}
+            showArrow
+            onPress={() => setSecurityModalVisible(true)}
+          />
+          <Separator />
           <SettingsRow
             icon="🗑️"
             label="Remove Device"
@@ -535,6 +577,12 @@ const SettingsScreen = ({ navigation }) => {
         email={settings.email}
         onClose={() => setDeleteModalVisible(false)}
         onConfirm={handleDeleteAccount}
+      />
+
+      <SecurityActivityModal
+        visible={securityModalVisible}
+        userId={user?.uid}
+        onClose={() => setSecurityModalVisible(false)}
       />
 
       {/* PELCO III Block 1 rate editor */}
