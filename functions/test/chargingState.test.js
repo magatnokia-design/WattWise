@@ -4,6 +4,7 @@ const assert = require('node:assert/strict');
 const {
   updateChargingState,
   SETTLED_HOLD_MS,
+  RESUME_HOLD_MS,
   MIN_RUN_MS,
 } = require('../src/lib/chargingState');
 
@@ -82,6 +83,38 @@ test('a brief blip is not a charge', () => {
   assert.equal(settledAt.length, 0);
   assert.ok(MIN_RUN_MS > 2 * MINUTE, 'the guard is what rejects this');
   assert.equal(state.state, 'charging');
+});
+
+test('a top-off pulse does not reset the hold', () => {
+  // Regression: measured on hardware 16 Aug 2026. A phone held at 100% sat at
+  // 3-4 W and pulsed briefly over 5 W to maintain the level. Each pulse used to
+  // discard the whole accumulated hold, so the notification could never fire -
+  // the stored settledSinceMs restarted at 10:43:08 after holding since ~10:31.
+  const { state, settledAt } = run([
+    [0, 30], [2, 28], [4, 20], [6, 8],
+    [8, 4], [9, 4],
+    [10, 12], [10.2, 4],
+    [11, 4], [12, 4], [13, 4], [14, 4],
+  ]);
+
+  assert.equal(settledAt.length, 1, 'the pulse must not postpone the notification');
+  assert.equal(settledAt[0], 13, 'still measured from 8 min, when the level was first reached');
+  assert.equal(state.settledSinceMs, AT + (8 * MINUTE), 'the original hold survived');
+});
+
+test('a sustained return to load still resets the hold', () => {
+  // The other side of the same guard: stay above the settled level for longer
+  // than RESUME_HOLD_MS and it is a real charge again, not a maintenance blip.
+  const { state, settledAt } = run([
+    [0, 30], [5, 30],
+    [8, 4], [9, 4],
+    [10, 25], [13, 25],
+    [14, 4], [15, 4],
+  ]);
+
+  assert.equal(settledAt.length, 0);
+  assert.ok(RESUME_HOLD_MS < 3 * MINUTE, 'three minutes above must count as resumed');
+  assert.equal(state.settledSinceMs, AT + (14 * MINUTE), 'timer restarted at the second rest');
 });
 
 test('a charge that picks back up clears the settle timer', () => {

@@ -50,6 +50,23 @@ const SETTLED_RATIO = 0.25;
 // on its way down, so without this the notification fires mid-charge.
 const SETTLED_HOLD_MS = 5 * 60 * 1000;
 
+// A nearly full battery does not rest flat - it tops off in short bursts,
+// briefly crossing back over the settled level before dropping again. Resetting
+// the hold on the first such sample throws away minutes of accumulated evidence
+// and the notification can never fire.
+//
+// Measured on hardware, 16 Aug 2026: an iPhone charged to 100% on outlet1 sat
+// at 3-4 W with occasional excursions past 5 W. The stored state showed
+// settledSinceMs restarting at 10:43:08 after the level had already been held
+// since roughly 10:31 - the third such reset that run. Nothing was wrong with
+// the meter or the phone; the state machine simply could not tell a two-second
+// top-off from a resumed charge.
+//
+// What separates them is duration, not magnitude: a maintenance pulse lasts
+// seconds, a genuinely resumed charge lasts minutes. So the hold survives an
+// excursion unless the draw stays up for this long.
+const RESUME_HOLD_MS = 90 * 1000;
+
 // A charge takes time. This rejects a brief high blip followed by a low one,
 // which is a plug being wiggled rather than a battery filling.
 const MIN_RUN_MS = 3 * 60 * 1000;
@@ -64,6 +81,7 @@ const emptyState = (lastSampleAtMs = 0) => ({
   peakW: 0,
   runStartedAtMs: null,
   settledSinceMs: null,
+  aboveSinceMs: null,
   notifiedAtMs: null,
   lastSampleAtMs,
 });
@@ -77,6 +95,7 @@ const normalize = (raw = null) => {
     peakW: Math.max(0, toFiniteNumber(state.peakW, 0)),
     runStartedAtMs: toFiniteNumber(state.runStartedAtMs, 0) || null,
     settledSinceMs: toFiniteNumber(state.settledSinceMs, 0) || null,
+    aboveSinceMs: toFiniteNumber(state.aboveSinceMs, 0) || null,
     notifiedAtMs: toFiniteNumber(state.notifiedAtMs, 0) || null,
     lastSampleAtMs: Math.max(0, toFiniteNumber(state.lastSampleAtMs, 0)),
   };
@@ -114,6 +133,7 @@ const updateChargingState = (previous, sample = {}) => {
       peakW,
       runStartedAtMs,
       settledSinceMs: null,
+      aboveSinceMs: null,
       lastSampleAtMs: nowMs,
       justSettled: false,
     };
@@ -122,15 +142,20 @@ const updateChargingState = (previous, sample = {}) => {
   const isSettledLevel = powerW <= SETTLED_MAX_W && powerW <= peakW * SETTLED_RATIO;
 
   if (!isSettledLevel) {
-    // Still drawing. A charge that picks back up - a laptop waking, a phone
-    // used while charging - clears the settle timer rather than carrying a
-    // stale one that would fire the moment it drops again.
+    // Above the settled level. That is either a charge picking back up - a
+    // laptop waking, a phone used while charging - or a top-off pulse from a
+    // battery that is already full. Only the first should clear the settle
+    // timer, and the two are told apart by how long the draw stays up.
+    const aboveSinceMs = prior.aboveSinceMs || nowMs;
+    const resumed = nowMs - aboveSinceMs >= RESUME_HOLD_MS;
+
     return {
       ...prior,
       state: 'charging',
       peakW,
       runStartedAtMs,
-      settledSinceMs: null,
+      settledSinceMs: resumed ? null : prior.settledSinceMs,
+      aboveSinceMs,
       lastSampleAtMs: nowMs,
       justSettled: false,
     };
@@ -150,6 +175,7 @@ const updateChargingState = (previous, sample = {}) => {
     peakW,
     runStartedAtMs,
     settledSinceMs,
+    aboveSinceMs: null,
     notifiedAtMs: justSettled ? nowMs : prior.notifiedAtMs,
     lastSampleAtMs: nowMs,
     justSettled,
@@ -172,5 +198,6 @@ module.exports = {
   SETTLED_MAX_W,
   SETTLED_RATIO,
   SETTLED_HOLD_MS,
+  RESUME_HOLD_MS,
   MIN_RUN_MS,
 };

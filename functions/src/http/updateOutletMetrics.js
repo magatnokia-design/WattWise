@@ -308,6 +308,7 @@ async function updateOutletMetrics(req, res) {
           peakW: nextChargingState.peakW,
           runStartedAtMs: nextChargingState.runStartedAtMs,
           settledSinceMs: nextChargingState.settledSinceMs,
+          aboveSinceMs: nextChargingState.aboveSinceMs,
           notifiedAtMs: nextChargingState.notifiedAtMs,
           lastSampleAtMs: nextChargingState.lastSampleAtMs,
         },
