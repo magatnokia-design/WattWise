@@ -124,3 +124,18 @@ export const filterByDateRange = (data = [], startDate, endDate) => {
     return true;
   });
 };
+
+/**
+ * How many days an export would cover, for the export control's own label.
+ *
+ * Lives here rather than beside the workbook builder on purpose: this is the one
+ * thing the export UI needs *before* anyone clicks, and `usageExport.js` carries
+ * a 400 kB spreadsheet library that the website loads on demand. Keeping the
+ * label out of that module is what lets the heavy part stay behind the click.
+ */
+export const describeUsageRows = (rows = []) => {
+  const count = (Array.isArray(rows) ? rows : []).filter((row) => row?.date).length;
+
+  if (count === 0) return 'Nothing to export yet';
+  return count === 1 ? '1 day' : `${count} days`;
+};

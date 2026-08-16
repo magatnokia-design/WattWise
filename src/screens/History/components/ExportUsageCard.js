@@ -8,14 +8,16 @@ import {
   Alert,
 } from 'react-native';
 import { COLORS } from '../../../constants/colors';
-import {
-  buildUsageCsv,
-  buildUsageCsvFilename,
-  describeUsageCsv,
-} from '../../../utils/usageCsv';
+import { describeUsageRows } from '../utils/historyHelpers';
 
 /**
- * Exports the loaded daily usage as a CSV file and hands it to the share sheet.
+ * Exports the loaded daily usage as an Excel workbook and hands it to the share
+ * sheet.
+ *
+ * A workbook rather than CSV because CSV is plain text and cannot carry the
+ * theme, the column widths, or a currency format - and the costs here need to
+ * *look* like pesos while staying numeric enough to add up, which is the one
+ * thing CSV could not do.
  *
  * Written to a cache directory rather than Documents on purpose: the file's
  * only job is to reach whatever app the user picks from the share sheet, and
@@ -39,16 +41,22 @@ export const ExportUsageCard = ({ usage = [] }) => {
 
     try {
       // Required lazily so the screen still renders on a build where the native
-      // module is missing - the same pattern the QR scanner uses.
+      // module is missing - the same pattern the QR scanner uses. The workbook
+      // builder is deferred for a different reason: it carries a ~400 kB
+      // spreadsheet writer that most sessions never touch.
       const FileSystem = require('expo-file-system/legacy');
       const Sharing = require('expo-sharing');
+      const { writeUsageXlsx, buildUsageFilename, XLSX_MIME } =
+        require('../../../utils/usageExport');
 
-      const csv = buildUsageCsv(usage);
-      const filename = buildUsageCsvFilename(usage);
+      // xlsx is a zip container, so it has to travel as base64 - writing it as
+      // UTF8 text would corrupt the archive and Excel would refuse the file.
+      const workbook = writeUsageXlsx(usage, 'base64');
+      const filename = buildUsageFilename(usage);
       const fileUri = `${FileSystem.cacheDirectory}${filename}`;
 
-      await FileSystem.writeAsStringAsync(fileUri, csv, {
-        encoding: FileSystem.EncodingType.UTF8,
+      await FileSystem.writeAsStringAsync(fileUri, workbook, {
+        encoding: FileSystem.EncodingType.Base64,
       });
 
       if (!(await Sharing.isAvailableAsync())) {
@@ -60,9 +68,9 @@ export const ExportUsageCard = ({ usage = [] }) => {
       }
 
       await Sharing.shareAsync(fileUri, {
-        mimeType: 'text/csv',
+        mimeType: XLSX_MIME,
         dialogTitle: 'Export daily usage',
-        UTI: 'public.comma-separated-values-text',
+        UTI: 'org.openxmlformats.spreadsheetml.sheet',
       });
     } catch (error) {
       Alert.alert(
@@ -85,7 +93,7 @@ export const ExportUsageCard = ({ usage = [] }) => {
           <Text style={styles.title}>Export daily usage</Text>
           <Text style={styles.subtitle}>
             {hasRows
-              ? `${describeUsageCsv(usage)} as a spreadsheet file`
+              ? `${describeUsageRows(usage)} as an Excel workbook`
               : 'Nothing to export yet'}
           </Text>
         </View>
@@ -100,12 +108,13 @@ export const ExportUsageCard = ({ usage = [] }) => {
         {busy ? (
           <ActivityIndicator size="small" color={COLORS.white} />
         ) : (
-          <Text style={styles.buttonText}>Export CSV</Text>
+          <Text style={styles.buttonText}>Export Excel</Text>
         )}
       </TouchableOpacity>
 
       <Text style={styles.note}>
-        Energy and cost per outlet, one row per day. Opens in Excel or Sheets.
+        Energy and cost per outlet, one row per day. Opens in Excel or Sheets,
+        already formatted.
       </Text>
     </View>
   );
