@@ -32,6 +32,7 @@
 #include <WebServer.h>
 #include <DNSServer.h>
 #include <Preferences.h>
+#include <esp_mac.h>
 
 // GPIO0 is the BOOT button on every ESP32 dev board. It is also the flash-mode
 // strapping pin, which is why it is only ever READ, and only after boot has
@@ -133,10 +134,18 @@ const String& provisionedPassword() { return storedPassword; }
 // Portal identity
 // ---------------------------------------------------------------------------
 
-/** `WattWise-Hub-A4C1` - the suffix makes two units distinguishable in a list. */
+/**
+ * `WattWise-Hub-A4C1` - the suffix makes two units distinguishable in a list.
+ *
+ * Read straight from efuse rather than through WiFi.macAddress(). That call
+ * answers differently depending on whether the radio has been started and which
+ * mode it is in, so the name came out one way when the portal opened on a fresh
+ * boot and another way when it opened after a failed connection. A setup network
+ * whose name changes is worse than useless once the name is printed on a label.
+ */
 String provisioningApName() {
   uint8_t mac[6];
-  WiFi.macAddress(mac);
+  esp_read_mac(mac, ESP_MAC_WIFI_STA);
 
   char suffix[5];
   snprintf(suffix, sizeof(suffix), "%02X%02X", mac[4], mac[5]);
@@ -179,7 +188,15 @@ static String cachedNetworkOptions;
 void refreshNetworkScan() {
   // Scanning in AP_STA keeps the portal reachable while the radio scans; a plain
   // AP mode scan would drop the phone that is trying to configure the Hub.
-  const int found = WiFi.scanNetworks(false, false);
+  int found = WiFi.scanNetworks(false, false);
+
+  // One retry. A scan can come back empty because the radio was momentarily
+  // busy rather than because the air is quiet, and an empty list is a dead end
+  // for the user - there is nothing to pick and no way forward.
+  if (found <= 0) {
+    delay(600);
+    found = WiFi.scanNetworks(false, false);
+  }
 
   cachedNetworkOptions = "";
 
@@ -295,6 +312,20 @@ void handlePortalNotFound() {
 /** Blocks until credentials are saved (which reboots) or the window expires. */
 void runProvisioningPortal(const char* apPassword) {
   const String apName = provisioningApName();
+
+  /*
+   * Stop the station before bringing the portal up.
+   *
+   * Reaching this function after a failed connection leaves WiFi.begin() still
+   * retrying in the background with auto-reconnect on. Those attempts keep the
+   * radio busy and every scan comes back empty, so the network list is blank and
+   * Rescan cannot help - the user is left on a page with nothing to choose.
+   * Erasing the stored AP config here also stops the SDK re-applying the bad
+   * credentials behind our back.
+   */
+  WiFi.setAutoReconnect(false);
+  WiFi.disconnect(false, true);
+  delay(200);
 
   WiFi.mode(WIFI_AP_STA);
   WiFi.softAP(apName.c_str(), apPassword);
