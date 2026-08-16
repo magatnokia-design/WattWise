@@ -3,6 +3,7 @@ import React, { useEffect } from 'react';
 import { View, Text, StyleSheet, Image } from 'react-native';
 import { COLORS } from '../../constants/colors';
 import { FONTS } from '../../constants/theme';
+import { Wordmark } from '../../components/common/Wordmark';
 
 export const SplashScreen = ({ navigation }) => {
   useEffect(() => {
@@ -22,7 +23,9 @@ export const SplashScreen = ({ navigation }) => {
         style={styles.logo}
         resizeMode="contain"
       />
-      <Text style={styles.title}>WattWise</Text>
+      {/* "Watt" white to match the bolt above it; "Wise" in the deep green,
+          because the default accent IS this screen's background. */}
+      <Wordmark style={styles.title} accentColor={COLORS.primaryDeep} />
       <Text style={styles.subtitle}>Smart Energy Monitoring</Text>
     </View>
   );
@@ -43,7 +46,8 @@ const styles = StyleSheet.create({
   title: {
     ...FONTS.h1,
     color: COLORS.white,
-    fontWeight: 'bold',
+    fontWeight: '800',
+    letterSpacing: -0.5,
     marginBottom: 8,
   },
   subtitle: {

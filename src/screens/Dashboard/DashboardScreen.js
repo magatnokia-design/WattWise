@@ -25,6 +25,7 @@ import { useSafetyStage } from './hooks/useSafetyStage';
 import { getSafetyStageConfig } from '../PowerSafetyManagement/utils/safetyHelpers';
 import { budgetService } from '../../services/firebase';
 import { auth } from '../../services/firebase/config';
+import { Wordmark } from '../../components/common/Wordmark';
 
 const toMetricNumber = (value) => {
   const parsed = Number(value);
@@ -349,7 +350,7 @@ export const DashboardScreen = ({ navigation }) => {
       >
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>WattWise</Text>
+          <Wordmark style={styles.headerTitle} />
           <TouchableOpacity
             style={styles.notificationButton}
             onPress={() => setNotificationVisible(true)}

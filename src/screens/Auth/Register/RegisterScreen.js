@@ -14,6 +14,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Input } from '../../../components/common/Input';
 import { Button } from '../../../components/common/Button';
+import { Wordmark } from '../../../components/common/Wordmark';
 import { authService, initializationService } from '../../../services/firebase';
 import { COLORS } from '../../../constants/colors';
 import { SIZES, FONTS } from '../../../constants/theme';
@@ -169,6 +170,7 @@ const handleRegister = async () => {
               style={styles.logo}
               resizeMode="contain"
             />
+            <Wordmark style={styles.wordmark} />
             <Text style={styles.title}>Create Account</Text>
             <Text style={styles.subtitle}>Sign up to get started</Text>
           </View>
@@ -293,7 +295,16 @@ const styles = StyleSheet.create({
   logo: {
     width: 72,
     height: 72,
-    marginBottom: 16,
+    marginBottom: 12,
+  },
+  // Matches LoginScreen exactly — the two auth screens are seen back to back,
+  // so a few pixels of difference between them reads as a rendering bug.
+  wordmark: {
+    ...FONTS.h1,
+    color: COLORS.textDark,
+    fontWeight: '800',
+    letterSpacing: -0.5,
+    marginBottom: 20,
   },
   title: {
     ...FONTS.h1,

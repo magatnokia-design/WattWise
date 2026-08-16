@@ -3,6 +3,11 @@ export const COLORS = {
   primary: '#10B981', // Green
   primaryDark: '#059669',
   primaryLight: '#34D399',
+  // A deep step of the same green, for type that has to sit ON `primary`.
+  // The splash is a full `primary` field, so the wordmark's green half would
+  // be invisible there; primaryDark is only 1.4:1 against it and fails too.
+  // This clears 3.8:1, which large display type needs.
+  primaryDeep: '#064E3B',
   
   white: '#FFFFFF',
   background: '#F9FAFB',

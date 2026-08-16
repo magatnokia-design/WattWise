@@ -14,6 +14,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Input } from '../../../components/common/Input';
 import { Button } from '../../../components/common/Button';
+import { Wordmark } from '../../../components/common/Wordmark';
 import { authService } from '../../../services/firebase';
 import { COLORS } from '../../../constants/colors';
 import { SIZES, FONTS } from '../../../constants/theme';
@@ -112,6 +113,7 @@ const handleLogin = async () => {
               style={styles.logo}
               resizeMode="contain"
             />
+            <Wordmark style={styles.wordmark} />
             <Text style={styles.title}>Welcome Back</Text>
             <Text style={styles.subtitle}>Login to your account</Text>
           </View>
@@ -188,7 +190,16 @@ const styles = StyleSheet.create({
   logo: {
     width: 72,
     height: 72,
-    marginBottom: 16,
+    marginBottom: 12,
+  },
+  // Sits tight under the disc so the two read as one lockup rather than as two
+  // separate things that happen to be stacked.
+  wordmark: {
+    ...FONTS.h1,
+    color: COLORS.textDark,
+    fontWeight: '800',
+    letterSpacing: -0.5,
+    marginBottom: 20,
   },
   title: {
     ...FONTS.h1,
