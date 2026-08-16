@@ -174,6 +174,7 @@ export const DashboardScreen = ({ navigation }) => {
     outlet1SwitchingTo,
     outlet2SwitchingTo,
     isLoadingOutlets,
+    hasNeverReported,
     totalEnergyKwh,
     totalPowerW,
     estimatedCost,
@@ -427,8 +428,33 @@ export const DashboardScreen = ({ navigation }) => {
           <Text style={styles.sectionTitle}>Smart Outlets</Text>
         </View>
 
+        {/* Before any device has ever reported, the two cards below have nothing
+            to show and read as a broken app rather than an unfinished setup.
+            This is the first screen after registration, so it is worth spending
+            the space on saying what to do next. */}
+        {hasNeverReported ? (
+          <View style={styles.setupCard}>
+            <Text style={styles.setupIcon}>🔌</Text>
+            <Text style={styles.setupTitle}>Link your WattWise unit</Text>
+            <Text style={styles.setupText}>
+              Nothing is paired to this account yet, so there are no readings to
+              show. Scan the QR code on your WattWise unit and both outlets will
+              appear here within a few seconds.
+            </Text>
+            <TouchableOpacity
+              style={styles.setupButton}
+              onPress={() => navigation.navigate('Settings')}
+            >
+              <Text style={styles.setupButtonText}>Go to Settings</Text>
+            </TouchableOpacity>
+            <Text style={styles.setupHint}>
+              Settings → Scan device QR
+            </Text>
+          </View>
+        ) : null}
+
         {/* Outlet Cards */}
-        <View style={styles.outletsContainer}>
+        <View style={[styles.outletsContainer, hasNeverReported ? styles.hidden : null]}>
           {/* Outlet 1 */}
           <View style={styles.outletCard}>
             <View style={styles.outletHeader}>
@@ -783,6 +809,54 @@ const styles = StyleSheet.create({
   },
   outletsContainer: {
     marginBottom: 8,
+  },
+  // Kept mounted rather than unmounted so the outlet cards do not have to
+  // re-initialise the moment the first telemetry arrives.
+  hidden: {
+    display: 'none',
+  },
+  setupCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: SIZES.radius,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    marginHorizontal: 16,
+    marginBottom: 12,
+    padding: 24,
+    alignItems: 'center',
+  },
+  setupIcon: {
+    fontSize: 36,
+    marginBottom: 12,
+  },
+  setupTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: COLORS.text,
+    marginBottom: 8,
+  },
+  setupText: {
+    fontSize: 13,
+    color: COLORS.textLight,
+    lineHeight: 20,
+    textAlign: 'center',
+    marginBottom: 18,
+  },
+  setupButton: {
+    backgroundColor: COLORS.primary,
+    paddingVertical: 12,
+    paddingHorizontal: 28,
+    borderRadius: 10,
+  },
+  setupButtonText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.white,
+  },
+  setupHint: {
+    fontSize: 12,
+    color: COLORS.textLight,
+    marginTop: 10,
   },
   outletCard: {
     backgroundColor: COLORS.white,

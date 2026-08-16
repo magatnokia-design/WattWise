@@ -15,6 +15,11 @@ const AlertThresholds = ({ monthlyBudget, currentSpending, percentageUsed }) => 
     return percentageUsed >= level;
   };
 
+  // Every threshold is a percentage of the budget, so with no budget they are
+  // all ₱0.00 - four rows of "alert at zero pesos", which says nothing and
+  // reads as broken. The card above already carries the prompt to set one.
+  if (!(monthlyBudget > 0)) return null;
+
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Alert Thresholds</Text>

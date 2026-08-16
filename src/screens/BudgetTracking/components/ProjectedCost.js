@@ -10,7 +10,13 @@ const ProjectedCost = ({
   daysInMonth,
   currentDay,
 }) => {
-  const projectedOverBudget = projectedCost > monthlyBudget;
+  // With no budget set, every comparison against it is true: any spending at
+  // all is "over" zero. A new user opening this screen was told they were over
+  // budget by the exact amount they had spent, in red, directly below a card
+  // saying "No Budget Set". The projection itself is still worth showing - it
+  // just has nothing to be measured against yet.
+  const hasBudget = monthlyBudget > 0;
+  const projectedOverBudget = hasBudget && projectedCost > monthlyBudget;
   const projectedDifference = Math.abs(projectedCost - monthlyBudget);
   const daysRemaining = daysInMonth - currentDay;
 
@@ -25,27 +31,35 @@ const ProjectedCost = ({
         <Text style={styles.projectionLabel}>Estimated End-of-Month Cost</Text>
         <Text style={[
           styles.projectionValue,
-          { color: projectedOverBudget ? COLORS.error : COLORS.success }
+          // Neutral until there is a budget: green would read as a pass against
+          // a limit that does not exist.
+          { color: hasBudget ? (projectedOverBudget ? COLORS.error : COLORS.success) : COLORS.text }
         ]}>
           ₱{projectedCost.toFixed(2)}
         </Text>
 
-        <View style={[
-          styles.statusBadge,
-          { backgroundColor: projectedOverBudget ? '#FEF2F2' : '#ECFDF5' }
-        ]}>
-          <Ionicons
-            name={projectedOverBudget ? 'trending-up' : 'trending-down'}
-            size={16}
-            color={projectedOverBudget ? COLORS.error : COLORS.success}
-          />
-          <Text style={[
-            styles.statusText,
-            { color: projectedOverBudget ? COLORS.error : COLORS.success }
+        {hasBudget ? (
+          <View style={[
+            styles.statusBadge,
+            { backgroundColor: projectedOverBudget ? '#FEF2F2' : '#ECFDF5' }
           ]}>
-            {projectedOverBudget ? 'Over' : 'Under'} budget by ₱{projectedDifference.toFixed(2)}
+            <Ionicons
+              name={projectedOverBudget ? 'trending-up' : 'trending-down'}
+              size={16}
+              color={projectedOverBudget ? COLORS.error : COLORS.success}
+            />
+            <Text style={[
+              styles.statusText,
+              { color: projectedOverBudget ? COLORS.error : COLORS.success }
+            ]}>
+              {projectedOverBudget ? 'Over' : 'Under'} budget by ₱{projectedDifference.toFixed(2)}
+            </Text>
+          </View>
+        ) : (
+          <Text style={styles.noBudgetHint}>
+            Set a monthly budget to see whether this is on track.
           </Text>
-        </View>
+        )}
       </View>
 
       <View style={styles.detailsContainer}>
@@ -129,6 +143,12 @@ const styles = StyleSheet.create({
   statusText: {
     fontSize: 13,
     fontWeight: '600',
+  },
+  noBudgetHint: {
+    fontSize: 12,
+    color: COLORS.textLight,
+    textAlign: 'center',
+    marginTop: 4,
   },
   detailsContainer: {
     flexDirection: 'row',
