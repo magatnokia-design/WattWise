@@ -342,9 +342,20 @@ void runProvisioningPortal(const char* apPassword) {
   Serial.println("[PROV] AP password is on the unit sticker.");
   Serial.println("[PROV] ---------------------------------------------");
 
-  // Scanned once up front so the first page load is instant.
-  refreshNetworkScan();
-
+  /*
+   * Listeners up BEFORE the scan, not after.
+   *
+   * A phone probes for a captive portal the instant it joins, and a scan blocks
+   * for seconds. With the scan first, those probes arrived while nothing was
+   * bound to port 53 or 80 - so they were refused outright rather than merely
+   * slow, and both iOS and Android answer a refused check with a long backoff
+   * before trying again. That turns a two-second scan into a thirty-second wait
+   * for the setup page.
+   *
+   * Started first, the network stack accepts and queues the connection even
+   * while the scan has the loop blocked, so the probe waits a moment instead of
+   * failing. The retry added for empty scans had doubled the exposure.
+   */
   portalDns.start(53, "*", apIp);
 
   portalServer.on("/", handlePortalRoot);
@@ -352,6 +363,9 @@ void runProvisioningPortal(const char* apPassword) {
   portalServer.on("/save", HTTP_POST, handlePortalSave);
   portalServer.onNotFound(handlePortalNotFound);
   portalServer.begin();
+
+  // Now scan, so the first page load still has a populated list.
+  refreshNetworkScan();
 
   const unsigned long startedAtMs = millis();
 

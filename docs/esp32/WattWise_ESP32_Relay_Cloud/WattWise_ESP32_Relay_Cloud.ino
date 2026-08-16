@@ -89,7 +89,7 @@ const IPAddress WIFI_DNS_PRIMARY(1, 1, 1, 1);
 const IPAddress WIFI_DNS_SECONDARY(8, 8, 8, 8);
 
 // Controller metadata
-static const char* FIRMWARE_VERSION = "relay-cloud-dualpzem-1.3.2";
+static const char* FIRMWARE_VERSION = "relay-cloud-dualpzem-1.3.3";
 
 bool relay1On = false;
 bool relay2On = false;
