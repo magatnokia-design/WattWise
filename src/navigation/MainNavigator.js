@@ -13,6 +13,7 @@ import PowerSafetyScreen from '../screens/PowerSafetyManagement/PowerSafetyScree
 import BudgetTrackingScreen from '../screens/BudgetTracking/BudgetTrackingScreen';
 import ReferenceComparisonScreen from '../screens/ReferenceComparison/ReferenceComparisonScreen';
 import HelpCenterScreen from '../screens/Help/HelpCenterScreen';
+import DocumentScreen from '../screens/Help/DocumentScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -120,6 +121,12 @@ export const MainNavigator = () => {
       <Stack.Screen
         name="HelpCenter"
         component={HelpCenterScreen}
+        options={{ headerShown: false }}
+      />
+      {/* About and Privacy share one screen; `document` selects which. */}
+      <Stack.Screen
+        name="Document"
+        component={DocumentScreen}
         options={{ headerShown: false }}
       />
     </Stack.Navigator>

@@ -24,6 +24,7 @@ const { processOutletToggle } = require('./src/http/processOutletToggle');
 const { clearAutoDetection } = require('./src/http/clearAutoDetection');
 const { registerApplianceProfile } = require('./src/http/registerApplianceProfile');
 const { removeApplianceProfile } = require('./src/http/removeApplianceProfile');
+const { deleteAccount } = require('./src/http/deleteAccount');
 const { renameApplianceProfile } = require('./src/http/renameApplianceProfile');
 const { linkDeviceToAccount } = require('./src/http/linkDeviceToAccount');
 const { checkUserExistsByEmail } = require('./src/http/checkUserExistsByEmail');
@@ -151,6 +152,22 @@ exports.repriceDailyRollups = onCall(
     maxInstances: 10,
   },
   repriceDailyRollups
+);
+
+/**
+ * Callable function to delete the signed-in account and everything stored under
+ * it, and release any paired device so the hardware can be linked again
+ * Called from: Settings screen (Delete Account)
+ */
+exports.deleteAccount = onCall(
+  {
+    maxInstances: 10,
+    // recursiveDelete walks every subcollection under the user, and a long-lived
+    // account carries a year of per-second history. The default 60s is not
+    // enough to be sure it finishes.
+    timeoutSeconds: 300,
+  },
+  deleteAccount
 );
 
 /**

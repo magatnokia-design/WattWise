@@ -4,7 +4,9 @@ import {
   signInWithEmailAndPassword,
   signOut,
   reload,
-  updateProfile
+  updateProfile,
+  reauthenticateWithCredential,
+  EmailAuthProvider
 } from "firebase/auth";
 import { httpsCallable } from 'firebase/functions';
 import { auth, functions } from "./config";
@@ -216,6 +218,85 @@ export const authService = {
       return {
         success: false,
         error: error?.details || error?.message || 'Failed to send reset email',
+        code,
+      };
+    }
+  },
+
+  /**
+   * Permanently deletes the signed-in account and everything stored under it.
+   *
+   * Two gates, and they check different things. The password is proof that the
+   * person holding the phone is the account owner rather than someone who
+   * picked up an unlocked screen - Firebase requires a recent sign-in to delete
+   * an account at all, so this is not an extra hoop, it is the one Firebase
+   * already insists on, asked for plainly instead of as a surprise error. The
+   * typed email is proof of intent: it cannot be produced by a mis-tap.
+   *
+   * The data is deleted server-side. Doing it here would mean a phone that
+   * loses signal partway through leaves measurements owned by a UID that can no
+   * longer sign in to remove them.
+   */
+  deleteAccount: async (password) => {
+    try {
+      const user = auth.currentUser;
+
+      if (!user) {
+        return { success: false, error: 'No signed-in account', code: 'auth/no-current-user' };
+      }
+
+      const email = String(user.email || '').trim();
+      if (!email) {
+        return {
+          success: false,
+          error: 'This account has no email address',
+          code: 'auth/no-email',
+        };
+      }
+
+      if (!password) {
+        return {
+          success: false,
+          error: 'Enter your password to confirm',
+          code: 'auth/missing-password',
+        };
+      }
+
+      // Fails with auth/wrong-password on a bad password, which the caller maps
+      // to a message rather than treating as a delete failure.
+      await reauthenticateWithCredential(
+        user,
+        EmailAuthProvider.credential(email, password)
+      );
+
+      const callable = httpsCallable(functions, 'deleteAccount');
+      const result = await callable({ confirmEmail: email });
+
+      if (!result?.data?.success) {
+        throw new Error(result?.data?.error || 'Failed to delete the account');
+      }
+
+      // The Auth user is already gone, so this only clears local session state.
+      // Failing here must not be reported as a failed deletion.
+      try {
+        await signOut(auth);
+      } catch {
+        // Already signed out by the deletion; nothing to do.
+      }
+
+      return {
+        success: true,
+        deletedCollections: result.data.deletedCollections || [],
+        releasedDeviceId: result.data.releasedDeviceId || null,
+      };
+    } catch (error) {
+      const code = typeof error?.code === 'string'
+        ? error.code.replace('functions/', '')
+        : error?.code;
+
+      return {
+        success: false,
+        error: error?.details || error?.message || 'Failed to delete the account',
         code,
       };
     }

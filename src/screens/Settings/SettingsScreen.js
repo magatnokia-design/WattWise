@@ -16,6 +16,7 @@ import ESP32DeviceModal from './components/ESP32DeviceModal';
 import DeviceQRScannerModal from './components/DeviceQRScannerModal';
 import ProfileNameModal from './components/ProfileNameModal';
 import OutletNameModal from './components/OutletNameModal';
+import DeleteAccountModal from './components/DeleteAccountModal';
 import { useSettings } from './hooks/useSettings';
 import {
   formatVersion,
@@ -45,6 +46,7 @@ const SettingsScreen = ({ navigation }) => {
   const [deviceModalVisible, setDeviceModalVisible] = useState(false);
   const [scannerVisible, setScannerVisible] = useState(false);
   const [nameModalVisible, setNameModalVisible] = useState(false);
+  const [deleteModalVisible, setDeleteModalVisible] = useState(false);
   // Which saved appliance is being renamed, or null. Holds the label rather than
   // a boolean so the modal knows what it is editing.
   const [renamingAppliance, setRenamingAppliance] = useState(null);
@@ -195,40 +197,31 @@ const SettingsScreen = ({ navigation }) => {
     );
   }, [settings.email]);
 
+  // Was an Alert. The safety limits are the most important text in the app and
+  // they sat at the bottom of a dialog body, which is the first thing a small
+  // screen cuts off.
   const handleAbout = useCallback(() => {
-    Alert.alert(
-      'About WattWise',
-      [
-        'WattWise is a smart energy monitoring system for apartment rooms, pairing an ESP32 with PZEM-004T meters to two switchable outlets.',
-        '',
-        'WHAT IT DOES',
-        '• Live voltage, current and power per outlet',
-        '• Remote on/off switching from anywhere',
-        '• Automatic appliance detection from power signatures',
-        '• Scheduled and countdown timers',
-        '• Power safety monitoring with automatic cutoff',
-        '• Monthly budget tracking with threshold alerts',
-        '• Cost estimates and monthly statements',
-        '',
-        'BILLING',
-        'All costs use the PELCO III residential tariff (Pampanga III Electric Cooperative). Distribution and government charges are ERC-approved constants; generation and transmission are entered by you each month from pelco3.org/rates.php.',
-        '',
-        'SAFETY LIMITS',
-        `Low-voltage appliances only. Maximum ${500} W per outlet and ${1000} W combined. Not for air conditioners, heaters, irons, or motors.`,
-        '',
-        `Version ${formatVersion()}`,
-      ].join('\n'),
-      [{ text: 'OK' }]
-    );
-  }, []);
+    navigation.navigate('Document', { document: 'about' });
+  }, [navigation]);
 
   const handleHelp = useCallback(() => {
     navigation.navigate('HelpCenter');
   }, [navigation]);
 
   const handlePrivacy = useCallback(() => {
-    // TODO: Navigate to privacy policy
-    Alert.alert('Privacy Policy', 'Privacy policy coming soon.');
+    navigation.navigate('Document', { document: 'privacy' });
+  }, [navigation]);
+
+  // The account is gone by the time this resolves, so there is nothing to
+  // navigate to - the auth listener drops the app back to sign-in on its own.
+  const handleDeleteAccount = useCallback(async (password) => {
+    const result = await authService.deleteAccount(password);
+
+    if (result.success) {
+      setDeleteModalVisible(false);
+    }
+
+    return result;
   }, []);
 
   const handleESP32Settings = useCallback(() => {
@@ -327,6 +320,16 @@ const SettingsScreen = ({ navigation }) => {
             icon="📧"
             label="Email"
             value={settings.email || '--'}
+          />
+          <Separator />
+          {/* Last in the section, and the only destructive row on this screen.
+              The modal itemises what goes before offering any way forward. */}
+          <SettingsRow
+            icon="🗑️"
+            label="Delete Account"
+            value="Permanent"
+            showArrow
+            onPress={() => setDeleteModalVisible(true)}
           />
         </SectionCard>
 
@@ -525,6 +528,13 @@ const SettingsScreen = ({ navigation }) => {
         currentName={settings.profileName}
         onClose={() => setNameModalVisible(false)}
         onSave={handleNameSave}
+      />
+
+      <DeleteAccountModal
+        visible={deleteModalVisible}
+        email={settings.email}
+        onClose={() => setDeleteModalVisible(false)}
+        onConfirm={handleDeleteAccount}
       />
 
       {/* PELCO III Block 1 rate editor */}
