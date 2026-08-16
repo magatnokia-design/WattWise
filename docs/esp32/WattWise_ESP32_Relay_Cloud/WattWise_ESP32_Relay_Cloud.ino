@@ -13,9 +13,14 @@
 // ---------------------------
 // USER CONFIGURATION
 // ---------------------------
-// WIFI_SSID, WIFI_PASSWORD, DEVICE_ID and DEVICE_TOKEN live in secrets.h,
-// which is gitignored. Copy secrets.example.h to secrets.h and fill it in.
+// DEVICE_ID, DEVICE_TOKEN and PROVISION_AP_PASSWORD live in secrets.h, which is
+// gitignored. Copy secrets.example.h to secrets.h and fill it in.
+//
+// Wi-Fi credentials are deliberately NOT here. They are entered once through the
+// setup portal and kept in NVS - see wifiProvisioning.h for what that does and
+// does not protect against.
 #include "secrets.h"
+#include "wifiProvisioning.h"
 
 static const char* ENDPOINT_UPDATE_METRICS = "https://asia-southeast1-wattwise-fe394.cloudfunctions.net/updateOutletMetrics";
 static const char* ENDPOINT_GET_COMMAND = "https://asia-southeast1-wattwise-fe394.cloudfunctions.net/getDeviceCommand";
@@ -84,7 +89,7 @@ const IPAddress WIFI_DNS_PRIMARY(1, 1, 1, 1);
 const IPAddress WIFI_DNS_SECONDARY(8, 8, 8, 8);
 
 // Controller metadata
-static const char* FIRMWARE_VERSION = "relay-cloud-dualpzem-1.2.7";
+static const char* FIRMWARE_VERSION = "relay-cloud-dualpzem-1.3.0";
 
 bool relay1On = false;
 bool relay2On = false;
@@ -310,7 +315,7 @@ bool applyPreferredDnsAndReconnect() {
     return false;
   }
 
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  WiFi.begin(provisionedSsid().c_str(), provisionedPassword().c_str());
   Serial.print("[WiFi] Reconnecting with DNS override");
 
   int retries = 0;
@@ -860,9 +865,10 @@ void connectWiFi() {
   WiFi.persistent(false);
   WiFi.setAutoReconnect(true);
   WiFi.config(INADDR_NONE, INADDR_NONE, INADDR_NONE, WIFI_DNS_PRIMARY, WIFI_DNS_SECONDARY);
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  WiFi.begin(provisionedSsid().c_str(), provisionedPassword().c_str());
 
-  Serial.print("[WiFi] Connecting");
+  Serial.print("[WiFi] Connecting to ");
+  Serial.print(provisionedSsid());
   int retries = 0;
   while (WiFi.status() != WL_CONNECTED && retries < 60) {
     delay(500);
@@ -1462,6 +1468,16 @@ void setup() {
   pzemSerial1.begin(PZEM_UART_BAUD, SERIAL_8N1, PZEM_1_RX_PIN, PZEM_1_TX_PIN);
   pzemSerial2.begin(PZEM_UART_BAUD, SERIAL_8N1, PZEM_2_RX_PIN, PZEM_2_TX_PIN);
 
+  // Safe to claim GPIO0 now: boot is finished, so the strapping pin has already
+  // done its job and reading it can no longer affect flash mode.
+  beginFactoryResetButton();
+
+  // The relays are already forced OFF above, so a unit sitting in the setup
+  // portal is not holding an outlet in an unknown state.
+  if (!loadWifiCredentials()) {
+    runProvisioningPortal(PROVISION_AP_PASSWORD); // does not return
+  }
+
   connectWiFi();
   syncTime();
   printControllerStatus();
@@ -1473,6 +1489,12 @@ void setup() {
 
 void loop() {
   processSerialConsole();
+
+  // Polled before the Wi-Fi check on purpose. The branch below returns early
+  // after a blocking 30s reconnect attempt, so anything placed after it would
+  // barely be serviced while the network is down - which is precisely when
+  // someone is standing there holding the button to re-provision.
+  pollFactoryResetButton();
 
   if (WiFi.status() != WL_CONNECTED) {
     connectWiFi();
