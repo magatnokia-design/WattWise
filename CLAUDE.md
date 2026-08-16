@@ -79,8 +79,22 @@ infrastructure exists only under `functions/`.
   four profiles inside thirteen points. Nothing malfunctioned. Those are precisely the profiles
   whose `stdDevPower` ranges tolerate a swinging load, and the mean of that sweep is 21 W, a
   value the appliance never actually draws. `stdDevPower` is weighted 0.25 to choose *between*
-  profiles but never to decide whether any of them is a meaningful answer, so a load that moves
-  is never reported as unidentifiable - it is routed to whichever profile tolerates movement.
+  profiles but never to decide whether any of them is a meaningful answer - spread alone will
+  never reject a match, so it cannot route a moving load to "unidentifiable".
+
+  It gets reported as unsure anyway, by a different route, and this note used to deny that.
+  A load that fits four profiles about equally leaves the top candidates within
+  `AMBIGUOUS_MARGIN` of each other, and the run comes back `ambiguous: true` - the clients then
+  say the load cannot be named and ask the user to pick. So the escape hatch is the *margin
+  between candidates*, not the spread of the run. (`unsupported: true` is the separate, harsher
+  path for a load outside the catalogue entirely, i.e. `effectiveScore > MAX_ACCEPTABLE_SCORE`.)
+
+  A second charge of the same phone on 16 Aug 2026 reproduced the whole thing: ~30 W to 8.3 W,
+  mean 18 W, Speaker 48% / Monitor 43% / Electric Fan 40% / Laptop Charger 36% - the same four
+  profiles, within a few points of the first run, and correctly flagged ambiguous. Confidence
+  decays rather than snapping: `recognised` at ~30 W, the suffix gone by ~10 W (82% charge),
+  ambiguous by 8.3 W (90%). Treat the behaviour as characterised and reproducible.
+
   Multi-signature clustering (see `MAX_SIGNATURES_PER_APPLIANCE`) is the mitigation, not a cure.
 - A detection **run only ends when the outlet is switched off** (or the draw drops under 3 W for
   3 samples). Swapping appliances on a live outlet keeps one run going across both, so the mean
