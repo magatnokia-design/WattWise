@@ -1,0 +1,56 @@
+name: Dependency audit
+
+# Runs on every push and once a week. The weekly run is the point: a repository
+# with no commits is not a repository with no vulnerabilities, and most advisories
+# land against code that has not changed.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    # 09:00 Manila, Mondays (01:00 UTC).
+    - cron: '0 1 * * 1'
+  workflow_dispatch:
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+
+    strategy:
+      # Report on both even if one fails, otherwise a failure in the app hides
+      # the state of the backend.
+      fail-fast: false
+      matrix:
+        include:
+          - name: app
+            path: .
+            # The app's remaining highs are all build tooling - metro, @expo/cli,
+            # postcss - which run on a developer machine and are not in the
+            # shipped bundle. Clearing them needs an Expo SDK major, so this
+            # gate is set at critical to stay honest rather than permanently red.
+            level: critical
+          - name: functions
+            path: functions
+            # The backend is the one that actually faces the internet, so it is
+            # held to a stricter line.
+            level: high
+
+    name: audit (${{ matrix.name }})
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Audit ${{ matrix.name }}
+        working-directory: ${{ matrix.path }}
+        run: npm audit --audit-level=${{ matrix.level }}
+
+      - name: Full report (informational)
+        # Always runs, so a failure above is read next to the whole picture
+        # rather than just the first thing that tripped it.
+        if: always()
+        working-directory: ${{ matrix.path }}
+        run: npm audit || true

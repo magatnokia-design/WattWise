@@ -131,8 +131,16 @@ const handleRegister = async () => {
       errorMessage = 'Email already in use';
     } else if (error.code === 'auth/invalid-email') {
       errorMessage = 'Invalid email address';
-    } else if (error.code === 'auth/weak-password') {
-      errorMessage = 'Password is too weak';
+    } else if (
+      error.code === 'auth/weak-password'
+      || error.code === 'auth/password-does-not-meet-requirements'
+    ) {
+      // The form checks the same rules before submitting, so reaching this means
+      // the server disagreed with the form - a policy tightened in the console,
+      // or a client old enough to predate it. Repeat the rules rather than say
+      // "too weak", which leaves the user guessing which one they missed.
+      errorMessage = 'Password must be at least 8 characters and include an '
+        + 'uppercase letter, a lowercase letter and a number.';
     } else if (error.message) {
       errorMessage = error.message;
     }

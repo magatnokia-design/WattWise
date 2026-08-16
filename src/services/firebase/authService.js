@@ -27,6 +27,11 @@ const isExpectedAuthError = (code) => [
   'auth/email-already-in-use',
   'auth/invalid-email',
   'auth/weak-password',
+  // Returned when the project's server-side password policy rejects a password.
+  // Distinct from auth/weak-password, which is Firebase's own fixed minimum -
+  // this one is our configured rule, and it is the code that actually fires now
+  // that the policy is enforced server-side rather than only in the form.
+  'auth/password-does-not-meet-requirements',
 ].includes(code);
 
 export const authService = {
