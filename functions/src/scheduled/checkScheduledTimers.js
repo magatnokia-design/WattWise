@@ -4,6 +4,7 @@ const { dispatchDeviceCommand } = require('../lib/deviceCommandDispatcher');
 const { createNotification } = require('../lib/notifications');
 const { getManilaTimeString, getManilaWeekday } = require('../lib/manilaTime');
 const { resolveOutletLogName } = require('../lib/applianceDetector');
+const { resolveLogPower } = require('../lib/historyLog');
 
 const DAY_LABEL_TO_INDEX = {
   sun: 0,
@@ -136,7 +137,7 @@ async function checkScheduledTimers() {
             outletName: resolveOutletLogName(outletData, outletNumber),
             action: newStatus ? 'on' : 'off',
             source: 'schedule',
-            power: outletData.power || 0,
+            power: resolveLogPower(newStatus, outletData),
           });
 
           // Update schedule lastTriggered
@@ -237,7 +238,7 @@ async function checkScheduledTimers() {
             outletName: resolveOutletLogName(outletData, outletNumber),
             action: newStatus ? 'on' : 'off',
             source: 'countdown',
-            power: outletData.power || 0,
+            power: resolveLogPower(newStatus, outletData),
           });
 
           await scheduleDoc.ref.set({

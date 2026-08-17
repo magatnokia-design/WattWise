@@ -4,6 +4,7 @@ const { HttpsError } = require('firebase-functions/v2/https');
 const { dispatchDeviceCommand } = require('../lib/deviceCommandDispatcher');
 const { PENDING_STATUS_WINDOW_MS } = require('../lib/outletStatus');
 const { resolveOutletLogName } = require('../lib/applianceDetector');
+const { resolveLogPower } = require('../lib/historyLog');
 
 const HTTPS_ERROR_CODES = new Set([
   'cancelled',
@@ -95,7 +96,7 @@ async function processOutletToggle(request) {
         outletName: resolveOutletLogName(outletData, outletNumber),
         action: status ? 'on' : 'off',
         source: 'manual',
-        power: outletData.power || 0,
+        power: resolveLogPower(status, outletData),
       })
       .catch((historyError) => {
         logger.warn('Outlet toggled but history log failed', {

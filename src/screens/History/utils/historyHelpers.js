@@ -78,6 +78,37 @@ export const formatWatts = (value) => {
   return `${parsed.toFixed(1)} W`;
 };
 
+/**
+ * The wattage a switch event is allowed to claim.
+ *
+ * Only a switch-off has one: it is the draw measured just before the relay
+ * opened. A switch-on has nothing to measure - the outlet was off, and the new
+ * load's reading only develops over the seconds after the row is written.
+ *
+ * The backend now writes 0 for every 'on' (see functions/src/lib/historyLog.js),
+ * but rows created before that are still in Firestore and are not rewritten -
+ * history should record what the system believed at the time. Those rows can
+ * carry a genuinely misleading figure: `power` held the last telemetry, and
+ * after a switch-off the device has not posted a zero yet, so it was still the
+ * reading from *before* that switch-off. A lamp turned off at 15.2 W and back on
+ * seconds later logged 14.9 W against the switch-on - a measurement of an outlet
+ * that was drawing nothing.
+ *
+ * Whether that stale value landed depended on if telemetry arrived between the
+ * two toggles, which is a race. That is why the column looked arbitrary: some ON
+ * rows had a figure, some did not, and nothing about the outlet decided which.
+ *
+ * Applying the rule at render time as well as at write time makes the column
+ * consistent immediately, rather than after the log rolls over.
+ */
+export const powerAtSwitch = (log = {}) => {
+  const isOn = String(log?.status || '').trim().toUpperCase() === 'ON';
+  if (isOn) return 0;
+
+  const parsed = Number(log?.power);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+};
+
 export const DATE_RANGE_PRESETS = [
   { id: 'all', label: 'All time', shortLabel: 'Date' },
   { id: '7d', label: 'Last 7 days', shortLabel: '7 days' },

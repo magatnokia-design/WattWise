@@ -9,7 +9,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { COLORS } from '../../../constants/colors';
-import { describeLogSource, formatWatts } from '../utils/historyHelpers';
+import { describeLogSource, formatWatts, powerAtSwitch } from '../utils/historyHelpers';
 
 const EMPTY_LOGS = [];
 
@@ -24,7 +24,10 @@ const ActivityLogItem = ({ item }) => {
   const isOn = item.status === 'ON';
   const source = describeLogSource(item.source);
   const tone = SOURCE_TONES[source.tone] || SOURCE_TONES.neutral;
-  const watts = formatWatts(item.power);
+  // Only a switch-off carries a wattage. Rows written before this was fixed
+  // backend-side can hold the previous session's reading against a switch-on,
+  // so the rule is applied here too rather than trusted from the document.
+  const watts = formatWatts(powerAtSwitch(item));
 
   return (
     <View style={[styles.logItem, { width: width - 32 }]}>
@@ -82,16 +85,26 @@ const ActivityLog = ({ logs = EMPTY_LOGS, loading = false, hasMore = false, onLo
     if (!hasMore || logs.length === 0) return null;
 
     return (
-      <TouchableOpacity
-        style={styles.loadMoreButton}
-        onPress={onLoadMore}
-        activeOpacity={0.7}
-        disabled={loading}
-      >
-        <Text style={styles.loadMoreText}>
-          {loading ? 'Loading...' : 'Load older activity'}
+      <View>
+        <TouchableOpacity
+          style={styles.loadMoreButton}
+          onPress={onLoadMore}
+          activeOpacity={0.7}
+          disabled={loading}
+        >
+          <Text style={styles.loadMoreText}>
+            {loading ? 'Loading...' : 'Load older activity'}
+          </Text>
+        </TouchableOpacity>
+
+        {/* The listener is capped by count and carries no date clause - the
+            range is applied to whatever has been loaded. Without saying so, a
+            short list under "Last 7 days" reads as "nothing else happened"
+            rather than "nothing else was fetched". */}
+        <Text style={styles.loadMoreNote}>
+          The date range filters what is loaded here — it does not search further back.
         </Text>
-      </TouchableOpacity>
+      </View>
     );
   }, [hasMore, logs.length, loading, onLoadMore]);
 
@@ -165,6 +178,14 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.border,
     marginTop: 4,
+  },
+  loadMoreNote: {
+    fontSize: 11,
+    lineHeight: 15,
+    textAlign: 'center',
+    color: COLORS.textLight,
+    marginTop: 8,
+    paddingHorizontal: 12,
   },
   loadMoreText: {
     fontSize: 13,
