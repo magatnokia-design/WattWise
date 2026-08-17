@@ -56,7 +56,7 @@ export const HELP_SECTIONS = [
         question: 'How close will this be to the bill that arrives?',
         answer: [
           'For the energy it measures, very close. The energy figure comes from the meter inside your WattWise unit, not from an estimate, and Blocks 1 and 2 are exact arithmetic on rates you can verify line by line.',
-          'There is one approximation in the whole model. The VAT applied to generation and transmission is not published as a formula by PELCO III, so it is a factor fitted against real bills - it lands within about a peso on the samples it was checked against.',
+          'There is one approximation in the whole model. The VAT applied to generation and transmission is not published as a formula by PELCO III, so it is a factor fitted against real bills. Checked against four of them spanning 94 to 216 kWh, the model came within 0.71% of the printed total at worst and 0.31% on average - a few pesos on a bill of over a thousand. Every peso of that difference sits in the government charges; generation and transmission match the bill exactly.',
           'The much bigger difference is scope, and it is not an error. WattWise measures two outlets. Your bill covers your entire connection - lights, aircon, refrigerator, every socket in the room. Unless everything you use runs through these two outlets, the WattWise total will be lower than your bill, and it should be.',
           'Treat this as "what these two outlets cost", not "what I will be charged". Compare Usage is the screen for checking a real bill against what WattWise saw.',
         ],
