@@ -22,6 +22,12 @@ const normalizeOutletNumber = (outletValue) => {
   return null;
 };
 
+const buildLogLabel = (recordedName, outletNumber) => {
+  const slot = `Outlet ${outletNumber || '--'}`;
+  const name = String(recordedName || '').trim();
+  return !name || name.toLowerCase() === slot.toLowerCase() ? slot : `${slot} · ${name}`;
+};
+
 const mapActivityLog = (log) => {
   const timestamp = log.timestamp || log.createdAt || log.lastUpdated;
   const outletNumber = normalizeOutletNumber(log.outlet);
@@ -31,7 +37,12 @@ const mapActivityLog = (log) => {
   return {
     ...log,
     outlet: outletNumber,
-    outletName: log.outletName || `Outlet ${outletNumber || '--'}`,
+    // The slot leads, the recorded name follows. Both outlets can carry the same
+    // appliance name - two sockets called "LED Lamp" made every row in this log
+    // indistinguishable - and the slot is the one part that is always true. The
+    // name still has to be the one recorded at the time, not the current one: a
+    // log that rewrites its own past is worse than one that reads stale.
+    outletName: buildLogLabel(log.outletName, outletNumber),
     status: isOn ? 'ON' : 'OFF',
     timestamp,
     time: formatTime(timestamp),

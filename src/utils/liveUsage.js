@@ -117,6 +117,26 @@ const resolveApplianceName = (outlet = {}, outletNumber) => {
 };
 
 /**
+ * What to print for a live outlet, as opposed to what to group it by.
+ *
+ * `resolveApplianceName` is the grouping key: the daily rollup sums energy per
+ * appliance name, and today's live entry has to key the same way yesterday's
+ * stored one did, so it must stay a bare name.
+ *
+ * A live row is a different job. It names a socket that is drawing power right
+ * now, and the name alone is not enough to identify one: two outlets may
+ * legitimately carry the same appliance name, and a name the detector has not
+ * been able to verify was still being printed here as though it had been -
+ * "LED Lamp, 15.2 W" beside a dashboard that said "Detecting..." about the same
+ * outlet. The slot number is the part that is always true, so it leads.
+ */
+export const resolveOutletDisplayLabel = (outlet = {}, outletNumber) => {
+  const slot = `Outlet ${outletNumber}`;
+  const name = resolveApplianceName(outlet, outletNumber);
+  return name === slot ? slot : `${slot} · ${name}`;
+};
+
+/**
  * Builds a history_daily-shaped entry for today from live outlet documents.
  * Returns null when nothing has been measured yet, so callers can simply skip it
  * rather than charting a zero row.
@@ -299,6 +319,7 @@ export const buildLiveAppliances = (
     return {
       outletNumber,
       applianceName: resolveApplianceName(outlet, outletNumber),
+      displayLabel: resolveOutletDisplayLabel(outlet, outletNumber),
       powerW,
       energyKwh,
       costToday: energyKwh * perKwhRate,

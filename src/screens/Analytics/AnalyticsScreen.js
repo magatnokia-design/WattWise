@@ -73,7 +73,12 @@ const buildInsights = ({
   if (isLive && drawing.length > 0) {
     const livePower = drawing.reduce((sum, appliance) => sum + toNumber(appliance.powerW), 0);
     const liveCostPerHour = drawing.reduce((sum, appliance) => sum + toNumber(appliance.costPerHour), 0);
-    const names = drawing.map((appliance) => appliance.applianceName).join(' and ');
+    // Slot-qualified, because two outlets may carry the same appliance name and
+    // "LED Lamp and LED Lamp are drawing 29 W" tells the reader nothing about
+    // which socket to go and look at.
+    const names = drawing
+      .map((appliance) => appliance.displayLabel || appliance.applianceName)
+      .join(' and ');
 
     add('live-draw', `${Math.round(livePower / 5) * 5}`, {
       icon: '⚡',
