@@ -179,7 +179,7 @@ const buildInsights = ({
       tone: 'neutral',
       text: isBillingPeriod
         ? `You are effectively paying ${formatCurrency(effectiveRate)} per kWh this monthly period.`
-        : `${formatCurrency(effectiveRate)} per kWh for extra use.`,
+        : `${formatCurrency(effectiveRate)} per additional kWh.`,
     });
   }
 
@@ -837,9 +837,13 @@ export const AnalyticsScreen = ({ navigation }) => {
                 <View style={styles.breakdownRow}>
                   {/* Named for what it is on this tab. Only Monthly's figure
                       carries the period flats, so only Monthly's is the rate
-                      the period actually worked out at. */}
+                      the period actually worked out at.
+
+                      "for extra use" read as though it meant unusual or
+                      excessive consumption. It means the next kWh, under a
+                      blocked tariff, so say that. */}
                   <Text style={styles.breakdownLabel}>
-                    {selectedTab === 'Monthly' ? 'Effective Rate' : 'Rate for extra use'}
+                    {selectedTab === 'Monthly' ? 'Effective Rate' : 'Rate per additional kWh'}
                   </Text>
                   <Text style={styles.breakdownValue}>
                     ₱{summary.effectiveRate.toFixed(4)} / kWh
