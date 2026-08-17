@@ -25,6 +25,7 @@ const { dispatchDeviceCommand } = require('../lib/deviceCommandDispatcher');
 const { resolveOutletStatus, isUncommandedStatusChange } = require('../lib/outletStatus');
 const { deriveOutletEnergy } = require('../lib/energyAccounting');
 const { evaluateSafety } = require('../lib/powerSafety');
+const { evaluateRelayFault } = require('../lib/relayFault');
 
 const VALID_STATUSES = new Set(['on', 'off']);
 const MAX_OUTLET_POWER_W = 500;
@@ -180,6 +181,9 @@ async function updateOutletMetrics(req, res) {
     // a failed write never produces a notification about state that was not
     // saved - the next sample would then report it a second time.
     const chargeCompletions = [];
+    // Outlets whose relay has stopped opening, and outlets where that has just
+    // recovered. Same after-the-commit discipline as chargeCompletions.
+    const relayFaultEvents = [];
 
     for (const outlet of validOutlets) {
       const { number, voltage, current, power, status, energy, isOverPower } = outlet;
@@ -277,6 +281,28 @@ async function updateOutletMetrics(req, res) {
         });
       }
 
+      // The third reconciliation: the device says the relay is open, and the
+      // meter on that same outlet says current is flowing. Both were already
+      // being written to this document and neither was ever compared with the
+      // other, so a contact that welded shut looked identical to a healthy
+      // outlet in every log the system kept.
+      const relayFault = evaluateRelayFault({
+        previous: previousOutletData,
+        status: statusResolution.status,
+        powerW: power,
+        pendingHonoured: statusResolution.pendingHonoured,
+        nowMs: now,
+      });
+
+      if (relayFault.justTripped || relayFault.justCleared) {
+        relayFaultEvents.push({
+          number,
+          outletName: resolveOutletLogName(previousOutletData, number),
+          tripped: relayFault.justTripped,
+          observedW: relayFault.observedW,
+        });
+      }
+
       const outletUpdate = {
         outletId: `outlet${number}`,
         outletNumber: number,
@@ -316,6 +342,12 @@ async function updateOutletMetrics(req, res) {
         metricsUpdatedAtMs: now,
         lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
         safety: outletSafety,
+        relayFault: {
+          state: relayFault.state,
+          firstSeenAtMs: relayFault.firstSeenAtMs,
+          observedW: relayFault.observedW,
+          confirmedAtMs: relayFault.confirmedAtMs,
+        },
       };
 
       // What the outlet claims to be, ignoring the "Outlet 1" placeholder - that
@@ -566,6 +598,19 @@ async function updateOutletMetrics(req, res) {
       });
     }
 
+    // Logged as its own event rather than folded into the switch history: the
+    // outlet did not change state, which is exactly the complaint.
+    for (const event of relayFaultEvents) {
+      batch.set(db.collection(`users/${userId}/history_logs`).doc(), {
+        timestamp: admin.firestore.FieldValue.serverTimestamp(),
+        outlet: event.number,
+        outletName: event.outletName,
+        action: event.tripped ? 'relay_fault' : 'relay_recovered',
+        source: 'device',
+        power: event.observedW,
+      });
+    }
+
     // Commit batch write
     await batch.commit();
 
@@ -584,6 +629,36 @@ async function updateOutletMetrics(req, res) {
           peakPowerW: completion.peakW,
           restingPowerW: completion.powerW,
         },
+      });
+    }
+
+    // Deliberately blunt, and deliberately tells the user to do the one thing
+    // WattWise cannot do for them. Every other safety notification this system
+    // sends can end with "the outlet was switched off"; this is the one that
+    // cannot, because the relay is the thing that failed.
+    for (const event of relayFaultEvents) {
+      await createNotification({
+        userId,
+        type: event.tripped ? 'safety' : 'system',
+        title: event.tripped ? '⚠️ Outlet is not switching off' : '✅ Outlet is switching again',
+        message: event.tripped
+          ? `Outlet ${event.number} was switched off but is still drawing `
+            + `${event.observedW.toFixed(1)} W. The relay may be stuck closed. `
+            + 'Unplug the appliance at the wall - WattWise cannot cut this outlet.'
+          : `Outlet ${event.number} responded to a switch-off and is now drawing no power.`,
+        outlet: event.number,
+        metadata: {
+          type: event.tripped ? 'relay_stuck_closed' : 'relay_recovered',
+          observedPowerW: event.observedW,
+        },
+      });
+    }
+
+    if (relayFaultEvents.some((event) => event.tripped)) {
+      logger.error('Relay did not open', {
+        userId,
+        deviceId: normalizedDeviceId,
+        outlets: relayFaultEvents.filter((e) => e.tripped).map((e) => e.number),
       });
     }
 

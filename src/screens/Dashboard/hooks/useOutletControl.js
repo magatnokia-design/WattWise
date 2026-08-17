@@ -7,6 +7,7 @@ import { calculatePelcoIIIBill, marginalRatePerKwh } from '../../../utils/billin
 import {
   deriveOutletRuntimeState,
   resolveSwitchingTo,
+  isRelayStuck,
   toEpochMs,
   LIVE_POWER_THRESHOLD_W,
   HARDWARE_STALE_THRESHOLD_MS,
@@ -339,6 +340,7 @@ export const useOutletControl = () => {
           hasLoad: false,
           hasReading: false,
           switchingTo: null,
+          relayStuck: false,
         };
       }
 
@@ -380,6 +382,10 @@ export const useOutletControl = () => {
           isDrawing: runtimeState.hasLoad,
           nowMs,
         }),
+        // Not gated on the optimistic override: a user tapping the switch again
+        // on a stuck outlet must not clear the warning that says why it did
+        // nothing last time.
+        relayStuck: isRelayStuck(outlet),
       };
     };
 
@@ -400,6 +406,8 @@ export const useOutletControl = () => {
   const outlet2HasReading = derived[2].hasReading;
   const outlet1SwitchingTo = derived[1].switchingTo;
   const outlet2SwitchingTo = derived[2].switchingTo;
+  const outlet1RelayStuck = derived[1].relayStuck;
+  const outlet2RelayStuck = derived[2].relayStuck;
 
   // Load outlet data on mount
   useEffect(() => {
@@ -578,6 +586,8 @@ export const useOutletControl = () => {
     outlet2HasReading,
     outlet1SwitchingTo,
     outlet2SwitchingTo,
+    outlet1RelayStuck,
+    outlet2RelayStuck,
     isLoadingOutlets,
     // No telemetry has ever arrived for this account.
     //

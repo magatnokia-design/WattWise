@@ -134,9 +134,11 @@ const formatPeso = (value) => {
 const StatusBadge = ({ badge }) => {
   const tone = badge.tone === 'good'
     ? { pill: styles.statusOn, dot: styles.dotOn, label: styles.statusTextOn }
-    : badge.tone === 'warn'
-      ? { pill: styles.statusWarn, dot: styles.dotWarn, label: styles.statusTextWarn }
-      : { pill: styles.statusOff, dot: styles.dotOff, label: styles.statusTextOff };
+    : badge.tone === 'danger'
+      ? { pill: styles.statusDanger, dot: styles.dotDanger, label: styles.statusTextDanger }
+      : badge.tone === 'warn'
+        ? { pill: styles.statusWarn, dot: styles.dotWarn, label: styles.statusTextWarn }
+        : { pill: styles.statusOff, dot: styles.dotOff, label: styles.statusTextOff };
 
   return (
     <View style={[styles.statusBadge, tone.pill]}>
@@ -174,6 +176,8 @@ export const DashboardScreen = ({ navigation }) => {
     outlet2HasReading,
     outlet1SwitchingTo,
     outlet2SwitchingTo,
+    outlet1RelayStuck,
+    outlet2RelayStuck,
     isLoadingOutlets,
     hasNeverReported,
     totalEnergyKwh,
@@ -219,12 +223,14 @@ export const DashboardScreen = ({ navigation }) => {
     isDrawing: outlet1HasLoad,
     telemetryFresh: outlet1HasReading,
     switchingTo: outlet1SwitchingTo,
+    relayStuck: outlet1RelayStuck,
   });
   const outlet2Badge = resolveOutletBadge({
     isOn: outlet2Status,
     isDrawing: outlet2HasLoad,
     telemetryFresh: outlet2HasReading,
     switchingTo: outlet2SwitchingTo,
+    relayStuck: outlet2RelayStuck,
   });
 
   // Staleness comes from the outlets, not from the safety document's own
@@ -374,6 +380,31 @@ export const DashboardScreen = ({ navigation }) => {
             onDismiss={rateNotice.dismiss}
           />
         )}
+
+        {/*
+          Above the snapshot strip and not dismissible. Every other notice on
+          this screen describes something the user may reasonably choose to
+          ignore; this one describes an outlet that is live and that WattWise
+          cannot open, so the auto-cutoff cannot protect it either. The only
+          action that ends the condition is physical, which is why the text says
+          so plainly instead of pointing at a screen.
+        */}
+        {[
+          { number: 1, stuck: outlet1RelayStuck },
+          { number: 2, stuck: outlet2RelayStuck },
+        ].filter((item) => item.stuck).map((item) => (
+          <View key={`relay-stuck-${item.number}`} style={styles.relayFaultNotice}>
+            <Text style={styles.relayFaultTitle}>
+              ⚠️ Outlet {item.number} is not switching off
+            </Text>
+            <Text style={styles.relayFaultBody}>
+              It was told to switch off and current is still flowing. The relay may be
+              stuck closed, so the safety cut-off cannot protect this outlet either.
+              Unplug the appliance at the wall and have the wiring checked before using
+              it again.
+            </Text>
+          </View>
+        ))}
 
         <View style={styles.snapshotStrip}>
           <View style={styles.snapshotItem}>
@@ -942,6 +973,39 @@ const styles = StyleSheet.create({
   },
   statusTextWarn: {
     color: '#B45309',
+  },
+  // Red, and the only place this badge uses it. Amber already means "in flight
+  // or needs attention, not broken", which is exactly what a stuck relay is
+  // not - reusing it here would have put the one uncontrollable outlet in the
+  // same colour as a normal switch-off waiting on a poll.
+  relayFaultNotice: {
+    backgroundColor: COLORS.error + '12',
+    borderWidth: 1,
+    borderColor: COLORS.error + '40',
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    marginBottom: 12,
+    gap: 4,
+  },
+  relayFaultTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.error,
+  },
+  relayFaultBody: {
+    fontSize: 12,
+    lineHeight: 17,
+    color: COLORS.textLight,
+  },
+  statusDanger: {
+    backgroundColor: COLORS.error + '1A',
+  },
+  dotDanger: {
+    backgroundColor: COLORS.error,
+  },
+  statusTextDanger: {
+    color: COLORS.error,
   },
   statusDot: {
     width: 6,

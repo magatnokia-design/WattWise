@@ -305,7 +305,15 @@ export const buildLiveAppliances = (
     // outlet the document calls off is the same user-visible problem whether a
     // toggle, a cutoff, or a firmware-local trip caused it, and it cannot be a
     // resting state: something has to give.
-    const isSwitchingOff = !isOn && isDrawing;
+    // A relay that has stopped opening at all. The backend confirms this only
+    // after the draw outlasts a window no poll cycle can reach, so by the time
+    // it is set, "switching off" has stopped being an honest description of
+    // what is happening - the transition is not slow, it is not coming. The
+    // badge below has to stop claiming otherwise, or the one genuinely
+    // dangerous state in this system renders as the ordinary busy one.
+    const relayStuck = String(outlet.relayFault?.state || '').trim() === 'stuck_closed';
+
+    const isSwitchingOff = !isOn && isDrawing && !relayStuck;
 
     // The `on` direction cannot key off a contradiction, because there isn't
     // one. An outlet switched on with nothing plugged into it is a perfectly
@@ -337,6 +345,10 @@ export const buildLiveAppliances = (
       // caller can say "Switching off..." rather than asserting either one.
       isSwitching: switchingTo !== null,
       switchingTo,
+      // WattWise has lost control of this outlet: it was told to open, it did
+      // not, and no command will change that. Separate from `isSwitching`
+      // precisely because it is the opposite of a transition.
+      relayStuck,
     };
   });
 };

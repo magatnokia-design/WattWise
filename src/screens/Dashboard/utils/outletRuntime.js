@@ -61,6 +61,21 @@ export const deriveOutletRuntimeState = (outlet = {}, nowMs = Date.now()) => {
 };
 
 /**
+ * Whether the backend has confirmed this outlet's relay stopped opening.
+ *
+ * Written by relayFault.js on the telemetry path, which is the only place that
+ * can see it: the device reports the relay position from its own bookkeeping,
+ * so a welded contact reports `off` while the meter beside it reads 15 W. Read
+ * here rather than re-derived, because confirming it needs a 30-second history
+ * the client does not keep.
+ *
+ * @param {object} outlet Raw outlet document.
+ * @returns {boolean}
+ */
+export const isRelayStuck = (outlet = {}) =>
+  String(outlet?.relayFault?.state || '').trim() === 'stuck_closed';
+
+/**
  * Which way a command in flight is moving, or null if nothing is in flight.
  *
  * Same two rules liveUsage.js applies, because the dashboard card and the
@@ -78,6 +93,12 @@ export const deriveOutletRuntimeState = (outlet = {}, nowMs = Date.now()) => {
  * @returns {'on'|'off'|null}
  */
 export const resolveSwitchingTo = (outlet = {}, { isOn, isDrawing, nowMs = Date.now() } = {}) => {
+  // A relay the backend has confirmed will not open is not mid-transition, and
+  // saying "Switching off..." about it is the failure this whole path exists to
+  // avoid - an indefinite transition reads as patience required rather than as
+  // an outlet nobody can switch. resolveOutletBadge answers this case itself.
+  if (isRelayStuck(outlet)) return null;
+
   // Keyed on the contradiction itself, not on a pending marker: an auto-cutoff
   // opens no pending window, so a card would otherwise read "Off" beside a fan
   // that is still turning. Current flowing through an outlet the document calls

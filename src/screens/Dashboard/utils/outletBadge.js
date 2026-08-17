@@ -21,10 +21,20 @@
  * @param {boolean} args.isDrawing       Real power above the floor.
  * @param {boolean} args.telemetryFresh  Readings arriving inside the 12 s window.
  * @param {'on'|'off'|null} args.switchingTo  A toggle the ESP32 has not polled yet.
- * @returns {{ text: string, tone: 'good'|'warn'|'neutral' }}
+ * @param {boolean} args.relayStuck  The relay was told to open and did not.
+ * @returns {{ text: string, tone: 'good'|'warn'|'neutral'|'danger' }}
  */
-export const resolveOutletBadge = ({ isOn, isDrawing, telemetryFresh, switchingTo }) => {
-  // A command in flight outranks everything: for that window neither the
+export const resolveOutletBadge = ({ isOn, isDrawing, telemetryFresh, switchingTo, relayStuck }) => {
+  /*
+   * Outranks even a command in flight, because it is the answer to the question
+   * a command in flight leaves open. Everything below this line describes an
+   * outlet WattWise still controls; this describes one it does not, and the
+   * distinction is the whole safety claim. Said plainly rather than as a code:
+   * the user's next move is to pull the plug, and "fault" does not ask for that.
+   */
+  if (relayStuck) return { text: 'Will not switch off', tone: 'danger' };
+
+  // A command in flight outranks everything else: for that window neither the
   // commanded state nor the meter is the whole truth, and the transition is.
   if (switchingTo === 'on') return { text: 'Switching on…', tone: 'warn' };
   if (switchingTo === 'off') return { text: 'Switching off…', tone: 'warn' };
