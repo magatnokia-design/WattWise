@@ -70,8 +70,31 @@ const watts = (value) => `${(toNumber(value) ?? 0).toFixed(1)} W`;
 const pesos = (value) => `₱${(toNumber(value) ?? 0).toFixed(2)}`;
 const percent = (value) => `${(toNumber(value) ?? 0).toFixed(1)}%`;
 
+const kwh = (value) => `${(toNumber(value) ?? 0).toFixed(3)} kWh`;
+
 const readingLine = (voltage, current, power) =>
   `${volts(voltage)}  ·  ${amps(current)}  ·  ${watts(power)}`;
+
+/**
+ * Metadata a reader must never be shown.
+ *
+ * Two kinds, and they are excluded for different reasons.
+ *
+ * Identifiers: `scheduleId` is a Firestore document id. It was rendering as
+ * "Schedule Id  jSt9nisEwYn3xm0tpKiV" under a timer notification - a string the
+ * reader cannot use, act on, or check against anything. The `Id$` test covers it
+ * generically so the next handler that stashes a document reference in metadata
+ * does not put one back on screen.
+ *
+ * Restatements: `scheduleType` and `action` are already in the words above them.
+ * The title says "Timer turned off My Ceiling Fan" and the body says "Your
+ * countdown finished and switched the outlet off" - then a detail list repeated
+ * "Schedule Type: countdown" and "Action: off". A detail row earns its place by
+ * carrying something the sentence does not.
+ */
+const HIDDEN_METADATA_KEYS = new Set(['type', 'scheduleType', 'action']);
+
+const isHiddenMetadataKey = (key) => HIDDEN_METADATA_KEYS.has(key) || /Id$/.test(key);
 
 /** '2026-08' -> 'August 2026'. Left alone if it is not a month key. */
 const monthLabel = (value) => {
@@ -138,14 +161,24 @@ export const describeNotificationDetails = (item) => {
   // Safety stage change - handleSafetyAlerts.
   if (has('stage')) {
     rows.push({ label: 'Stage', value: titleCase(metadata.stage) });
-    rows.push({
-      label: 'Outlet 1',
-      value: readingLine(metadata.outlet1Voltage, metadata.outlet1Current, metadata.outlet1Power),
-    });
-    rows.push({
-      label: 'Outlet 2',
-      value: readingLine(metadata.outlet2Voltage, metadata.outlet2Current, metadata.outlet2Power),
-    });
+
+    // Only when the readings are actually there. The auto-cutoff notification
+    // writes `{ stage }` alone, and these rows were rendering it as
+    // "0.0 V · 0.00 A · 0.0 W" for both outlets - measurements presented with
+    // full precision that were never taken. A missing reading has to look
+    // missing, not like a reading of zero.
+    if (has('outlet1Voltage') || has('outlet1Current') || has('outlet1Power')) {
+      rows.push({
+        label: 'Outlet 1',
+        value: readingLine(metadata.outlet1Voltage, metadata.outlet1Current, metadata.outlet1Power),
+      });
+    }
+    if (has('outlet2Voltage') || has('outlet2Current') || has('outlet2Power')) {
+      rows.push({
+        label: 'Outlet 2',
+        value: readingLine(metadata.outlet2Voltage, metadata.outlet2Current, metadata.outlet2Power),
+      });
+    }
     return rows;
   }
 
@@ -178,9 +211,37 @@ export const describeNotificationDetails = (item) => {
     return rows;
   }
 
-  // Anything else, including shapes added after this was written.
+  // Charge finished - updateOutletMetrics. Both figures are the evidence for the
+  // claim: it tapered from a peak and then sat still.
+  if (has('peakPowerW') || has('restingPowerW')) {
+    if (has('peakPowerW')) rows.push({ label: 'Peak draw', value: watts(metadata.peakPowerW) });
+    if (has('restingPowerW')) {
+      rows.push({ label: 'Now resting at', value: watts(metadata.restingPowerW) });
+    }
+    return rows;
+  }
+
+  // Monthly invoice - processMonthlyInvoice. Was falling through to the
+  // catch-all, which rendered "Total Amount Due  1234.5" - a bill without a
+  // currency and an energy figure without a unit.
+  if (has('totalAmountDue') || has('billingMonth')) {
+    if (has('billingMonth')) {
+      rows.push({ label: 'Billing month', value: monthLabel(metadata.billingMonth) });
+    }
+    if (has('totalKwh')) rows.push({ label: 'Energy used', value: kwh(metadata.totalKwh) });
+    if (has('totalAmountDue')) {
+      rows.push({ label: 'Amount due', value: pesos(metadata.totalAmountDue) });
+    }
+    return rows;
+  }
+
+  // Anything else, including shapes added after this was written. A schedule or
+  // countdown notification lands here and now yields no rows at all, which is
+  // the right answer - its title and message already say the outlet, which way
+  // it switched, and why.
   Object.entries(metadata).forEach(([key, value]) => {
-    if (key === 'type' || value === null || value === undefined || value === '') return;
+    if (isHiddenMetadataKey(key)) return;
+    if (value === null || value === undefined || value === '') return;
     if (typeof value === 'object') return;
     rows.push({ label: humanizeKey(key), value: humanizeValue(value, key) });
   });
