@@ -1,6 +1,7 @@
 const admin = require('firebase-admin');
 const logger = require('firebase-functions/logger');
 const { HttpsError } = require('firebase-functions/v2/https');
+const { recordSecurityEvent, EVENT_TYPES } = require('../lib/securityEvents');
 
 const MAX_FIELD_LENGTH = 128;
 const MIN_TOKEN_LENGTH = 8;
@@ -107,6 +108,14 @@ async function linkDeviceToAccount(request) {
           deviceToken: null,
           device: { active: false, unlinkedAt: admin.firestore.FieldValue.serverTimestamp() },
         }, { merge: true });
+
+        // The losing side gets the entry that matters most: their Hub left the
+        // account and they did not do it. Deliberately no mention of who took
+        // it - a user's security log is not a place to learn another user's id.
+        await recordSecurityEvent(outcome.previousOwnerId, EVENT_TYPES.DEVICE_UNLINKED, {
+          deviceId,
+          reason: 'claimed by another account',
+        });
       } catch (detachError) {
         logger.warn('Device linked but previous owner not detached', {
           deviceId,
@@ -115,6 +124,12 @@ async function linkDeviceToAccount(request) {
         });
       }
     }
+
+    await recordSecurityEvent(
+      userId,
+      outcome.isTransfer ? EVENT_TYPES.DEVICE_TRANSFERRED : EVENT_TYPES.DEVICE_LINKED,
+      { deviceId }
+    );
 
     logger.info('Device linked to account', {
       userId,

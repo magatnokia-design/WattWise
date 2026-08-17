@@ -151,3 +151,38 @@ test('a good event lands under the user, not in a central collection', async () 
   assert.deepEqual(written.detail, { deviceId: 'ESP32_ROOM_A' });
   assert.ok(!JSON.stringify(written).includes('should never appear'));
 });
+
+/*
+ * Four of the six types were declared here and written by nothing for weeks.
+ * The screen looked broken - a user paired a Hub and Security activity stayed
+ * empty - while every unit test passed, because a type nobody emits is
+ * indistinguishable from one nobody triggered. This walks the source instead.
+ */
+test('every declared event type is emitted somewhere', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+
+  const SRC = path.join(__dirname, '..', 'src');
+  const DECLARED_IN = path.join(SRC, 'lib', 'securityEvents.js');
+
+  const walk = (dir) => fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) return walk(full);
+    return entry.isFile() && entry.name.endsWith('.js') ? [full] : [];
+  });
+
+  // The declaring file names every type by definition, so it cannot vouch for any.
+  const source = walk(SRC)
+    .filter((file) => file !== DECLARED_IN)
+    .map((file) => fs.readFileSync(file, 'utf8'))
+    .join('\n');
+
+  const unemitted = Object.keys(EVENT_TYPES)
+    .filter((name) => !source.includes(`EVENT_TYPES.${name}`));
+
+  assert.deepEqual(
+    unemitted,
+    [],
+    `declared but never written: ${unemitted.join(', ')} - either emit it or remove it`
+  );
+});

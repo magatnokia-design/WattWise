@@ -2,6 +2,7 @@ const admin = require('firebase-admin');
 const logger = require('firebase-functions/logger');
 const { HttpsError } = require('firebase-functions/v2/https');
 const { enqueueEmail } = require('../lib/mailQueue');
+const { recordSecurityEvent, EVENT_TYPES } = require('../lib/securityEvents');
 const {
   normalizeEmail,
   isValidEmail,
@@ -74,6 +75,19 @@ async function sendPasswordResetEmail(request) {
 
   if (result?.success === false) {
     throw new HttpsError('internal', 'Could not send the reset email');
+  }
+
+  // The account exists - buildAuthActionUrl throws auth/user-not-found if it
+  // does not - so the uid is resolvable and the entry belongs under it. Wrapped
+  // because the lookup can fail on its own, and a reset that reached the inbox
+  // must not report failure because an audit line did not get written.
+  try {
+    const { uid } = await admin.auth().getUserByEmail(email);
+    await recordSecurityEvent(uid, EVENT_TYPES.PASSWORD_RESET_REQUESTED, {
+      requestedVia: 'forgot password',
+    });
+  } catch (eventError) {
+    logger.warn('Password reset sent but not recorded', { message: eventError?.message });
   }
 
   logger.info('Password reset email queued', { email });
