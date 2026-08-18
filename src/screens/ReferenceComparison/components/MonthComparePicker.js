@@ -8,66 +8,59 @@ import {
   ScrollView,
 } from 'react-native';
 import { COLORS } from '../../../constants/colors';
-import { formatMonthShort, formatMonthLabel } from '../utils/comparisonHelpers';
+import { formatMonthLabel } from '../utils/comparisonHelpers';
 
 /**
- * The "what am I comparing" control: two explicit slots with `vs` between them.
+ * The "which month" control. One slot, one month.
  *
- * Both sides are pickable. The previous design had a single month stepper and
- * an implicit "previous month" other side, which is what made the comparison
- * hard to reason about - you could not see what you were comparing against.
+ * This has been two slots with `vs` between them, on the reasoning that an
+ * implicit baseline is hard to reason about - you could not see what you were
+ * comparing against. True as far as it went, but it fixed the wrong half. The
+ * bill card below only ever followed the left slot, so the right one governed
+ * part of the screen and not the rest, with nothing marking where its influence
+ * stopped. Two visible slots made that ambiguity look deliberate.
+ *
+ * The baseline is now always the preceding month and is named in the sentence
+ * that reports the change, which is where it is actually needed.
  */
-const MonthComparePicker = ({ monthOptions, monthA, monthB, onSelectA, onSelectB }) => {
-  const [openSide, setOpenSide] = useState(null);
+const MonthComparePicker = ({ monthOptions, month, onSelect }) => {
+  const [open, setOpen] = useState(false);
 
-  const handlePick = useCallback((month) => {
-    if (openSide === 'A') onSelectA(month);
-    if (openSide === 'B') onSelectB(month);
-    setOpenSide(null);
-  }, [openSide, onSelectA, onSelectB]);
-
-  const activeValue = openSide === 'A' ? monthA : monthB;
-
-  const renderSlot = (side, value, caption) => (
-    <TouchableOpacity
-      style={styles.slot}
-      onPress={() => setOpenSide(side)}
-      activeOpacity={0.7}
-    >
-      <Text style={styles.slotCaption}>{caption}</Text>
-      <Text style={styles.slotValue}>{formatMonthShort(value)}</Text>
-      <Text style={styles.slotHint}>Tap to change ▾</Text>
-    </TouchableOpacity>
-  );
+  const handlePick = useCallback((value) => {
+    onSelect(value);
+    setOpen(false);
+  }, [onSelect]);
 
   return (
     <View style={styles.container}>
-      <View style={styles.row}>
-        {renderSlot('A', monthA, 'This month')}
-        <View style={styles.vsWrap}>
-          <Text style={styles.vs}>vs</Text>
+      <TouchableOpacity
+        style={styles.slot}
+        onPress={() => setOpen(true)}
+        activeOpacity={0.7}
+      >
+        <View style={styles.slotText}>
+          <Text style={styles.slotCaption}>Month</Text>
+          <Text style={styles.slotValue}>{formatMonthLabel(month)}</Text>
         </View>
-        {renderSlot('B', monthB, 'Compared to')}
-      </View>
+        <Text style={styles.slotHint}>Change ▾</Text>
+      </TouchableOpacity>
 
       <Modal
-        visible={openSide !== null}
+        visible={open}
         transparent
         animationType="fade"
-        onRequestClose={() => setOpenSide(null)}
+        onRequestClose={() => setOpen(false)}
       >
         <TouchableOpacity
           style={styles.overlay}
           activeOpacity={1}
-          onPress={() => setOpenSide(null)}
+          onPress={() => setOpen(false)}
         >
           <View style={styles.sheet}>
-            <Text style={styles.sheetTitle}>
-              {openSide === 'A' ? 'Select month' : 'Compare against'}
-            </Text>
+            <Text style={styles.sheetTitle}>Select month</Text>
             <ScrollView showsVerticalScrollIndicator={false}>
               {monthOptions.map((option) => {
-                const selected = option.value === activeValue;
+                const selected = option.value === month;
                 return (
                   <TouchableOpacity
                     key={option.value}
@@ -95,18 +88,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     marginTop: 16,
   },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'stretch',
-  },
   slot: {
-    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     backgroundColor: COLORS.white,
     borderWidth: 1,
     borderColor: COLORS.border,
     borderRadius: 12,
     paddingVertical: 12,
-    paddingHorizontal: 14,
+    paddingHorizontal: 16,
+    gap: 12,
+  },
+  slotText: {
+    flex: 1,
   },
   slotCaption: {
     fontSize: 11,
@@ -114,24 +109,15 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   slotValue: {
-    fontSize: 17,
+    fontSize: 18,
     fontWeight: '700',
     color: COLORS.text,
   },
   slotHint: {
-    fontSize: 10,
-    color: COLORS.primary,
-    marginTop: 3,
-    fontWeight: '600',
-  },
-  vsWrap: {
-    justifyContent: 'center',
-    paddingHorizontal: 10,
-  },
-  vs: {
+    flexShrink: 0,
     fontSize: 12,
-    fontWeight: '700',
-    color: COLORS.textLight,
+    color: COLORS.primary,
+    fontWeight: '600',
   },
   overlay: {
     flex: 1,

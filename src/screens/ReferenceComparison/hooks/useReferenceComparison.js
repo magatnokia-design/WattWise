@@ -13,24 +13,33 @@ import {
 } from '../utils/comparisonHelpers';
 
 /**
- * Two-month usage comparison.
+ * One month of usage, checked two ways.
  *
- * The months being compared come from `history_daily` - what the hardware
- * actually measured and processDailyRollup wrote. The earlier version read both
- * sides out of `reference_comparison`, a collection only the manual bill form
- * ever writes, so the screen compared two sets of hand-typed numbers and showed
- * zeroes until the user filled both in.
+ * `month` is the only thing the user picks. Everything on the screen is keyed
+ * to it: the totals, the preceding month it is compared against, and the actual
+ * PELCO III bill for the same period.
  *
- * `reference_comparison` is still used, but only for what it is good for: the
- * actual PELCO III bill for a month, so the app's estimate can be checked
- * against the real thing.
+ * The baseline was a second user-chosen month until it turned out to be the
+ * source of the screen's confusion. The bill card only ever followed the first
+ * selection, so the second dropdown silently governed one half of the screen
+ * and not the other, with nothing on the page marking the boundary. It is now
+ * always the preceding month - derived, not selected - so there is exactly one
+ * control and one month in play.
+ *
+ * The totals come from `history_daily`, what the hardware actually measured and
+ * processDailyRollup wrote. An earlier version read them out of
+ * `reference_comparison`, a collection only the manual bill form ever writes,
+ * so the screen compared two sets of hand-typed numbers and showed zeroes until
+ * the user filled both in. `reference_comparison` is still used, but only for
+ * what it is good for: the paper bill, so the estimate can be checked against
+ * the real thing.
  */
 const useReferenceComparison = () => {
   const [userId, setUserId] = useState(null);
   const monthOptions = useMemo(() => buildMonthOptions(MONTH_OPTION_COUNT), []);
 
   const [monthA, setMonthA] = useState(() => monthOptions[0].value);
-  const [monthB, setMonthB] = useState(() => previousMonthKey(monthOptions[0].value));
+  const monthB = useMemo(() => previousMonthKey(monthA), [monthA]);
 
   const [totalsA, setTotalsA] = useState(emptyMonthTotals);
   const [totalsB, setTotalsB] = useState(emptyMonthTotals);
@@ -128,17 +137,7 @@ const useReferenceComparison = () => {
     [totalsA, actualBill, rates]
   );
 
-  // Picking the same month on both sides compares nothing, so the other side
-  // steps out of the way rather than showing a 0% delta.
-  const selectMonthA = useCallback((month) => {
-    setMonthA(month);
-    setMonthB((current) => (current === month ? previousMonthKey(month) : current));
-  }, []);
-
-  const selectMonthB = useCallback((month) => {
-    setMonthB(month);
-    setMonthA((current) => (current === month ? previousMonthKey(month) : current));
-  }, []);
+  const selectMonth = useCallback((month) => setMonthA(month), []);
 
   const saveActualBill = useCallback(async (data) => {
     setError(null);
@@ -190,17 +189,19 @@ const useReferenceComparison = () => {
 
   return {
     monthOptions,
-    monthA,
-    monthB,
-    totalsA,
-    totalsB,
+    // The selected month, and the one it is measured against. `previousMonth`
+    // is exported so a screen can name the baseline it is showing; it is not
+    // settable.
+    month: monthA,
+    previousMonth: monthB,
+    totals: totalsA,
+    previousTotals: totalsB,
     comparison,
     actualBill,
     accuracy,
     loading,
     error,
-    selectMonthA,
-    selectMonthB,
+    selectMonth,
     saveActualBill,
     deleteActualBill,
     refresh: fetchComparison,

@@ -14,7 +14,7 @@ import MonthComparePicker from './components/MonthComparePicker';
 import CompareMetric from './components/CompareMetric';
 import AddPreviousBillModal from './components/AddPreviousBillModal';
 import useReferenceComparison from './hooks/useReferenceComparison';
-import { buildVerdict, explainAccuracy, formatMonthShort } from './utils/comparisonHelpers';
+import { buildTrend, explainAccuracy, formatMonthShort } from './utils/comparisonHelpers';
 import { WebAppNotice } from '../../components/common/WebAppNotice';
 import { WEB_APP_LINKS } from '../../constants/webApp';
 import { useDismissibleNotice } from '../../hooks/useDismissibleNotice';
@@ -25,15 +25,13 @@ const formatPeso = (value) => `₱${(Number(value) || 0).toFixed(2)}`;
 const ReferenceComparisonScreen = ({ navigation }) => {
   const {
     monthOptions,
-    monthA,
-    monthB,
-    totalsA,
-    totalsB,
+    month,
+    previousMonth,
+    totals,
     comparison,
     actualBill,
     accuracy,
-    selectMonthA,
-    selectMonthB,
+    selectMonth,
     saveActualBill,
     deleteActualBill,
     refresh,
@@ -43,15 +41,14 @@ const ReferenceComparisonScreen = ({ navigation }) => {
   const [showBillModal, setShowBillModal] = useState(false);
   const webNotice = useDismissibleNotice('comparison-web-app');
 
-  const labelA = formatMonthShort(monthA);
-  const labelB = formatMonthShort(monthB);
+  const label = formatMonthShort(month);
+  const previousLabel = formatMonthShort(previousMonth);
 
-  // The bill card is about month A alone - month B has no bearing on it.
-  const hasMonthAUsage = totalsA.daysRecorded > 0;
+  const hasUsage = totals.daysRecorded > 0;
 
-  const verdict = useMemo(
-    () => buildVerdict(comparison, labelA, labelB),
-    [comparison, labelA, labelB]
+  const trend = useMemo(
+    () => buildTrend(comparison, label, previousLabel),
+    [comparison, label, previousLabel]
   );
 
   const onRefresh = async () => {
@@ -60,11 +57,11 @@ const ReferenceComparisonScreen = ({ navigation }) => {
     setRefreshing(false);
   };
 
-  const verdictStyle = {
+  const trendStyle = {
     good: styles.verdictGood,
     alert: styles.verdictAlert,
     neutral: styles.verdictNeutral,
-  }[verdict.tone];
+  }[trend.tone];
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
@@ -90,7 +87,9 @@ const ReferenceComparisonScreen = ({ navigation }) => {
         }
       >
         <Text style={styles.intro}>
-          Pick any two months to see how your energy use changed.
+          Pick one month. Everything below is about that month - what WattWise measured,
+          how that compares with the month before, and how it lines up with the PELCO III
+          bill covering the same electricity.
         </Text>
 
         {/* Adding a past bill means copying peso figures off paper, which is
@@ -106,102 +105,135 @@ const ReferenceComparisonScreen = ({ navigation }) => {
 
         <MonthComparePicker
           monthOptions={monthOptions}
-          monthA={monthA}
-          monthB={monthB}
-          onSelectA={selectMonthA}
-          onSelectB={selectMonthB}
+          month={month}
+          onSelect={selectMonth}
         />
 
-        {/* The answer, stated outright, before any numbers to interpret. */}
-        <View style={[styles.verdict, verdictStyle]}>
-          <Text style={styles.verdictHeadline}>{verdict.headline}</Text>
-          <Text style={styles.verdictDetail}>{verdict.detail}</Text>
+        <View style={styles.body}>
+          <Text style={styles.sectionTitle}>What WattWise measured in {label}</Text>
+
+          {hasUsage ? (
+            <>
+              {/* The month-on-month line. Toned when there is a real change to
+                  report; a quiet sentence when the preceding month has nothing,
+                  because "no baseline" is not a finding and should not be
+                  dressed as one. */}
+              {trend.available ? (
+                <View style={[styles.verdict, trendStyle]}>
+                  <Text style={styles.verdictHeadline}>{trend.headline}</Text>
+                  <Text style={styles.verdictDetail}>{trend.detail}</Text>
+                </View>
+              ) : (
+                <Text style={styles.trendMuted}>{trend.detail}</Text>
+              )}
+
+              {trend.available ? (
+                <>
+                  <CompareMetric
+                    title="Energy used"
+                    labelA={label}
+                    labelB={previousLabel}
+                    valueA={comparison.energy.current}
+                    valueB={comparison.energy.previous}
+                    delta={comparison.energy}
+                    format={formatKwh}
+                  />
+
+                  <CompareMetric
+                    title="Cost"
+                    labelA={label}
+                    labelB={previousLabel}
+                    valueA={comparison.cost.current}
+                    valueB={comparison.cost.previous}
+                    delta={comparison.cost}
+                    format={formatPeso}
+                  />
+
+                  <Text style={styles.sectionTitle}>Which outlet changed</Text>
+                  <View style={styles.outletCard}>
+                    {[
+                      { name: totals.outlet1Name, delta: comparison.outlet1 },
+                      { name: totals.outlet2Name, delta: comparison.outlet2 },
+                    ].map((outlet, index) => {
+                      const improving = outlet.delta.direction === 'down';
+                      const color = outlet.delta.direction === 'flat'
+                        ? COLORS.textLight
+                        : (improving ? COLORS.success : COLORS.error);
+
+                      return (
+                        <View
+                          key={outlet.name}
+                          style={[styles.outletRow, index === 0 && styles.outletRowDivided]}
+                        >
+                          <View style={styles.outletInfo}>
+                            <Text style={styles.outletName}>{outlet.name}</Text>
+                            <Text style={styles.outletFlow}>
+                              {formatKwh(outlet.delta.previous)} → {formatKwh(outlet.delta.current)}
+                            </Text>
+                          </View>
+                          <Text style={[styles.outletDelta, { color }]}>
+                            {outlet.delta.direction === 'flat'
+                              ? '—'
+                              : `${outlet.delta.direction === 'down' ? '↓' : '↑'} ${
+                                outlet.delta.absolutePercent === null
+                                  ? formatKwh(outlet.delta.absolute)
+                                  : `${outlet.delta.absolutePercent.toFixed(1)}%`
+                              }`}
+                          </Text>
+                        </View>
+                      );
+                    })}
+                  </View>
+                </>
+              ) : (
+                /* No baseline, so no bars and no arrows - just the month's own
+                   totals. Rendering a delta against an unmeasured month would
+                   print a 100% rise off a zero that was never measured. */
+                <View style={styles.totalsCard}>
+                  {[
+                    { label: 'Energy used', value: formatKwh(totals.kWh) },
+                    { label: 'Cost', value: formatPeso(totals.cost) },
+                    { label: totals.outlet1Name, value: formatKwh(totals.outlet1) },
+                    { label: totals.outlet2Name, value: formatKwh(totals.outlet2) },
+                  ].map((row, index) => (
+                    <View
+                      key={row.label}
+                      style={[styles.totalsRow, index > 0 && styles.totalsRowDivided]}
+                    >
+                      <Text style={styles.totalsLabel}>{row.label}</Text>
+                      <Text style={styles.totalsValue}>{row.value}</Text>
+                    </View>
+                  ))}
+                  <Text style={styles.totalsFooter}>
+                    {totals.daysRecorded} {totals.daysRecorded === 1 ? 'day' : 'days'} recorded,
+                    from outlet 1 and outlet 2 only.
+                  </Text>
+                </View>
+              )}
+            </>
+          ) : (
+            <View style={styles.emptyState}>
+              <Ionicons name="calendar-outline" size={64} color={COLORS.border} />
+              <Text style={styles.emptyTitle}>Nothing recorded for {label}</Text>
+              <Text style={styles.emptyText}>
+                WattWise builds a monthly total from daily usage, which is recorded
+                once your outlets have been reporting for a full day. You can still
+                file that month&apos;s PELCO III bill below.
+              </Text>
+            </View>
+          )}
         </View>
 
-        {comparison.bothHaveData ? (
-          <View style={styles.body}>
-            <CompareMetric
-              title="Energy used"
-              labelA={labelA}
-              labelB={labelB}
-              valueA={totalsA.kWh}
-              valueB={totalsB.kWh}
-              delta={comparison.energy}
-              format={formatKwh}
-            />
-
-            <CompareMetric
-              title="Cost"
-              labelA={labelA}
-              labelB={labelB}
-              valueA={totalsA.cost}
-              valueB={totalsB.cost}
-              delta={comparison.cost}
-              format={formatPeso}
-            />
-
-            <Text style={styles.sectionTitle}>Which outlet changed</Text>
-            <View style={styles.outletCard}>
-              {[
-                { name: totalsA.outlet1Name, a: totalsA.outlet1, b: totalsB.outlet1, delta: comparison.outlet1 },
-                { name: totalsA.outlet2Name, a: totalsA.outlet2, b: totalsB.outlet2, delta: comparison.outlet2 },
-              ].map((outlet, index) => {
-                const improving = outlet.delta.direction === 'down';
-                const color = outlet.delta.direction === 'flat'
-                  ? COLORS.textLight
-                  : (improving ? COLORS.success : COLORS.error);
-
-                return (
-                  <View
-                    key={outlet.name}
-                    style={[styles.outletRow, index === 0 && styles.outletRowDivided]}
-                  >
-                    <View style={styles.outletInfo}>
-                      <Text style={styles.outletName}>{outlet.name}</Text>
-                      <Text style={styles.outletFlow}>
-                        {formatKwh(outlet.b)} → {formatKwh(outlet.a)}
-                      </Text>
-                    </View>
-                    <Text style={[styles.outletDelta, { color }]}>
-                      {outlet.delta.direction === 'flat'
-                        ? '—'
-                        : `${outlet.delta.direction === 'down' ? '↓' : '↑'} ${
-                          outlet.delta.absolutePercent === null
-                            ? formatKwh(outlet.delta.absolute)
-                            : `${outlet.delta.absolutePercent.toFixed(1)}%`
-                        }`}
-                    </Text>
-                  </View>
-                );
-              })}
-            </View>
-          </View>
-        ) : (
-          <View style={styles.emptyState}>
-            <Ionicons name="calendar-outline" size={64} color={COLORS.border} />
-            <Text style={styles.emptyTitle}>
-              {totalsA.daysRecorded === 0 && totalsB.daysRecorded === 0
-                ? 'No usage recorded yet'
-                : `Nothing recorded for ${totalsA.daysRecorded === 0 ? labelA : labelB}`}
-            </Text>
-            <Text style={styles.emptyText}>
-              WattWise builds a monthly total from daily usage, which is recorded
-              once your outlets have been reporting for a full day. Pick a month
-              with recorded usage, or check back tomorrow.
-            </Text>
-          </View>
-        )}
-
-        {/* Deliberately outside the comparison above.
-            A paper bill is a figure copied off paper - it depends on neither
-            month having recorded usage, and it is about month A alone.
-            Sitting inside that branch meant a user with one month of data could
-            neither see a bill already on file nor add one, whatever Firestore
-            held. Found from the web client, which gates neither. */}
+        {/* Deliberately outside the block above.
+            A paper bill is a figure copied off paper - it does not depend on
+            the month having recorded usage. Sitting inside that branch meant a
+            user with no rollups yet could neither see a bill already on file
+            nor add one, whatever Firestore held. Found from the web client,
+            which gates neither. */}
         <View style={styles.billSection}>
           <Text style={styles.sectionTitle}>Check against your real bill</Text>
 
-          {accuracy && hasMonthAUsage ? (
+          {accuracy && hasUsage ? (
             <View style={styles.accuracyCard}>
               <View style={styles.accuracyRow}>
                 <Text style={styles.accuracyLabel}>PELCO III billed you</Text>
@@ -242,7 +274,7 @@ const ReferenceComparisonScreen = ({ navigation }) => {
                   </Text>
                 </View>
               ) : null}
-              <Text style={styles.accuracyNote}>{explainAccuracy(accuracy, labelA)}</Text>
+              <Text style={styles.accuracyNote}>{explainAccuracy(accuracy, label)}</Text>
               <TouchableOpacity
                 style={styles.secondaryButton}
                 onPress={() => setShowBillModal(true)}
@@ -265,9 +297,9 @@ const ReferenceComparisonScreen = ({ navigation }) => {
                 <Text style={styles.accuracyValue}>Nothing yet</Text>
               </View>
               <Text style={styles.accuracyNote}>
-                Your {labelA} bill is saved. WattWise has no recorded usage for that
-                month, so there is nothing to compare it against yet - the check
-                appears once your outlets have reported for a full day.
+                Your {label} bill is saved. WattWise has no recorded usage for that
+                month, so there is nothing to grade it against yet - the check
+                appears once your outlets have reported for a full day of {label}.
               </Text>
               <TouchableOpacity
                 style={styles.secondaryButton}
@@ -285,7 +317,7 @@ const ReferenceComparisonScreen = ({ navigation }) => {
             >
               <Ionicons name="receipt-outline" size={22} color={COLORS.primary} />
               <View style={styles.addBillText}>
-                <Text style={styles.addBillTitle}>Add your {labelA} bill</Text>
+                <Text style={styles.addBillTitle}>Add your {label} bill</Text>
                 <Text style={styles.addBillSub}>
                   Enter the total from your paper PELCO III bill to see how close
                   WattWise&apos;s estimate came.
@@ -299,7 +331,7 @@ const ReferenceComparisonScreen = ({ navigation }) => {
 
       <AddPreviousBillModal
         visible={showBillModal}
-        selectedMonth={monthA}
+        selectedMonth={month}
         previousData={{
           kWh: actualBill?.totalKWh || 0,
           cost: actualBill?.totalCost || 0,
@@ -350,12 +382,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 16,
   },
+  // Sits inside the body block now rather than spanning the screen, so it takes
+  // its horizontal padding from the parent.
   verdict: {
-    marginHorizontal: 20,
-    marginTop: 16,
+    marginBottom: 12,
     borderRadius: 12,
     padding: 16,
     borderWidth: 1,
+  },
+  // No preceding month to compare against. Left as plain text on the background
+  // deliberately: an absent comparison is not a result, and giving it a bordered
+  // panel of its own was what made an empty screen look like it had reported
+  // something.
+  trendMuted: {
+    fontSize: 13,
+    color: COLORS.textLight,
+    lineHeight: 19,
+    marginBottom: 12,
   },
   verdictGood: {
     backgroundColor: '#ECFDF5',
@@ -401,6 +444,46 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.border,
     marginBottom: 12,
+  },
+  totalsCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    paddingHorizontal: 16,
+    paddingVertical: 4,
+    marginBottom: 12,
+  },
+  totalsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 13,
+    gap: 12,
+  },
+  totalsRowDivided: {
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+  },
+  totalsLabel: {
+    flex: 1,
+    fontSize: 13,
+    color: COLORS.textLight,
+  },
+  totalsValue: {
+    flexShrink: 0,
+    fontSize: 15,
+    fontWeight: '700',
+    color: COLORS.text,
+  },
+  totalsFooter: {
+    fontSize: 12,
+    color: COLORS.textLight,
+    lineHeight: 17,
+    paddingTop: 10,
+    paddingBottom: 14,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
   },
   outletRow: {
     flexDirection: 'row',
@@ -516,10 +599,11 @@ const styles = StyleSheet.create({
     lineHeight: 17,
     marginTop: 3,
   },
+  // Inside the body block, which already carries 20pt of horizontal padding.
   emptyState: {
     alignItems: 'center',
-    paddingVertical: 48,
-    paddingHorizontal: 40,
+    paddingVertical: 40,
+    paddingHorizontal: 16,
   },
   emptyTitle: {
     fontSize: 17,

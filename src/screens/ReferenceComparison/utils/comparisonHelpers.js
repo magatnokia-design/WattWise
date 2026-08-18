@@ -156,23 +156,33 @@ export const compareMonths = (totalsA, totalsB) => {
 };
 
 /**
- * One plain sentence for the top of the screen. This is the whole point of the
- * comparison, so it says the outcome outright rather than leaving the user to
- * subtract two numbers.
+ * How the selected month compares with the month before it, in one sentence.
+ *
+ * The baseline used to be a second month the user picked. That put two
+ * unrelated questions behind one screen with no way to tell them apart: "am I
+ * using more than last month" (needs two measured months) and "is WattWise's
+ * bill estimate right" (needs one month and a paper bill). Only the first
+ * dropdown ever fed the bill card, so choosing a month in the second one
+ * changed a comparison the user could not see the boundary of - the reasonable
+ * reading was that it somehow altered the bill check too, and it never did.
+ *
+ * One month is selected now and the baseline is always the month before it,
+ * which is the only month-on-month comparison anyone was making anyway.
+ *
+ * `available` is false when the preceding month has no rollups, and callers
+ * must render that as an absence rather than as a result. A month that was
+ * never measured is not a month that used zero - showing "up 100%" against it
+ * is the same class of mistake as grading an unplugged outlet's 0.0 V.
  */
-export const buildVerdict = (comparison, monthALabel, monthBLabel) => {
+export const buildTrend = (comparison, monthLabel, previousLabel) => {
   if (!comparison.bothHaveData) {
     return {
+      available: false,
       tone: 'neutral',
-      headline: `Nothing to compare ${monthALabel} against yet`,
-      // The old text stated the requirement and stopped, which reads as a dead
-      // end to the person it is aimed at: someone who has just started, for whom
-      // a month-on-month comparison is weeks away no matter what they do. It now
-      // says what does work in the meantime - checking against a real PELCO bill
-      // needs no second month and accepts bills from before the hub existed.
-      detail: `Month-on-month needs recorded usage in both ${monthALabel} and ${monthBLabel}. `
-        + `Until then, add your real PELCO III bill below - that check works from day one, and `
-        + `bills from before you owned the hub count.`,
+      headline: `No ${previousLabel} usage on record`,
+      detail: `${monthLabel} is shown on its own. The month-on-month change appears once `
+        + `${previousLabel} has at least one recorded day. The bill check below never needs a `
+        + `second month - it works from day one, and bills from before you owned the hub count.`,
     };
   }
 
@@ -180,23 +190,24 @@ export const buildVerdict = (comparison, monthALabel, monthBLabel) => {
 
   if (energy.direction === 'flat') {
     return {
+      available: true,
       tone: 'neutral',
-      headline: 'About the same',
-      detail: `${monthALabel} used roughly the same energy as ${monthBLabel}.`,
+      headline: `About the same as ${previousLabel}`,
+      detail: `${monthLabel} used roughly the same energy as ${previousLabel}.`,
     };
   }
 
   const usedLess = energy.direction === 'down';
   const percentText = energy.absolutePercent === null
     ? ''
-    : ` (${energy.absolutePercent.toFixed(1)}%)`;
+    : `${energy.absolutePercent.toFixed(1)}% `;
 
   return {
+    available: true,
     tone: usedLess ? 'good' : 'alert',
-    headline: usedLess
-      ? `${energy.absolutePercent === null ? '' : `${energy.absolutePercent.toFixed(1)}% `}less energy`
-      : `${energy.absolutePercent === null ? '' : `${energy.absolutePercent.toFixed(1)}% `}more energy`,
-    detail: `${monthALabel} used ${energy.absolute.toFixed(2)} kWh ${usedLess ? 'less' : 'more'} than ${monthBLabel}${percentText}, a difference of ₱${cost.absolute.toFixed(2)}.`,
+    headline: `${percentText}${usedLess ? 'less' : 'more'} energy than ${previousLabel}`,
+    detail: `${monthLabel} used ${energy.absolute.toFixed(2)} kWh ${usedLess ? 'less' : 'more'} `
+      + `than ${previousLabel}, a difference of ₱${cost.absolute.toFixed(2)}.`,
   };
 };
 
