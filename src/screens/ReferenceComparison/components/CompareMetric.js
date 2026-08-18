@@ -22,6 +22,11 @@ const CompareMetric = ({
   format,
   // Using less energy is good; the caller can flip this where that is not true.
   lowerIsBetter = true,
+  // Whether the change is a verdict at all. False while the month is still
+  // running: the arrow and figure stay, because the totals really do differ,
+  // but the colour goes, because most of the difference is days that have not
+  // happened yet rather than anything the user did.
+  graded = true,
 }) => {
   const max = Math.max(Number(valueA) || 0, Number(valueB) || 0);
   const widthFor = (value) => {
@@ -32,7 +37,7 @@ const CompareMetric = ({
   };
 
   const improving = lowerIsBetter ? delta.direction === 'down' : delta.direction === 'up';
-  const deltaColor = delta.direction === 'flat'
+  const deltaColor = delta.direction === 'flat' || !graded
     ? COLORS.textLight
     : (improving ? COLORS.success : COLORS.error);
 

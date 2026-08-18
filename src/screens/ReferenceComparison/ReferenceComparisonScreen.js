@@ -28,6 +28,7 @@ const ReferenceComparisonScreen = ({ navigation }) => {
     month,
     previousMonth,
     totals,
+    previousTotals,
     comparison,
     actualBill,
     accuracy,
@@ -47,8 +48,11 @@ const ReferenceComparisonScreen = ({ navigation }) => {
   const hasUsage = totals.daysRecorded > 0;
 
   const trend = useMemo(
-    () => buildTrend(comparison, label, previousLabel),
-    [comparison, label, previousLabel]
+    () => buildTrend(comparison, label, previousLabel, {
+      recorded: totals.daysRecorded,
+      previousRecorded: previousTotals.daysRecorded,
+    }),
+    [comparison, label, previousLabel, totals.daysRecorded, previousTotals.daysRecorded]
   );
 
   const onRefresh = async () => {
@@ -137,6 +141,7 @@ const ReferenceComparisonScreen = ({ navigation }) => {
                     valueB={comparison.energy.previous}
                     delta={comparison.energy}
                     format={formatKwh}
+                    graded={!trend.partial}
                   />
 
                   <CompareMetric
@@ -147,6 +152,7 @@ const ReferenceComparisonScreen = ({ navigation }) => {
                     valueB={comparison.cost.previous}
                     delta={comparison.cost}
                     format={formatPeso}
+                    graded={!trend.partial}
                   />
 
                   <Text style={styles.sectionTitle}>Which outlet changed</Text>
@@ -156,7 +162,7 @@ const ReferenceComparisonScreen = ({ navigation }) => {
                       { name: totals.outlet2Name, delta: comparison.outlet2 },
                     ].map((outlet, index) => {
                       const improving = outlet.delta.direction === 'down';
-                      const color = outlet.delta.direction === 'flat'
+                      const color = outlet.delta.direction === 'flat' || trend.partial
                         ? COLORS.textLight
                         : (improving ? COLORS.success : COLORS.error);
 

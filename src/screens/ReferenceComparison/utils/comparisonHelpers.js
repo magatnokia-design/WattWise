@@ -173,11 +173,24 @@ export const compareMonths = (totalsA, totalsB) => {
  * must render that as an absence rather than as a result. A month that was
  * never measured is not a month that used zero - showing "up 100%" against it
  * is the same class of mistake as grading an unplugged outlet's 0.0 V.
+ *
+ * `partial` is the other way this comparison lies, and it is the one that shows
+ * up on the second of every month: a month two days old against a finished one
+ * is a smaller number for a reason that has nothing to do with consumption. Two
+ * days of September against twenty-four days of August reads as "92% less
+ * energy", which is arithmetically true of the totals and worthless as a trend.
+ * So the day counts are always stated, and a month that is clearly still
+ * running is reported without a good/bad verdict rather than congratulating the
+ * user for not having lived through the rest of it yet.
+ *
+ * @param {object} [days] `recorded` and `previousRecorded` day counts. Omitted,
+ *   nothing is claimed about completeness and the comparison is graded as-is.
  */
-export const buildTrend = (comparison, monthLabel, previousLabel) => {
+export const buildTrend = (comparison, monthLabel, previousLabel, days = {}) => {
   if (!comparison.bothHaveData) {
     return {
       available: false,
+      partial: false,
       tone: 'neutral',
       headline: `No ${previousLabel} usage on record`,
       detail: `${monthLabel} is shown on its own. The month-on-month change appears once `
@@ -186,14 +199,56 @@ export const buildTrend = (comparison, monthLabel, previousLabel) => {
     };
   }
 
+  const recorded = toNumber(days.recorded);
+  const previousRecorded = toNumber(days.previousRecorded);
+
+  // Four fifths rather than an exact match, so a short calendar month is not
+  // permanently caveated against a long one - February's 28 days against
+  // January's 31 is 90% and a fair comparison. A month still in progress is
+  // nowhere near the threshold within the first three weeks, which is the
+  // window where the misreading actually happens.
+  const partial = recorded > 0
+    && previousRecorded > 0
+    && recorded < previousRecorded * 0.8;
+
+  const dayNote = recorded > 0 && previousRecorded > 0
+    ? ` Counted over ${recorded} recorded ${recorded === 1 ? 'day' : 'days'} in ${monthLabel} `
+      + `against ${previousRecorded} in ${previousLabel}.`
+    : '';
+
+  if (partial) {
+    const gap = comparison.energy.absolute;
+    const morePlain = comparison.energy.direction === 'up' ? 'more' : 'less';
+
+    // Fewer days landing on the same total is not sameness, so the flat case
+    // does not get the "about the same" wording either.
+    const gapText = gap < 0.005
+      ? `So far ${monthLabel} has used about as much energy as ${previousLabel}, over fewer days.`
+      : `So far ${monthLabel} has used ${gap.toFixed(2)} kWh ${morePlain} than ${previousLabel}, `
+        + `but most of that gap is the days that have not happened yet, not a change in how much `
+        + `you are using.`;
+
+    return {
+      available: true,
+      partial: true,
+      // No verdict colour. The difference is mostly the missing days, and
+      // painting it green would tell a user they are doing well on the second
+      // of the month, every month.
+      tone: 'neutral',
+      headline: `${monthLabel} is not a full month yet`,
+      detail: `${gapText}${dayNote}`,
+    };
+  }
+
   const { energy, cost } = comparison;
 
   if (energy.direction === 'flat') {
     return {
       available: true,
+      partial: false,
       tone: 'neutral',
       headline: `About the same as ${previousLabel}`,
-      detail: `${monthLabel} used roughly the same energy as ${previousLabel}.`,
+      detail: `${monthLabel} used roughly the same energy as ${previousLabel}.${dayNote}`,
     };
   }
 
@@ -204,10 +259,11 @@ export const buildTrend = (comparison, monthLabel, previousLabel) => {
 
   return {
     available: true,
+    partial: false,
     tone: usedLess ? 'good' : 'alert',
     headline: `${percentText}${usedLess ? 'less' : 'more'} energy than ${previousLabel}`,
     detail: `${monthLabel} used ${energy.absolute.toFixed(2)} kWh ${usedLess ? 'less' : 'more'} `
-      + `than ${previousLabel}, a difference of ₱${cost.absolute.toFixed(2)}.`,
+      + `than ${previousLabel}, a difference of ₱${cost.absolute.toFixed(2)}.${dayNote}`,
   };
 };
 
