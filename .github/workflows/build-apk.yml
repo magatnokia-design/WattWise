@@ -20,6 +20,15 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 40
 
+    # Needed only by the publish step, which creates a release. Without it the
+    # default token is read-only and the whole run fails at the last step with
+    # "HTTP 403: Resource not accessible by integration" - after twelve minutes
+    # of building, with a perfectly good APK already uploaded as an artifact.
+    # Scoped to contents rather than granted wholesale: this job has no business
+    # touching issues, packages or deployments.
+    permissions:
+      contents: write
+
     steps:
       - uses: actions/checkout@v4
 
