@@ -1,0 +1,109 @@
+name: Build APK
+
+# Manual only. Building costs runner minutes and produces an artifact someone is
+# meant to install, so it runs when a human asks for it, not on every push.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version, digits only (e.g. 1.0.9)'
+        required: true
+        type: string
+      publish_release:
+        description: 'Also publish a GitHub Release with the APK attached'
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # RN 0.81 / Expo SDK 54 build on JDK 17. Newer JDKs are not a safe swap.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # android/ is gitignored, so it does not exist on a fresh runner and has
+      # to be generated. This is also why the architecture flag below cannot be
+      # left to android/gradle.properties: prebuild rewrites that file with the
+      # Expo default of all four architectures every time.
+      - name: Generate the Android project
+        run: npx expo prebuild --platform android --no-install
+        env:
+          CI: 'true'
+
+      # The same debug keystore the local builds have always used, so an APK
+      # from here installs *over* one built on the laptop instead of being
+      # rejected for a signature mismatch. A runner would otherwise generate its
+      # own and every tester would have to uninstall first.
+      - name: Restore the signing keystore
+        run: |
+          echo "${{ secrets.ANDROID_DEBUG_KEYSTORE_BASE64 }}" | base64 -d > android/app/debug.keystore
+          test -s android/app/debug.keystore || { echo "::error::keystore secret missing or empty"; exit 1; }
+
+      # ARM only, deliberately. The Expo default also ships lib/x86 and
+      # lib/x86_64 - 43.5 MB of native code no physical phone can run, only an
+      # emulator - which took the APK from 60.6 MB to 106.6 MB and stalled the
+      # download over mobile data before it finished.
+      - name: Build release APK
+        working-directory: android
+        run: ./gradlew assembleRelease -PreactNativeArchitectures=armeabi-v7a,arm64-v8a --no-daemon
+
+      # A silent revert of the flag above would not fail the build, it would
+      # just quietly produce a 106 MB APK again. So it is checked, not trusted.
+      - name: Reject emulator architectures
+        run: |
+          APK=android/app/build/outputs/apk/release/app-release.apk
+          echo "ABIs present:"
+          unzip -l "$APK" | grep -oE 'lib/[a-z0-9_-]+/' | sort -u
+          if unzip -l "$APK" | grep -qE 'lib/(x86|x86_64)/'; then
+            echo "::error::x86 libraries present - the architecture flag did not apply"
+            exit 1
+          fi
+          echo "Size: $(( $(stat -c%s "$APK") / 1048576 )) MiB"
+
+      # Catches the case where the bundle silently did not pick up new source.
+      - name: Confirm the JS bundle is present
+        run: |
+          APK=android/app/build/outputs/apk/release/app-release.apk
+          unzip -p "$APK" assets/index.android.bundle | head -c 200 > /dev/null
+          SIZE=$(unzip -l "$APK" assets/index.android.bundle | awk 'NR==4{print $1}')
+          echo "index.android.bundle: $SIZE bytes"
+          test "$SIZE" -gt 1000000 || { echo "::error::bundle looks too small"; exit 1; }
+
+      - name: Name the APK
+        run: |
+          cp android/app/build/outputs/apk/release/app-release.apk \
+             "WattWise-v${{ inputs.version }}.apk"
+          sha256sum "WattWise-v${{ inputs.version }}.apk"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: WattWise-v${{ inputs.version }}
+          path: WattWise-v${{ inputs.version }}.apk
+          retention-days: 30
+
+      # Off by default. Publishing is a deliberate act, so it takes a second
+      # decision rather than riding along with every build.
+      - name: Publish release
+        if: ${{ inputs.publish_release }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "v${{ inputs.version }}" "WattWise-v${{ inputs.version }}.apk" \
+            --title "WattWise v${{ inputs.version }}" \
+            --generate-notes
