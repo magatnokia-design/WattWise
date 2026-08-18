@@ -21,6 +21,7 @@ import {
   normalizeSupplyRates,
   sumSupplyRates,
 } from '../../../utils/billing';
+import { validateSupplyRates } from '../utils/settingsHelpers';
 
 export const PELCO3_RATES_URL = 'https://www.pelco3.org/rates.php';
 
@@ -81,8 +82,20 @@ const SupplyRateModal = ({ visible, currentRates, onClose, onSave }) => {
     return Number(bill?.effectiveRate) || 0;
   }, [parsedRates]);
 
-  const generationValue = Number(parsedRates.generation);
-  const canSave = Number.isFinite(generationValue) && generationValue > 0;
+  /*
+   * The same rule the web client applies, from the same function.
+   *
+   * This screen had a generation > 0 check from the start and the web had none,
+   * so the two clients disagreed about what a valid tariff was. Sharing the
+   * check means a rule added for one is a rule both get - and it adds two the
+   * phone was missing: a non-adjustment line cannot go negative, and an
+   * implausible Block 1 total is called out before it prices a month.
+   */
+  const check = useMemo(
+    () => validateSupplyRates(values, SUPPLY_RATE_FIELDS),
+    [values]
+  );
+  const canSave = check.valid;
 
   const handleChange = useCallback((key, text) => {
     // Allow a leading minus: Gen. Rate Adj is a credit on every real bill.
@@ -105,7 +118,8 @@ const SupplyRateModal = ({ visible, currentRates, onClose, onSave }) => {
 
   const handleSave = useCallback(async () => {
     if (!canSave) {
-      setError('Enter the generation rate from your bill.');
+      const field = SUPPLY_RATE_FIELDS.find((entry) => check.errors[entry.key]);
+      setError(`${field.label}: ${check.errors[field.key]}`);
       return;
     }
 
@@ -119,7 +133,7 @@ const SupplyRateModal = ({ visible, currentRates, onClose, onSave }) => {
     }
 
     onClose?.();
-  }, [canSave, onSave, onClose, parsedRates]);
+  }, [canSave, check.errors, onSave, onClose, parsedRates]);
 
   const renderField = (field) => (
     <View key={field.key} style={styles.fieldRow}>
