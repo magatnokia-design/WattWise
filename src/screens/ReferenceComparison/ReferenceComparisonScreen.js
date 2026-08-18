@@ -157,9 +157,16 @@ const ReferenceComparisonScreen = ({ navigation }) => {
 
                   <Text style={styles.sectionTitle}>Which outlet changed</Text>
                   <View style={styles.outletCard}>
+                    {/* The slot is carried alongside the name because the two
+                        outlets can legitimately share one. Appliance names are
+                        user-set and the rollup records whatever they were on the
+                        day it ran, so a rename - or the same appliance moved
+                        between outlets - produces two rows reading "My Ceiling
+                        Fan" with different figures and no way to tell which is
+                        which. Seen on a real account. */}
                     {[
-                      { name: totals.outlet1Name, delta: comparison.outlet1 },
-                      { name: totals.outlet2Name, delta: comparison.outlet2 },
+                      { id: 'outlet1', slot: 'Outlet 1', name: totals.outlet1Name, delta: comparison.outlet1 },
+                      { id: 'outlet2', slot: 'Outlet 2', name: totals.outlet2Name, delta: comparison.outlet2 },
                     ].map((outlet, index) => {
                       const improving = outlet.delta.direction === 'down';
                       const color = outlet.delta.direction === 'flat' || trend.partial
@@ -168,11 +175,16 @@ const ReferenceComparisonScreen = ({ navigation }) => {
 
                       return (
                         <View
-                          key={outlet.name}
+                          // Keyed on the slot, not the name. Two outlets sharing
+                          // a name gave React duplicate keys.
+                          key={outlet.id}
                           style={[styles.outletRow, index === 0 && styles.outletRowDivided]}
                         >
                           <View style={styles.outletInfo}>
-                            <Text style={styles.outletName}>{outlet.name}</Text>
+                            <Text style={styles.outletName}>
+                              {outlet.name}
+                              {outlet.name === outlet.slot ? '' : ` · ${outlet.slot}`}
+                            </Text>
                             <Text style={styles.outletFlow}>
                               {formatKwh(outlet.delta.previous)} → {formatKwh(outlet.delta.current)}
                             </Text>
