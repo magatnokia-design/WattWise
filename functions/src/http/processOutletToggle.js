@@ -89,8 +89,13 @@ async function processOutletToggle(request) {
     // the log only feeds the History screen. Awaiting a second Firestore round
     // trip first added latency to every toggle for no user-visible benefit.
     // Still resilient - a failed log must never fail the toggle.
-    const historyWrite = db.collection(`users/${userId}/history_logs`)
-      .add({
+    // The id is minted here rather than by `.add()` so it can travel with the
+    // command. If the device never acknowledges, handleDeviceCommandEmails uses
+    // it to come back and mark this exact row unconfirmed - otherwise History
+    // shows a switch that reads as if it happened.
+    const historyRef = db.collection(`users/${userId}/history_logs`).doc();
+    const historyWrite = historyRef
+      .set({
         timestamp: admin.firestore.FieldValue.serverTimestamp(),
         outlet: outletNumber,
         outletName: resolveOutletLogName(outletData, outletNumber),
@@ -114,6 +119,7 @@ async function processOutletToggle(request) {
       source: 'app',
       metadata: {
         outletNumber,
+        historyLogId: historyRef.id,
       },
     });
 

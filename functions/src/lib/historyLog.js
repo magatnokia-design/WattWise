@@ -1,3 +1,6 @@
+const admin = require('firebase-admin');
+const logger = require('firebase-functions/logger');
+
 /**
  * The power figure written onto a switch event in `history_logs`.
  *
@@ -38,4 +41,79 @@ const resolveLogPower = (turningOn, outletData = {}) => {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
 };
 
-module.exports = { resolveLogPower };
+/**
+ * Ack statuses that mean the switch in the log never actually happened, or at
+ * least was never confirmed to have happened.
+ */
+const UNCONFIRMED_ACK_STATUS = new Set(['timeout', 'failed', 'rejected']);
+
+/**
+ * Marks a history row as a switch the hardware never confirmed.
+ *
+ * Every writer of `history_logs` records the switch at the moment it is
+ * *requested* - before the ESP32 has seen it, because the device only learns
+ * about a command when it next polls `getDeviceCommand`. That ordering is
+ * deliberate (the log must survive the function instance freezing), but it left
+ * the History screen unable to tell the two cases apart: a row saying "OFF"
+ * looked identical whether the relay opened or the hub was off the network the
+ * whole time. During a demo that is the worst possible failure mode - the screen
+ * confidently states something the hardware never did.
+ *
+ * The link is a `historyLogId` carried in the command's own metadata, so the
+ * command document knows which row to come back and correct. `update` rather
+ * than `set(..., {merge: true})` on purpose: merge would *create* the row if the
+ * id were ever wrong, inventing a switch event that never happened.
+ *
+ * Only ever writes the failing direction. A command that succeeds leaves no
+ * mark, so an unannotated row keeps meaning what it always meant.
+ *
+ * @param {object} args
+ * @param {string} args.userId
+ * @param {string} args.historyLogId  Document id from the command's metadata.
+ * @param {string} args.status        Normalized ack status (timeout/failed/rejected).
+ * @param {string} [args.commandId]   Recorded so a row can be traced to its command.
+ * @returns {Promise<boolean>} True when a row was annotated.
+ */
+const markHistoryLogUnconfirmed = async ({
+  userId,
+  historyLogId,
+  status,
+  commandId = null,
+}) => {
+  const normalizedStatus = String(status || '').trim().toLowerCase();
+  const logId = String(historyLogId || '').trim();
+
+  if (!userId || !logId || !UNCONFIRMED_ACK_STATUS.has(normalizedStatus)) {
+    return false;
+  }
+
+  try {
+    await admin.firestore()
+      .doc(`users/${userId}/history_logs/${logId}`)
+      .update({
+        delivery: {
+          confirmed: false,
+          status: normalizedStatus,
+          commandId: commandId || null,
+          markedAtMs: Date.now(),
+        },
+      });
+    return true;
+  } catch (error) {
+    // A missing row is not worth failing the notification for - the user still
+    // gets told the command failed, they just do not get the badge on the row.
+    logger.warn('Could not mark history log unconfirmed', {
+      userId,
+      historyLogId: logId,
+      status: normalizedStatus,
+      message: error?.message,
+    });
+    return false;
+  }
+};
+
+module.exports = {
+  resolveLogPower,
+  markHistoryLogUnconfirmed,
+  UNCONFIRMED_ACK_STATUS,
+};

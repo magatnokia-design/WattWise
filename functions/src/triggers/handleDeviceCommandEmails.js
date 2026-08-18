@@ -1,6 +1,7 @@
 const logger = require('firebase-functions/logger');
 const { resolveUserContact, enqueueEmail } = require('../lib/mailQueue');
 const { createNotification } = require('../lib/notifications');
+const { markHistoryLogUnconfirmed } = require('../lib/historyLog');
 
 const NOTIFIABLE_STATUSES = new Set(['failed', 'rejected', 'timeout']);
 
@@ -36,6 +37,17 @@ async function handleDeviceCommandEmails(event) {
 
     const outletId = String(after.outletId || '').trim();
     const outletNumber = parseInt(outletId.replace('outlet', ''), 10);
+
+    // The History row was written when the switch was *requested*, so it
+    // currently reads as though it happened. Correct it before anything else:
+    // the notification below points the user straight at that screen, and the
+    // row it lands on has to already agree with the notification.
+    await markHistoryLogUnconfirmed({
+      userId,
+      historyLogId: after.metadata?.historyLogId,
+      status,
+      commandId,
+    });
 
     // A toggle that never reached the ESP32 is the one failure the user most
     // needs to know about immediately - they think the outlet switched and it

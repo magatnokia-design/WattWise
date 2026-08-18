@@ -9,12 +9,18 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { COLORS } from '../../../constants/colors';
-import { describeLogSource, formatWatts, powerAtSwitch } from '../utils/historyHelpers';
+import {
+  describeLogDelivery,
+  describeLogSource,
+  formatWatts,
+  powerAtSwitch,
+} from '../utils/historyHelpers';
 
 const EMPTY_LOGS = [];
 
 const SOURCE_TONES = {
   danger: { background: '#FEE2E2', text: '#B91C1C' },
+  warn: { background: '#FEF3C7', text: '#B45309' },
   info: { background: '#DBEAFE', text: '#1D4ED8' },
   neutral: { background: COLORS.border, text: COLORS.textLight },
 };
@@ -24,6 +30,10 @@ const ActivityLogItem = ({ item }) => {
   const isOn = item.status === 'ON';
   const source = describeLogSource(item.source);
   const tone = SOURCE_TONES[source.tone] || SOURCE_TONES.neutral;
+  // Null on every ordinary row. Only set when the hub never confirmed the
+  // switch, which is the one case where the ON/OFF beside it is not a fact.
+  const delivery = describeLogDelivery(item);
+  const deliveryTone = delivery ? (SOURCE_TONES[delivery.tone] || SOURCE_TONES.neutral) : null;
   // Only a switch-off carries a wattage. Rows written before this was fixed
   // backend-side can hold the previous session's reading against a switch-on,
   // so the rule is applied here too rather than trusted from the document.
@@ -31,7 +41,14 @@ const ActivityLogItem = ({ item }) => {
 
   return (
     <View style={[styles.logItem, { width: width - 32 }]}>
-      <View style={[styles.statusDot, { backgroundColor: isOn ? COLORS.primary : COLORS.textLight }]} />
+      <View
+        style={[
+          styles.statusDot,
+          // Amber rather than the on/off colour, because an unconfirmed row is
+          // not in either state as far as anyone knows.
+          { backgroundColor: delivery ? deliveryTone.text : (isOn ? COLORS.primary : COLORS.textLight) },
+        ]}
+      />
       <View style={styles.logInfo}>
         <Text style={styles.logTitle}>{item.outletName || 'Outlet --'}</Text>
         <View style={styles.logMetaRow}>
@@ -39,13 +56,29 @@ const ActivityLogItem = ({ item }) => {
           <View style={[styles.sourceBadge, { backgroundColor: tone.background }]}>
             <Text style={[styles.sourceText, { color: tone.text }]}>{source.label}</Text>
           </View>
+          {delivery ? (
+            <View style={[styles.sourceBadge, { backgroundColor: deliveryTone.background }]}>
+              <Text style={[styles.sourceText, { color: deliveryTone.text }]}>{delivery.label}</Text>
+            </View>
+          ) : null}
           {watts ? <Text style={styles.logSub}>{watts}</Text> : null}
         </View>
+        {/* Spelled out rather than left to the badge. "Not confirmed" beside an
+            OFF still reads as OFF unless the row says what is actually unknown. */}
+        {delivery ? <Text style={styles.deliveryNote}>{delivery.note}</Text> : null}
       </View>
       <View style={styles.logRight}>
         <View style={[styles.statusBadge, { backgroundColor: isOn ? COLORS.primaryLight + '20' : COLORS.border }]}>
-          <Text style={[styles.statusText, { color: isOn ? COLORS.primary : COLORS.textLight }]}>
-            {item.status || '--'}
+          <Text
+            style={[
+              styles.statusText,
+              { color: isOn ? COLORS.primary : COLORS.textLight },
+              // The switch was requested, not observed, so the label is hedged
+              // rather than removed - the request is still a real record.
+              delivery ? styles.statusTextUnconfirmed : null,
+            ]}
+          >
+            {delivery ? `${item.status || '--'}?` : (item.status || '--')}
           </Text>
         </View>
         <Text style={styles.logTime}>{item.time || '--:--'}</Text>
@@ -169,6 +202,16 @@ const styles = StyleSheet.create({
   sourceText: {
     fontSize: 10,
     fontWeight: '700',
+  },
+  deliveryNote: {
+    fontSize: 11,
+    lineHeight: 15,
+    color: COLORS.textLight,
+    marginTop: 5,
+    paddingRight: 8,
+  },
+  statusTextUnconfirmed: {
+    opacity: 0.55,
   },
   loadMoreButton: {
     paddingVertical: 12,

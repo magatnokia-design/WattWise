@@ -283,6 +283,11 @@ async function handleSafetyAlerts(event) {
       // on screen from the cutoff not having run.
       const pendingUntilMs = Date.now() + PENDING_STATUS_WINDOW_MS;
       const logsRef = db.collection(`users/${userId}/history_logs`);
+      // Which row each outlet's cutoff was logged to, so the dispatch loop below
+      // can hand the id to the command. A cutoff the device never acknowledges
+      // is the most important row in the log to mark - it is the difference
+      // between "the outlet was cut" and "we asked, and never heard back".
+      const historyLogIds = new Map();
 
       targets.forEach((entry) => {
         batch.set(db.doc(`users/${userId}/outlets/${entry.outletId}`), {
@@ -292,7 +297,10 @@ async function handleSafetyAlerts(event) {
           lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
         }, { merge: true });
 
-        batch.set(logsRef.doc(), {
+        const historyRef = logsRef.doc();
+        historyLogIds.set(entry.outletId, historyRef.id);
+
+        batch.set(historyRef, {
           timestamp: admin.firestore.FieldValue.serverTimestamp(),
           outlet: entry.number,
           outletName: resolveOutletLogName(
@@ -331,7 +339,10 @@ async function handleSafetyAlerts(event) {
           action: 'off',
           reason: 'safety_cutoff',
           source: 'safety_trigger',
-          metadata: { stage: currentStage },
+          metadata: {
+            stage: currentStage,
+            historyLogId: historyLogIds.get(entry.outletId) || null,
+          },
         });
 
         dispatched.push({

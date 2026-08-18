@@ -72,6 +72,54 @@ export const describeLogSource = (source) => {
   return SOURCE_LABELS[normalized] || { label: 'System', tone: 'neutral' };
 };
 
+/**
+ * Whether the hardware ever confirmed the switch this row describes.
+ *
+ * Every history row is written at the moment the switch is *requested*, because
+ * the ESP32 only finds out about a command when it next polls. So a row saying
+ * "OFF" has always meant "OFF was asked for", and read as "the relay opened".
+ * Those are the same thing right up until the hub is off the network - and then
+ * the log states, with no hedging, something that never happened.
+ *
+ * The backend now comes back and stamps `delivery.confirmed: false` on the row
+ * when the command times out or is refused (functions/src/lib/historyLog.js).
+ * Only the failing direction is ever written, so an un-stamped row keeps meaning
+ * exactly what it always meant and no existing row changes appearance.
+ *
+ * The distinction the labels draw is worth keeping: `timeout` means the hub
+ * never answered at all, so nobody knows what the relay did - that is why it is
+ * "Not confirmed" and not "Failed". `failed`/`rejected` mean the hub answered
+ * and said no, which is a different and more definite thing.
+ */
+const DELIVERY_LABELS = {
+  timeout: {
+    label: 'Not confirmed',
+    tone: 'warn',
+    note: 'The hub never answered this command, so the outlet may not have changed.',
+  },
+  failed: {
+    label: 'Failed',
+    tone: 'danger',
+    note: 'The hub reported that it could not carry out this command.',
+  },
+  rejected: {
+    label: 'Rejected',
+    tone: 'danger',
+    note: 'The hub refused this command.',
+  },
+};
+
+export const describeLogDelivery = (log = {}) => {
+  const delivery = log?.delivery;
+  // Absent, or confirmed - either way there is nothing to flag. Checked with
+  // `!== false` rather than a truthiness test so a row that has never been
+  // stamped is treated as fine, not as unknown.
+  if (!delivery || delivery.confirmed !== false) return null;
+
+  const normalized = String(delivery.status || '').trim().toLowerCase();
+  return DELIVERY_LABELS[normalized] || DELIVERY_LABELS.timeout;
+};
+
 export const formatWatts = (value) => {
   const parsed = Number(value);
   if (!Number.isFinite(parsed) || parsed <= 0) return '';

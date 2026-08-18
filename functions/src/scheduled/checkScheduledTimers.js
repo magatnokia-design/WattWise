@@ -131,7 +131,10 @@ async function checkScheduledTimers() {
           // Create activity log
           const outletNumber = parseInt(String(outletId).replace('outlet', ''), 10);
 
-          await db.collection(`users/${userId}/history_logs`).add({
+          // Id minted up front so it can ride along in the command metadata -
+          // an unacknowledged schedule needs marking on the row it wrote.
+          const historyRef = db.collection(`users/${userId}/history_logs`).doc();
+          await historyRef.set({
             timestamp: admin.firestore.FieldValue.serverTimestamp(),
             outlet: Number.isNaN(outletNumber) ? null : outletNumber,
             outletName: resolveOutletLogName(outletData, outletNumber),
@@ -154,6 +157,7 @@ async function checkScheduledTimers() {
             metadata: {
               scheduleId: scheduleDoc.id,
               scheduleType: 'scheduled',
+              historyLogId: historyRef.id,
             },
           });
 
@@ -232,7 +236,8 @@ async function checkScheduledTimers() {
             lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
           }, { merge: true });
 
-          await db.collection(`users/${userId}/history_logs`).add({
+          const historyRef = db.collection(`users/${userId}/history_logs`).doc();
+          await historyRef.set({
             timestamp: admin.firestore.FieldValue.serverTimestamp(),
             outlet: Number.isNaN(outletNumber) ? null : outletNumber,
             outletName: resolveOutletLogName(outletData, outletNumber),
@@ -256,6 +261,7 @@ async function checkScheduledTimers() {
             metadata: {
               scheduleId: scheduleDoc.id,
               scheduleType: 'countdown',
+              historyLogId: historyRef.id,
             },
           });
 
