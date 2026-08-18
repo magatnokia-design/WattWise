@@ -6,10 +6,13 @@ import {
   ScrollView,
   TouchableOpacity,
   Alert,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import * as Notifications from 'expo-notifications';
 import { useFocusEffect } from '@react-navigation/native';
 import { COLORS } from '../../constants/colors';
+import AppDialog from '../../components/common/AppDialog';
 import SettingsRow from './components/SettingsRow';
 import SupplyRateModal from './components/SupplyRateModal';
 import ESP32DeviceModal from './components/ESP32DeviceModal';
@@ -49,6 +52,10 @@ const SettingsScreen = ({ navigation }) => {
   const [rateModalVisible, setRateModalVisible] = useState(false);
   const [deviceModalVisible, setDeviceModalVisible] = useState(false);
   const [scannerVisible, setScannerVisible] = useState(false);
+  // One dialog at a time, held as its own props. A second setDialog replaces the
+  // first, which is how "Send link" hands straight over to "Check your inbox"
+  // without a frame where neither is on screen.
+  const [dialog, setDialog] = useState(null);
   const [nameModalVisible, setNameModalVisible] = useState(false);
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
   const [securityModalVisible, setSecurityModalVisible] = useState(false);
@@ -159,34 +166,79 @@ const SettingsScreen = ({ navigation }) => {
     return { success: true };
   }, [updateSupplyRates]);
 
+  /*
+   * Two separate switches, and confusing them is the obvious trap.
+   *
+   * This one is WattWise's own preference: it lives on the account and decides
+   * whether the backend sends anything at all (handlePushNotifications reads
+   * `notificationsEnabled` before dispatching). Android's per-app notification
+   * permission is the other one, and it decides whether the phone is allowed to
+   * display what was sent. No app can change that from code - only the user, in
+   * OS settings.
+   *
+   * So turning this on while Android's is off produces the silent failure worth
+   * catching here: the account is willing to send, the phone will not show. The
+   * toggle still saves - the preference is genuinely on - and the dialog offers
+   * the one route to fixing the other half.
+   */
   const handleNotificationsToggle = useCallback(async (value) => {
     const result = await updateNotifications(value);
 
     if (!result.success) {
-      Alert.alert('Unable to update notifications', result.error || 'Please try again.');
+      setDialog({
+        icon: '⚠️',
+        title: 'Could not save that',
+        message: result.error || 'Something went wrong. Please try again.',
+        tone: 'danger',
+      });
+      return;
     }
+
+    if (!value) return;
+
+    const permission = await Notifications.getPermissionsAsync().catch(() => null);
+    if (!permission || permission.granted) return;
+
+    setDialog({
+      icon: '🔔',
+      title: 'Android is blocking these',
+      message:
+        'WattWise will send safety cut-offs, budget alerts and device events to this account. Android is set to hide notifications from this app, so they will not appear on your phone until you allow them.',
+      tone: 'warning',
+      confirmLabel: 'Open settings',
+      cancelLabel: 'Not now',
+      onConfirm: () => {
+        setDialog(null);
+        Linking.openSettings().catch(() => {});
+      },
+    });
   }, [updateNotifications]);
 
   const handleLogout = useCallback(() => {
-  Alert.alert(
-    'Logout',
-    'Are you sure you want to logout?',
-    [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Logout',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await authService.logout();
-          } catch (err) {
-            Alert.alert('Error', 'Failed to logout. Please try again.');
-          }
-        },
+    setDialog({
+      icon: '🚪',
+      title: 'Sign out?',
+      // Says what actually changes. "Are you sure you want to logout?" asked the
+      // user to confirm a decision without telling them its consequence.
+      message: 'Your outlets keep running and keep recording. You will need to sign in again to control them.',
+      tone: 'danger',
+      confirmLabel: 'Sign out',
+      cancelLabel: 'Stay',
+      onConfirm: async () => {
+        setDialog(null);
+        try {
+          await authService.logout();
+        } catch (err) {
+          setDialog({
+            icon: '⚠️',
+            title: 'Could not sign out',
+            message: 'Something went wrong. Check your connection and try again.',
+            tone: 'danger',
+          });
+        }
       },
-    ]
-  );
-}, []);
+    });
+  }, []);
 
   const handleEditName = useCallback(() => {
     setNameModalVisible(true);
@@ -204,29 +256,40 @@ const SettingsScreen = ({ navigation }) => {
   const handleChangePassword = useCallback(async () => {
     const email = settings.email;
     if (!email) {
-      Alert.alert('No account email', 'Please sign in again and try resetting your password.');
+      setDialog({
+        icon: '⚠️',
+        title: 'No account email',
+        message: 'Please sign in again, then try resetting your password.',
+        tone: 'warning',
+      });
       return;
     }
 
-    Alert.alert(
-      'Reset Password',
-      `Send a password reset link to ${email}?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Send Link',
-          onPress: async () => {
-            const result = await authService.resetPassword(email);
-            if (!result.success) {
-              Alert.alert('Unable to send reset email', result.error || 'Please try again.');
-              return;
-            }
+    setDialog({
+      icon: '🔑',
+      title: 'Reset your password',
+      message: `We will email a reset link to ${email}. The link works once and expires after an hour.`,
+      confirmLabel: 'Send link',
+      cancelLabel: 'Cancel',
+      onConfirm: async () => {
+        const result = await authService.resetPassword(email);
 
-            Alert.alert('Reset Email Sent', 'Check your inbox for the password reset link.');
-          },
-        },
-      ]
-    );
+        setDialog(
+          result.success
+            ? {
+              icon: '📧',
+              title: 'Check your inbox',
+              message: `We sent a reset link to ${email}. If it is not there in a minute, look in spam.`,
+            }
+            : {
+              icon: '⚠️',
+              title: 'Could not send the email',
+              message: result.error || 'Something went wrong. Please try again.',
+              tone: 'danger',
+            }
+        );
+      },
+    });
   }, [settings.email]);
 
   // Was an Alert. The safety limits are the most important text in the app and
@@ -617,6 +680,16 @@ const SettingsScreen = ({ navigation }) => {
         onClose={() => setRenamingAppliance(null)}
         onSave={handleRenameSavedAppliance}
       />
+
+      {/* Mounted only while there is something to say. A Modal left mounted with
+          visible={false} still renders its children. */}
+      {dialog ? (
+        <AppDialog
+          {...dialog}
+          onCancel={() => setDialog(null)}
+          onConfirm={dialog.onConfirm || (() => setDialog(null))}
+        />
+      ) : null}
     </SafeAreaView>
   );
 };
