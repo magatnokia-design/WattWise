@@ -23,9 +23,12 @@ export const SplashScreen = ({ navigation }) => {
         style={styles.logo}
         resizeMode="contain"
       />
-      {/* "Watt" white to match the bolt above it; "Wise" in the deep green,
-          because the default accent IS this screen's background. */}
-      <Wordmark style={styles.title} accentColor={COLORS.primaryDeep} />
+      {/* Flat white, both halves. The two-tone needs the accent to sit on a
+          contrasting ground, and here the ground IS the accent - the deep-green
+          "Wise" was only ever a darker shade of its own background, and on a
+          phone outdoors it read as a smudge rather than as a word. There is no
+          shade of green that fixes that; the field itself is the problem. */}
+      <Wordmark style={styles.title} accentColor={COLORS.white} />
       <Text style={styles.subtitle}>Smart Energy Monitoring</Text>
     </View>
   );

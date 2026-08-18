@@ -15,10 +15,16 @@ import { COLORS } from '../../constants/colors';
  * Both halves stay on one source line on purpose - split across lines, JSX
  * whitespace handling is the difference between "WattWise" and "Watt Wise".
  *
- * `accentColor` exists for the one screen that needs it. The splash is a solid
- * `primary` field, so the default green half would vanish into its own
- * background; overriding it there keeps the two-tone instead of falling back to
- * the flat single colour the wordmark used to be.
+ * `accentColor` exists for the one screen that needs it: the splash, which is a
+ * solid `primary` field, so the default green half would vanish into its own
+ * background. That override was first used to keep the two-tone alive with a
+ * deeper green - which did not work in practice. A darker shade of the
+ * background is still the background as far as a phone screen in daylight is
+ * concerned, and "Wise" read as a smudge. The splash now passes white and drops
+ * the two-tone deliberately: on a coloured field the wordmark is one colour.
+ *
+ * Everywhere else sits on white or a light card, where the accent has a
+ * contrasting ground and stays green.
  *
  * The web client has its own copy at components/ui/Wordmark.jsx. They cannot be
  * one file - RN and DOM primitives do not overlap - so this is not a copy-rule
