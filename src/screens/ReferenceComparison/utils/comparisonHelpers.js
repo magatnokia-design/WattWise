@@ -164,8 +164,15 @@ export const buildVerdict = (comparison, monthALabel, monthBLabel) => {
   if (!comparison.bothHaveData) {
     return {
       tone: 'neutral',
-      headline: 'Not enough data yet',
-      detail: `WattWise needs recorded usage in both ${monthALabel} and ${monthBLabel} to compare them.`,
+      headline: `Nothing to compare ${monthALabel} against yet`,
+      // The old text stated the requirement and stopped, which reads as a dead
+      // end to the person it is aimed at: someone who has just started, for whom
+      // a month-on-month comparison is weeks away no matter what they do. It now
+      // says what does work in the meantime - checking against a real PELCO bill
+      // needs no second month and accepts bills from before the hub existed.
+      detail: `Month-on-month needs recorded usage in both ${monthALabel} and ${monthBLabel}. `
+        + `Until then, add your real PELCO III bill below - that check works from day one, and `
+        + `bills from before you owned the hub count.`,
     };
   }
 

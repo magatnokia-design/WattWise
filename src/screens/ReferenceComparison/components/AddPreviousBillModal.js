@@ -119,9 +119,26 @@ const AddPreviousBillModal = ({ visible, selectedMonth, previousData, onClose, o
               <Text style={styles.monthText}>{getBillMonthLabel()}</Text>
             </View>
 
+            {/* The month this is filed under is the month the electricity was
+                USED, not the month the paper arrived. Those differ by one, and
+                the old copy - "your paper bill for this month" - did not say
+                which it meant. Filing a bill a month late compares WattWise's
+                August against PELCO's July and quietly reports the gap as
+                error. */}
             <Text style={styles.description}>
-              Enter the totals printed on your paper bill for this month, so WattWise can check its estimate against the real thing
+              Enter the totals printed on your bill for the electricity used in{' '}
+              <Text style={styles.descriptionStrong}>{getBillMonthLabel()}</Text>, so WattWise can
+              check its estimate against the real thing.
             </Text>
+
+            <View style={styles.periodNote}>
+              <Ionicons name="calendar-outline" size={15} color={COLORS.warning} />
+              <Text style={styles.periodNoteText}>
+                A bill usually arrives the month after the electricity was used, so the bill in your
+                hand this month probably belongs to last month. Check the billing period printed on
+                it, not the date it was issued.
+              </Text>
+            </View>
 
             {/* Energy Usage Input */}
             <View style={styles.inputGroup}>
@@ -193,7 +210,8 @@ const AddPreviousBillModal = ({ visible, selectedMonth, previousData, onClose, o
             <View style={styles.infoBox}>
               <Ionicons name="information-circle" size={16} color={COLORS.primary} />
               <Text style={styles.infoText}>
-                This data will be used to compare with your current month's usage
+                WattWise measures two outlets, so its total will be far below the bill. The check
+                that matters is whether its rates price the bill&apos;s own kWh correctly.
               </Text>
             </View>
           </ScrollView>
@@ -285,8 +303,31 @@ const styles = StyleSheet.create({
   description: {
     fontSize: 14,
     color: COLORS.textLight,
-    marginBottom: 24,
+    marginBottom: 12,
     lineHeight: 20,
+  },
+  descriptionStrong: {
+    fontWeight: '700',
+    color: COLORS.textDark,
+  },
+  // Amber rather than the theme green: this is the one thing on the form a user
+  // can get wrong in a way that silently corrupts the comparison.
+  periodNote: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    padding: 12,
+    marginBottom: 24,
+    borderRadius: 10,
+    backgroundColor: '#FFFBEB',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+  },
+  periodNoteText: {
+    flex: 1,
+    fontSize: 12.5,
+    lineHeight: 18,
+    color: '#92400E',
   },
   inputGroup: {
     marginBottom: 20,
