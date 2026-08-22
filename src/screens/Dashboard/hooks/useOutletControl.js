@@ -80,7 +80,17 @@ const buildOutletMetrics = (outlet = {}, isOutletOn = false, runtimeState = {}) 
   // If backend status is briefly stale but live current/power is already present,
   // keep showing live metrics instead of forcing zeros.
   if (!isOutletOn && !hasLiveLoad) {
-    return { ...DEFAULT_OUTLET_METRICS };
+    // Volts, amps and watts are genuinely zero with the relay open - nothing is
+    // flowing. `energy` is not an instantaneous reading though: it is the kWh
+    // the outlet has accumulated since midnight, and switching an outlet off
+    // does not un-consume it.
+    //
+    // Zeroing it made the day's total disappear from the card and from the
+    // combined figure whenever an outlet was off, then reappear on switch-on.
+    // On 22 Aug 2026 that read as outlet 2 inventing 1.4 kWh at the moment it
+    // was toggled: Energy Today went 0.691 -> 2.088 with a 14 W lamp on it.
+    // Nothing was gained. It had been there all along, hidden while off.
+    return { ...DEFAULT_OUTLET_METRICS, energy };
   }
 
   return {
