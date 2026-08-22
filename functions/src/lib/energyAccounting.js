@@ -38,7 +38,17 @@ const toFiniteNumber = (value, fallback = 0) => {
   return Number.isFinite(parsed) ? parsed : fallback;
 };
 
+/**
+ * Volts as reported, or null when the caller did not report any. Zero volts is
+ * a measurement ("the meter sees no mains"); null is the absence of one.
+ */
+const readVoltage = (value) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? Math.max(0, parsed) : null;
+};
+
 const round = (value) => Number(Math.max(0, value).toFixed(4));
+
 // Watts are displayed to one decimal on both clients; storing more precision
 // than is ever shown just invites two screens to disagree in the last digit.
 const roundWatts = (value) => Number(Math.max(0, value).toFixed(1));
@@ -55,7 +65,8 @@ const deriveOutletEnergy = (
   previous = {},
   meterReading = 0,
   timestampMs = Date.now(),
-  powerW = 0
+  powerW = 0,
+  voltageV = undefined
 ) => {
   const dateKey = getManilaDateKey(new Date(timestampMs));
   const meterKwh = Math.max(0, toFiniteNumber(meterReading, 0));
@@ -63,11 +74,36 @@ const deriveOutletEnergy = (
   const previousMeterKwh = Number(previous.energyMeterKwh);
   const hasBaseline = Number.isFinite(previousMeterKwh);
 
+  // null means "not reported", which is not the same as zero volts. Callers
+  // that predate this argument must keep their old behaviour exactly.
+  const sampleVoltage = readVoltage(voltageV);
+  const previousVoltage = readVoltage(previous.voltage);
+
   let delta = 0;
   let meterRebased = false;
+  let baselineKwh = meterKwh;
 
   if (hasBaseline) {
-    if (meterKwh + 1e-9 < previousMeterKwh) {
+    if (sampleVoltage === 0) {
+      // The meter is reporting no voltage, so it is not measuring: it has lost
+      // its own supply, or the firmware is publishing zeros because the read
+      // failed. Either way its counter is not evidence of anything. Hold the
+      // baseline where it was instead of moving it down to the zero - a zero
+      // baseline is what turns the next live reading into a phantom bill.
+      baselineKwh = previousMeterKwh;
+    } else if (previousVoltage === 0) {
+      // Coming back from a dark meter. The counter kept its own total in NVM
+      // across the gap, but nothing here measured what happened during it, so
+      // adopt the reading as a new baseline rather than differencing across it.
+      //
+      // This is what put 1.394 kWh on outlet 2 the instant it was switched back
+      // on (22 Aug 2026): the outlet had reported 0 V while off, its baseline
+      // had already been dragged to zero, and the first live sample booked the
+      // meter's whole lifetime total as one sample's consumption. The stored
+      // zero survives this fix, so this branch has to repair it, not just
+      // prevent the next one.
+      meterRebased = true;
+    } else if (meterKwh + 1e-9 < previousMeterKwh) {
       // The counter went backwards: the meter was cleared, swapped, or this is
       // different hardware. Re-baseline rather than record a negative day.
       meterRebased = true;
@@ -96,7 +132,7 @@ const deriveOutletEnergy = (
   const peakAdvances = samplePowerW > carriedPeakW;
 
   const result = {
-    energyMeterKwh: round(meterKwh),
+    energyMeterKwh: round(baselineKwh),
     energyDateKey: dateKey,
     energyTodayKwh: round(carriedToday + delta),
     totalEnergy: round(Math.max(0, toFiniteNumber(previous.totalEnergy, 0)) + delta),

@@ -245,7 +245,7 @@ async function updateOutletMetrics(req, res) {
       // `power` is passed so the day's peak is a maximum over every telemetry
       // sample. It used to be reconstructed in the nightly rollup from event
       // logs, which only exist when someone pressed something.
-      const energyState = deriveOutletEnergy(previousOutletData, energy, timestampMs, power);
+      const energyState = deriveOutletEnergy(previousOutletData, energy, timestampMs, power, voltage);
 
       // A toggle the device has not polled for yet must not be overwritten by
       // telemetry still reporting the old relay state.
