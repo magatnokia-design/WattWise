@@ -38,7 +38,17 @@ export const DISTRIBUTION_RATES = {
 // a 10-day period pays P5.00 and so does a 45-day one.
 export const METERING_FLAT = 5.0;
 
-// Block 3 - Universal charges
+// Block 3 - Universal charges.
+//
+// These are defaults, not constants of nature. PELCO III re-sets them between
+// billing periods: across nine statements read on 22 Aug 2026, ucME appeared as
+// both 0.2763 and 0.1993, and fitAll as 0.2011, 0.2073 and 0.1189. Pass
+// `universalRates` to reproduce a specific bill.
+//
+// Leaving them frozen is what made the model look accurate to 0.71% on the four
+// bills it was first checked against - those four happen to be the ones whose
+// block 3 matches the values below - and 2.05% on five later ones. With the
+// printed rates supplied, all nine land inside 0.71%.
 export const UNIVERSAL_RATES = {
   ucME: 0.2763,
   fitAll: 0.2011,
@@ -192,6 +202,11 @@ const resolveSupplyRates = ({ supplyRates, profileId, profiles }) => {
  *   monthly by PELCO III and applied uniformly, so never bill per-day and sum.
  * @param {object} options
  * @param {object} [options.supplyRates] Block 1 rates; falls back to the profile.
+ * @param {object} [options.universalRates] Block 3 overrides, merged over
+ *   UNIVERSAL_RATES. Supply only the keys that moved; the rest keep their
+ *   defaults. UC-ME and FIT-ALL in particular are re-set by PELCO III between
+ *   billing periods, and a bill cannot be reproduced without the values printed
+ *   on it - see the note on UNIVERSAL_RATES.
  * @param {boolean} [options.isLifeline] Zeroes the lifeline subsidy line.
  * @param {boolean} [options.includePeriodFlats=true] Set false for a marginal
  *   estimate (e.g. today's usage) so the once-per-period P5.00 is not counted
@@ -201,6 +216,7 @@ export const calculatePelcoIIIBill = (
   kwh,
   {
     supplyRates = null,
+    universalRates = null,
     profiles = null,
     profileId = null,
     isLifeline = false,
@@ -240,9 +256,13 @@ export const calculatePelcoIIIBill = (
   );
   const evatSupply = roundCurrency(genTransTotal * EVAT_SUPPLY_FACTOR);
 
+  // Merged, not replaced: a caller reproducing one statement supplies only the
+  // rates that differ on it and keeps the defaults for the rest.
+  const universal = { ...UNIVERSAL_RATES, ...(universalRates || {}) };
+
   const government = [
     ...UNIVERSAL_LINES
-      .map(([key, label]) => perKwhItem(key, label, UNIVERSAL_RATES[key], usage))
+      .map(([key, label]) => perKwhItem(key, label, universal[key], usage))
       .filter(Boolean),
     evatSupply !== 0
       ? { key: 'evatSupply', label: 'EVAT on Gen/Trans', kind: 'derived', rate: EVAT_SUPPLY_FACTOR, amount: evatSupply }
