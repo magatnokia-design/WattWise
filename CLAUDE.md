@@ -33,11 +33,35 @@ cd functions; firebase functions:shell                       # npm run shell
 cd functions; firebase deploy --only functions               # npm run deploy
 cd functions; firebase functions:log                          # npm run logs
 
-# Android release APK (EAS quota is exhausted; this is built locally with Gradle)
+# Android release APK - GitHub Actions, NOT this laptop. Ask before running.
+gh workflow run build-apk.yml --ref main -f version=1.1.3 -f publish_release=false
+gh run watch                 # ~10 min
+```
+
+**The APK is built in CI and nowhere else.** EAS quota is exhausted until 1 Sept
+2026, and the local Gradle path was retired on 18 Aug 2026 ("lets just use
+github for now"). `.github/workflows/build-apk.yml` is `workflow_dispatch` only
+and takes two inputs: `version` (digits, e.g. `1.1.3`) and `publish_release`.
+The run produces `WattWise-v{version}.apk` as a 30-day artifact, and creates the
+GitHub Release only when `publish_release=true`.
+
+**Never dispatch this workflow on your own initiative.** Both the build and the
+release are the user's call, every time, stated explicitly - not inferred from
+"update the download link" or from having changed app code. It costs runner
+minutes and puts an installable artifact in front of testers.
+
+Releasing has a second half: bump `ANDROID_VERSION` in the **web** repo's
+`src/constants/appRelease.js` (`C:\App\WattWise-Web`) and redeploy, or the
+download button on `wattwise.site` points at a tag that does not exist. Check
+`git diff v<last>..HEAD -- src/` first - if no app code changed, a new release
+only makes users re-download ~60 MB for nothing.
+
+A local Gradle build is for debugging on this laptop only, never for a release:
+
+```powershell
 $env:ANDROID_HOME = "$env:LOCALAPPDATA\Android\Sdk"
 cd android; .\gradlew.bat assembleRelease `
   -PreactNativeArchitectures=armeabi-v7a,arm64-v8a
-# -> android/app/build/outputs/apk/release/app-release.apk
 ```
 
 `ANDROID_HOME` is not set globally on this machine and `android/local.properties`
@@ -51,8 +75,7 @@ default of all four architectures. That default ships `lib/x86` and `lib/x86_64`
 — 43.5 MB of native code no physical phone can run, only an emulator — and took
 the APK from 60.6 MB to 106.6 MB. That is not cosmetic: the APK is downloaded
 from a GitHub release onto phones, and the 106 MB transfer was stalling before it
-completed. Release builds no longer install on an x86 emulator; override the flag
-or use a debug build if one is ever needed.
+completed. The CI job fails the build outright if x86 libraries appear.
 
 There is no frontend test suite or linter configured in the root `package.json` — testing
 infrastructure exists only under `functions/`.
