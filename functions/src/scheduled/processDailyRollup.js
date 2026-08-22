@@ -76,6 +76,21 @@ async function recomputeMonthlyBudget({ db, userId, monthString, userData = {} }
   const monthBill = calculatePelcoIIIBill(monthEnergy, {
     supplyRates: userData.supplyRates || null,
     profileId: userData.rateProfileId || null,
+    // A month with no energy has nothing to track. Budget spending answers "what
+    // have these two outlets cost me", not "what does PELCO III bill a live
+    // connection" - so with nothing measured there is nothing to attribute.
+    //
+    // Without this, a brand-new account with no hub linked showed "spent P5.60"
+    // (the P5.00 metering flat plus its VAT) before it had measured anything,
+    // and Compare Months labelled that figure "measured by WattWise" while the
+    // Hub still read Not paired. It also started every new user partway toward
+    // their first budget alert.
+    //
+    // Deliberately narrower than a guard inside calculatePelcoIIIBill: an
+    // *invoice* for an empty month does still owe the flat, which
+    // invoice.test.js asserts by name. Statements charge it; a usage tracker
+    // does not.
+    includePeriodFlats: monthEnergy > 0,
   });
 
   const currentSpending = monthBill.totals.total;
