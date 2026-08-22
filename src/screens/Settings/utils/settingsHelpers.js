@@ -1,12 +1,23 @@
 // TODO: Expand when backend is ready
 
+import Constants from 'expo-constants';
+
 export const formatRate = (rate) => {
   if (!rate) return '₱0.00/kWh';
   return `₱${parseFloat(rate).toFixed(2)}/kWh`;
 };
 
+/*
+ * Read from the build rather than typed here. This returned a hardcoded
+ * 'v1.0.0' through fifteen releases, so the Settings screen and the legal text
+ * both told the user they were running 1.0.0 whatever they had installed.
+ *
+ * expo-constants exposes the version declared in app.json, which is the same
+ * value the release is named after, so the two cannot drift again.
+ */
 export const formatVersion = () => {
-  return 'v1.0.0';
+  const version = Constants?.expoConfig?.version || Constants?.manifest?.version;
+  return version ? `v${version}` : 'v?';
 };
 
 export const formatCurrency = (value, currency = '₱') => {
