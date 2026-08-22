@@ -35,6 +35,42 @@ const upsertApplianceBreakdown = (items, applianceName, energyKwh, cost, outletN
 };
 
 /**
+ * Whether this account currently has a Hub attached to it.
+ *
+ * `linkDeviceToAccount` writes `deviceId` and `device.active: true`; detaching
+ * clears `deviceId` and sets `device.active: false`. Either signal alone would
+ * do today - both are checked so a half-written detach cannot read as paired.
+ */
+const hasLinkedDevice = (userData = {}) => {
+  const deviceId = String(userData?.deviceId || '').trim();
+  if (!deviceId) return false;
+  return userData?.device?.active !== false;
+};
+
+/**
+ * Whether a nightly rollup should write anything for this account.
+ *
+ * processDailyRollup walks every user document, so an account that never linked
+ * a Hub still got a `history_daily` row every midnight. That row fired
+ * handleDailyReceiptEmails, which told the user "Daily summary ready - you used
+ * 0.000 kWh, about PHP 0.00" and emailed them the same. Nothing was measuring,
+ * so there was nothing to summarise.
+ *
+ * Both conditions have to hold before a night is skipped, and each is load
+ * bearing:
+ *
+ * - Measured energy alone is not enough to skip on. A paired Hub that genuinely
+ *   drew nothing still earns its zero row, or History shows a hole on any day
+ *   the room sat empty and the month loses its continuity.
+ * - Pairing alone is not enough either. A Hub unlinked halfway through a day
+ *   still measured the first half, and that reading has to land somewhere.
+ */
+const shouldRollUpUser = ({ userData = {}, totalEnergy = 0 } = {}) => {
+  if (Number(totalEnergy) > 0) return true;
+  return hasLinkedDevice(userData);
+};
+
+/**
  * Rewrites `budget/{month}` from that month's daily documents.
  *
  * Recomputed from the daily documents rather than added to a running total:
@@ -181,6 +217,18 @@ async function processDailyRollup() {
           dateString
         );
         const totalEnergy = outlet1Energy + outlet2Energy;
+
+        // Nothing linked and nothing measured: write no row, so no receipt
+        // trigger fires and no budget or invoice is opened for an account that
+        // has never drawn a watt. See shouldRollUpUser for why both halves.
+        if (!shouldRollUpUser({ userData, totalEnergy })) {
+          logger.info('Daily rollup skipped: no Hub linked and nothing measured', {
+            userId,
+            date: dateString,
+          });
+          return;
+        }
+
         const outlet1Name = outlet1Doc.exists
           ? String(outlet1Doc.data().applianceName || 'Outlet 1').trim()
           : 'Outlet 1';
@@ -351,4 +399,9 @@ async function processDailyRollup() {
   }
 }
 
-module.exports = { processDailyRollup, recomputeMonthlyBudget };
+module.exports = {
+  processDailyRollup,
+  recomputeMonthlyBudget,
+  shouldRollUpUser,
+  hasLinkedDevice,
+};
