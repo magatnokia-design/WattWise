@@ -46,17 +46,35 @@ static const int OUTLET_1_RELAY_PIN = RELAY_CH1_PIN;
 static const int OUTLET_2_RELAY_PIN = RELAY_CH2_PIN;
 
 // PZEM UART wiring (one PZEM per outlet)
-// PZEM1 => Outlet 1 monitoring
+// PZEM1 = the meter on RX2/TX2. On this bench that is OUTLET 2 (see cross below).
 static const int PZEM_1_RX_PIN = 16; // ESP32 RX from PZEM1 TX
 static const int PZEM_1_TX_PIN = 17; // ESP32 TX to   PZEM1 RX
-// PZEM2 => Outlet 2 monitoring
+// PZEM2 = the meter on D26/D27. On this bench that is OUTLET 1 (see cross below).
 static const int PZEM_2_RX_PIN = 26; // ESP32 RX from PZEM2 TX
 static const int PZEM_2_TX_PIN = 27; // ESP32 TX to   PZEM2 RX
 static const uint32_t PZEM_UART_BAUD = 9600;
 
 // Logical outlet -> PZEM channel mapping.
-// Sensor wiring is crossed on this build, so map logical outlets to the
-// opposite PZEM channels to keep dashboard readings aligned with outlet labels.
+//
+// CROSSED, and it must stay crossed. The loom is wired this way on the bench:
+//
+//   outlet 1's meter -> ESP32 D26 / D27  (GPIO26/27, which this file calls PZEM2)
+//   outlet 2's meter -> ESP32 RX2 / TX2  (GPIO16/17, which this file calls PZEM1)
+//
+// So outlet 1 must read channel 2 and outlet 2 must read channel 1. The names
+// PZEM1/PZEM2 here mean "the meter on this pin pair", not "the meter on this
+// outlet" - that is the whole reason this trips people up.
+//
+// These were briefly set straight (1/1, 2/2) on 21 Aug 2026 on the assumption
+// that the rebuild after the relay-board failure had also redone the PZEM data
+// lines. It had not - only the AC side was rebuilt - and the result was each
+// outlet reporting the other's load. Restored 22 Aug 2026 after the owner
+// physically traced both pairs.
+//
+// Do not "clean this up" again without first confirming with your own eyes
+// which ESP32 pins each meter's RX/TX actually land on. The symptom of getting
+// it wrong is specific: both outlets read plausible voltage, but each shows the
+// other's watts. Check the [MAP] line at boot against the loom.
 static const uint8_t OUTLET_1_PZEM_CHANNEL = 2;
 static const uint8_t OUTLET_2_PZEM_CHANNEL = 1;
 
@@ -89,7 +107,7 @@ const IPAddress WIFI_DNS_PRIMARY(1, 1, 1, 1);
 const IPAddress WIFI_DNS_SECONDARY(8, 8, 8, 8);
 
 // Controller metadata
-static const char* FIRMWARE_VERSION = "relay-cloud-dualpzem-1.3.3";
+static const char* FIRMWARE_VERSION = "relay-cloud-dualpzem-1.5.1";
 
 bool relay1On = false;
 bool relay2On = false;
@@ -345,21 +363,49 @@ float sanitizeMetric(float value) {
   return value;
 }
 
+// Last cumulative meter total each PZEM reported successfully. A failed read
+// must not publish 0 kWh: the server re-baselines when the counter goes
+// backwards, then books the meter's whole lifetime total as one sample's
+// consumption the moment the read recovers.
+float lastGoodEnergyKwh1 = NAN;
+float lastGoodEnergyKwh2 = NAN;
+
 OutletTelemetry readOutletTelemetry(uint8_t outletNumber) {
   PZEM004Tv30* meter = meterForOutlet(outletNumber);
 
+  // Only the FIRST of these four calls actually talks to the meter. The library
+  // stamps its _lastRead before attempting the read, so the other three land
+  // inside UPDATE_TIME (200 ms) and return cached values *with success* - even
+  // when that read failed and the first getter returned NaN.
+  //
+  // So the test below is || and not &&. Requiring all four to be NaN can never
+  // fire: three of them are stale cache. On 22 Aug 2026 that published outlet2
+  // as 0.0 V with 16.5 W - a fossil of the last live sample, physically
+  // impossible together - which held a false stuck-relay alarm on for hours.
   float voltage = meter->voltage();
   float current = meter->current();
   float power = meter->power();
   float energy = meter->energy();
 
-  bool meterReachable = !(isnan(voltage) && isnan(current) && isnan(power) && isnan(energy));
+  bool meterReachable = !(isnan(voltage) || isnan(current) || isnan(power) || isnan(energy));
+
+  float* lastGoodEnergy = (outletNumber == 1) ? &lastGoodEnergyKwh1 : &lastGoodEnergyKwh2;
 
   OutletTelemetry telemetry;
-  telemetry.voltage = sanitizeMetric(voltage);
-  telemetry.current = sanitizeMetric(current);
-  telemetry.power = sanitizeMetric(power);
-  telemetry.energy = sanitizeMetric(energy);
+  if (meterReachable) {
+    telemetry.voltage = sanitizeMetric(voltage);
+    telemetry.current = sanitizeMetric(current);
+    telemetry.power = sanitizeMetric(power);
+    telemetry.energy = sanitizeMetric(energy);
+    *lastGoodEnergy = telemetry.energy;
+  } else {
+    // Nothing was measured this cycle. Report no draw rather than the cache,
+    // and hold the last known meter total so the server's delta is zero.
+    telemetry.voltage = 0.0f;
+    telemetry.current = 0.0f;
+    telemetry.power = 0.0f;
+    telemetry.energy = isnan(*lastGoodEnergy) ? 0.0f : *lastGoodEnergy;
+  }
   telemetry.meterReachable = meterReachable;
 
   return telemetry;
@@ -1446,7 +1492,7 @@ void setup() {
   Serial.println("Serial commands: help");
   Serial.println("========================================");
   Serial.println("[MAP] Control: outlet1->relay1, outlet2->relay2");
-  Serial.println("[MAP] Sensor: outlet1->PZEM2, outlet2->PZEM1");
+  Serial.println("[MAP] Sensor: outlet1->PZEM2, outlet2->PZEM1  (loom is crossed)");
   Serial.print("[MAP] Outlet1 relayCH=");
   Serial.print(relayChannelForPin(OUTLET_1_RELAY_PIN));
   Serial.print(" pin=");
