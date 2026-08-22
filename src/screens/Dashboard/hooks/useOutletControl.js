@@ -74,7 +74,20 @@ const buildOutletMetrics = (outlet = {}, isOutletOn = false, runtimeState = {}) 
   const hasFreshTelemetry = runtimeState.hasFreshTelemetry === true;
 
   if (!hasFreshTelemetry) {
-    return { ...DEFAULT_OUTLET_METRICS };
+    // The same reasoning as the switched-off case below, and the same mistake:
+    // this branch zeroed everything, `energy` included.
+    //
+    // Stale telemetry means the *instantaneous* readings cannot be trusted -
+    // volts, amps and watts from an hour ago are not what the outlet is doing
+    // now. The day's accumulated kWh is not an instantaneous reading. It is a
+    // running total, and the last figure the hub reported is still the last
+    // thing that was true about it.
+    //
+    // Zeroing it meant a hub that was simply powered down made every card read
+    // 0.000 kWh, as though the day had never happened - and the total came back
+    // when the hub did, which is the same alarming jump the fix below removed.
+    // Found 22 Aug 2026 while explaining that fix, one branch further down.
+    return { ...DEFAULT_OUTLET_METRICS, energy };
   }
 
   // If backend status is briefly stale but live current/power is already present,
