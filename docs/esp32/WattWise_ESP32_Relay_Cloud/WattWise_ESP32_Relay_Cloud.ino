@@ -1506,10 +1506,27 @@ void setup() {
   Serial.print(" meter=PZEM");
   Serial.println(OUTLET_2_PZEM_CHANNEL);
 
+  // Level first, mode second. pinMode(OUTPUT) latches the pin LOW, and LOW is
+  // ON for this active-LOW board, so setting the mode before the level drove
+  // both coils for the gap between the two calls - two relays energising into
+  // the same instant the radio is being brought up.
+  //
+  // Writing the pin while it is still an input sets the output register, so the
+  // pin drives HIGH the moment it becomes an output and never passes through
+  // ON. The second pair re-asserts it, which costs nothing and does not depend
+  // on the core preserving the latch across the mode change.
+  //
+  // This does NOT cover the window before setup() runs at all. From power-on
+  // until this line the pins are floating inputs, and an active-LOW board reads
+  // a floating input as ON. Closing that needs a pull-up to the relay board's
+  // logic supply on each input line; it cannot be done in software, because no
+  // software is running yet.
+  digitalWrite(RELAY_CH1_PIN, HIGH);
+  digitalWrite(RELAY_CH2_PIN, HIGH);
+
   pinMode(RELAY_CH1_PIN, OUTPUT);
   pinMode(RELAY_CH2_PIN, OUTPUT);
 
-  // Default OFF for active LOW relay board.
   digitalWrite(RELAY_CH1_PIN, HIGH);
   digitalWrite(RELAY_CH2_PIN, HIGH);
 
