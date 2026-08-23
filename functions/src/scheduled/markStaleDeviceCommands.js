@@ -6,6 +6,12 @@ const MAX_STALE_COMMANDS_PER_USER = 30;
 
 const TERMINAL_ACK_STATUS = new Set(['executed', 'failed', 'rejected', 'timeout']);
 
+// What deviceCommandDispatcher writes into delivery.status when it queues a
+// command. Kept as a named constant because the sweep below now filters on it:
+// if the dispatcher's literal ever changes, this one has to change with it or
+// the sweep silently stops finding anything.
+const PENDING_DELIVERY_STATUS = 'pending';
+
 async function markStaleDeviceCommands() {
   const db = admin.firestore();
   const now = Date.now();
@@ -22,7 +28,26 @@ async function markStaleDeviceCommands() {
       const userId = userDoc.id;
       const commandsRef = db.collection(`users/${userId}/device_commands`);
 
+      // Only commands still waiting on the device.
+      //
+      // Without this filter the query fetched the newest 30 commands older than
+      // the cutoff on every run, whatever state they were in, and the loop below
+      // discarded nearly all of them as already terminal. Cheap while a user has
+      // little history and permanently expensive afterwards: once an account
+      // holds 30+ commands it costs a flat 30 reads a minute, about 173,000 reads
+      // a day across four accounts, which is over the free allowance on its own.
+      //
+      // Safe to filter on. deviceCommandDispatcher has written
+      // delivery.status: 'pending' since the collection's first commit
+      // (53c64bc), and it is the only thing that creates these documents - the
+      // ack and poll handlers only update ones that already exist - so no
+      // command can be missing the field and be skipped by this.
+      //
+      // Requires the composite index (delivery.status ASC, issuedAtMs DESC) in
+      // firestore.indexes.json. Deploy the index and let it finish building
+      // before deploying this function, or every run throws.
       const staleCandidates = await commandsRef
+        .where('delivery.status', '==', PENDING_DELIVERY_STATUS)
         .where('issuedAtMs', '<=', cutoffMs)
         .orderBy('issuedAtMs', 'desc')
         .limit(MAX_STALE_COMMANDS_PER_USER)
