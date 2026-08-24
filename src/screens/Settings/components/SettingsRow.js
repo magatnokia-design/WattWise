@@ -5,6 +5,7 @@ import {
   StyleSheet,
   TouchableOpacity,
   Switch,
+  ActivityIndicator,
 } from 'react-native';
 import { COLORS } from '../../../constants/colors';
 
@@ -19,13 +20,21 @@ const SettingsRow = ({
   isDestructive,
   showArrow,
   disabled,
+  // An action is running. Shows a spinner in place of the arrow and stops the
+  // row being tapped again while it does.
+  busy,
 }) => {
+  // `disabled` used to select a dimmed style and nothing else - the
+  // TouchableOpacity computed its own disabled state from whether an onPress
+  // existed, so a row could look unavailable and still fire on every tap.
+  const isInert = disabled || busy || (!onPress && !isSwitch);
+
   return (
     <TouchableOpacity
-      style={[styles.row, disabled && styles.rowDisabled]}
+      style={[styles.row, (disabled || busy) && styles.rowDisabled]}
       onPress={onPress}
-      activeOpacity={onPress ? 0.7 : 1}
-      disabled={!onPress && !isSwitch}
+      activeOpacity={onPress && !isInert ? 0.7 : 1}
+      disabled={isInert}
     >
       {/* Left Icon */}
       <View style={[styles.iconContainer, { backgroundColor: isDestructive ? '#FEF2F2' : COLORS.primary + '15' }]}>
@@ -42,7 +51,12 @@ const SettingsRow = ({
         {value ? (
           <Text style={styles.value}>{value}</Text>
         ) : null}
-        {isSwitch ? (
+        {busy ? (
+          <ActivityIndicator
+            size="small"
+            color={isDestructive ? COLORS.error : COLORS.primary}
+          />
+        ) : isSwitch ? (
           <Switch
             value={switchValue || false}
             onValueChange={onSwitchChange}

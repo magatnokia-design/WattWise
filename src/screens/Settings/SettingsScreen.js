@@ -13,6 +13,7 @@ import * as Notifications from 'expo-notifications';
 import { useFocusEffect } from '@react-navigation/native';
 import { COLORS } from '../../constants/colors';
 import AppDialog from '../../components/common/AppDialog';
+import { OfflineState } from '../../components/common/OfflineNotice';
 import SettingsRow from './components/SettingsRow';
 import SupplyRateModal from './components/SupplyRateModal';
 import ESP32DeviceModal from './components/ESP32DeviceModal';
@@ -89,11 +90,15 @@ const SettingsScreen = ({ navigation }) => {
   // Which saved appliance is being renamed, or null. Holds the label rather than
   // a boolean so the modal knows what it is editing.
   const [renamingAppliance, setRenamingAppliance] = useState(null);
+  // Sign-out is not instant - it clears this device's push token first - so the
+  // row reports that it is working rather than appearing to have ignored the tap.
+  const [isSigningOut, setIsSigningOut] = useState(false);
   const {
     settings,
     savedAppliances,
     loading,
     error,
+    showOfflineState,
     fetchSettings,
     updateSupplyRates,
     updateNotifications,
@@ -226,9 +231,31 @@ const SettingsScreen = ({ navigation }) => {
       cancelLabel: 'Stay',
       onConfirm: async () => {
         setDialog(null);
+        // Signing out unregisters this phone's push token first, which is a
+        // round trip to Firestore. The dialog closes immediately, so without
+        // this the user was returned to an unchanged Settings screen for a
+        // second or more with nothing to show the tap had registered - and
+        // nothing stopping them tapping again.
+        setIsSigningOut(true);
         try {
-          await authService.logout();
+          const result = await authService.logout();
+          // `logout` reports failure by returning, not by throwing, so the
+          // catch below never saw one: a failed sign-out silently did nothing
+          // at all. This is the branch that actually fires.
+          if (!result?.success) {
+            setIsSigningOut(false);
+            setDialog({
+              icon: '⚠️',
+              title: 'Could not sign out',
+              message: 'Something went wrong. Check your connection and try again.',
+              tone: 'danger',
+            });
+          }
+          // On success the auth listener unmounts this screen, so the flag is
+          // deliberately left set - clearing it would flash the row back to
+          // normal on the way out.
         } catch (err) {
+          setIsSigningOut(false);
           setDialog({
             icon: '⚠️',
             title: 'Could not sign out',
@@ -464,8 +491,26 @@ const SettingsScreen = ({ navigation }) => {
 
         {/* State first, controls after. Device health is what someone opens this
             section to check, and it used to be a value squeezed onto the right
-            edge of one row among four identical ones. */}
-        <HubStatusCard settings={settings} />
+            edge of one row among four identical ones.
+
+            Replaced entirely while unreadable: this card's whole job is to
+            report the hub's state, and with nothing read it has no state to
+            report - it would say "Not linked", which is a definite answer to a
+            question that was never asked. */}
+        {showOfflineState ? (
+          <OfflineState
+            compact
+            title="Can't check your Hub"
+            body={
+              'Your Hub and its settings are safe — the app just needs a ' +
+              'connection to read them. Check your wi-fi or mobile data, then ' +
+              'pull down to refresh.'
+            }
+            onRetry={fetchSettings}
+          />
+        ) : (
+          <HubStatusCard settings={settings} />
+        )}
         <SectionCard>
           {/* Pairing is a single action: scan the QR on the unit. Scanning
               again simply re-pairs, which is why there is no unlink step. */}
@@ -508,7 +553,18 @@ const SettingsScreen = ({ navigation }) => {
         {/* Saved Appliances */}
         <SectionHeader title="Saved Appliances" />
         <SectionCard>
-          {savedAppliances.length === 0 ? (
+          {/* Offline first: an unread list is also length 0, and telling an
+              owner who has trained four appliances that they have none would
+              invite them to start over. */}
+          {showOfflineState ? (
+            <View style={styles.emptyAppliances}>
+              <Text style={styles.emptyAppliancesText}>
+                Your saved appliances can&rsquo;t be loaded without a connection.
+                They are still here — check your wi-fi or mobile data and pull
+                down to refresh.
+              </Text>
+            </View>
+          ) : savedAppliances.length === 0 ? (
             <View style={styles.emptyAppliances}>
               <Text style={styles.emptyAppliancesText}>
                 No saved appliances yet. Confirm an appliance name on the Dashboard
@@ -613,8 +669,9 @@ const SettingsScreen = ({ navigation }) => {
         <SectionCard>
           <SettingsRow
             icon="🚪"
-            label="Logout"
+            label={isSigningOut ? 'Signing out…' : 'Logout'}
             isDestructive
+            busy={isSigningOut}
             onPress={handleLogout}
           />
         </SectionCard>

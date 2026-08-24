@@ -4,6 +4,7 @@ import { outletService, userService } from '../../../services/firebase';
 import { auth } from '../../../services/firebase/config';
 import { onAuthStateChanged } from 'firebase/auth';
 import { calculatePelcoIIIBill, marginalRatePerKwh } from '../../../utils/billing';
+import { isConnectivityError } from '../../../utils/connectivity';
 import {
   deriveOutletRuntimeState,
   resolveSwitchingTo,
@@ -281,9 +282,32 @@ export const useOutletControl = () => {
   // Starts true so the UI can show a placeholder instead of briefly rendering
   // "Not set" before the first Firestore snapshot arrives.
   const [isLoadingOutlets, setIsLoadingOutlets] = useState(true);
+  // Whether a read has ever actually come back. Not the inverse of the flag
+  // above: with no network the read throws, and clearing the loading flag on
+  // its way out used to leave "finished loading, holding nothing", which every
+  // empty state in the app then read as "this account is new".
+  const [hasLoadedOutletsOnce, setHasLoadedOutletsOnce] = useState(false);
+  const [outletsUnreachable, setOutletsUnreachable] = useState(false);
   const [rateProfileId, setRateProfileId] = useState(null);
   const [supplyRates, setSupplyRates] = useState(null);
   const [hasSupplyRates, setHasSupplyRates] = useState(true);
+
+  /** A read came back. The only thing that entitles the UI to claim emptiness. */
+  const markOutletsLoaded = useCallback(() => {
+    setHasLoadedOutletsOnce(true);
+    setOutletsUnreachable(false);
+    setIsLoadingOutlets(false);
+  }, []);
+
+  /**
+   * A read did not come back. Ends the loading state without conceding that
+   * the account is empty, so the setup prompt stays hidden and the screen can
+   * say it is out of contact instead.
+   */
+  const markOutletsFailed = useCallback((failure) => {
+    setOutletsUnreachable(isConnectivityError(failure));
+    setIsLoadingOutlets(false);
+  }, []);
 
   /*
    * A tab navigator keeps every screen mounted, and React Native runs all of
@@ -448,9 +472,18 @@ export const useOutletControl = () => {
         setPendingToggle({ 1: null, 2: null });
         setPendingRename({ 1: null, 2: null });
         setRateProfileId(null);
+        // Back to a clean slate rather than "loaded and empty" - the next user
+        // to sign in must do their own first read before anything on screen is
+        // entitled to say their account is empty.
+        setHasLoadedOutletsOnce(false);
+        setOutletsUnreachable(false);
         setIsLoadingOutlets(false);
         return;
       }
+
+      // A new session starts unknown again, whatever the previous one settled on.
+      setIsLoadingOutlets(true);
+      setOutletsUnreachable(false);
 
       // Rate profile drives the live cost estimate; a failure here just leaves
       // the estimate on the default profile rather than blocking the dashboard.
@@ -464,24 +497,34 @@ export const useOutletControl = () => {
         })
         .catch((error) => console.warn('Could not load rate profile:', error?.message));
 
+      // Deliberately no `finally`. It runs on both exits, so it reported the
+      // load as finished even when the read had thrown - and an unreachable
+      // Firestore then presented as an account with no hub, no history and no
+      // schedules. The two exits have to be told apart, which is the one thing
+      // `finally` cannot do.
       try {
         const result = await outletService.getOutlets(user.uid);
-        if (result.success && result.data.length > 0) {
+        if (result.success) {
+          // An account that genuinely holds no outlets is a real, empty answer:
+          // the forEach is a no-op and the load still counts as having landed.
           result.data.forEach((outlet) => applyOutletData(outlet));
+          markOutletsLoaded();
+        } else {
+          markOutletsFailed(result);
         }
-      } finally {
-        setIsLoadingOutlets(false);
+      } catch (error) {
+        markOutletsFailed(error);
       }
 
       unsubscribeOutlets = outletService.subscribeToOutlets(
         user.uid,
         (outlets) => {
           outlets.forEach((outlet) => applyOutletData(outlet));
-          setIsLoadingOutlets(false);
+          markOutletsLoaded();
         },
         (error) => {
           console.error('Outlet subscription error:', error);
-          setIsLoadingOutlets(false);
+          markOutletsFailed(error);
         }
       );
     });
@@ -490,7 +533,7 @@ export const useOutletControl = () => {
       if (unsubscribeOutlets) unsubscribeOutlets();
       unsubscribeAuth();
     };
-  }, [applyOutletData]);
+  }, [applyOutletData, markOutletsLoaded, markOutletsFailed]);
 
   // Toggle outlet ON/OFF
   const toggleOutlet = useCallback(async (outletNumber, newStatus) => {
@@ -624,9 +667,20 @@ export const useOutletControl = () => {
     // Distinct from `hasReading`, which goes false whenever telemetry merely
     // goes quiet. A dropped wi-fi connection must not be presented as "you have
     // not set up your device".
-    hasNeverReported: !isLoadingOutlets
+    //
+    // Gated on `hasLoadedOutletsOnce` rather than on `!isLoadingOutlets`, which
+    // is what let that happen anyway: with no network the read threw, the
+    // loading flag was cleared on the way out regardless, and the two absent
+    // deviceIds below - absent because nothing had been read, not because
+    // nothing exists - satisfied all three terms. This now requires a read that
+    // actually returned before the claim can be made.
+    hasNeverReported: hasLoadedOutletsOnce
       && !outletDocs[1]?.deviceId
       && !outletDocs[2]?.deviceId,
+    // Nothing was read and the phone could not reach the backend. Screens show
+    // their offline state on this rather than their empty state.
+    outletsUnreachable: outletsUnreachable && !hasLoadedOutletsOnce,
+    hasLoadedOutletsOnce,
     totalEnergyKwh,
     totalPowerW,
     estimatedCost,

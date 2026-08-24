@@ -4,6 +4,7 @@ import { historyService, outletService, userService } from '../../../services/fi
 import { auth } from '../../../services/firebase/config';
 import { buildLiveTodayEntry, withLiveToday } from '../../../utils/liveUsage';
 import { formatDate, formatTime, getTimestampMs, splitDailyDate } from '../utils/historyHelpers';
+import { useLoadOutcome } from '../../../hooks/useLoadTracker';
 
 const toNumber = (value) => {
   const parsed = Number(value);
@@ -102,6 +103,9 @@ export const useHistory = () => {
   const [lastDoc, setLastDoc] = useState(null);
   const [hasMore, setHasMore] = useState(true);
   const lastDocRef = useRef(null);
+  // An empty log and an unreadable one are the same zero rows on screen. This
+  // is what separates "you have no activity" from "I could not fetch any".
+  const load = useLoadOutcome();
 
   // Live telemetry, so today's row moves as usage accumulates.
   useEffect(() => {
@@ -172,14 +176,17 @@ export const useHistory = () => {
       setLastDoc(result.lastDoc);
       lastDocRef.current = result.lastDoc;
       setHasMore(result.hasMore);
+      load.succeeded();
 
     } catch (err) {
       setError(err.message);
+      // Ends the load without asserting the log is empty.
+      load.failed(err);
       console.error('Error fetching activity logs:', err);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [load.succeeded, load.failed]);
 
   // Subscribe to activity logs in real time (latest page only).
   const subscribeActivityLogs = useCallback((filters = {}, limitCount = 20) => {
@@ -201,14 +208,16 @@ export const useHistory = () => {
         lastDocRef.current = null;
         setLastDoc(null);
         setLoading(false);
+        load.succeeded();
       },
       (subscriptionError) => {
         setError(subscriptionError?.message || 'Failed to subscribe to activity logs');
         setLoading(false);
+        load.failed(subscriptionError);
       },
       limitCount
     );
-  }, []);
+  }, [load.succeeded, load.failed]);
 
   // Fetch usage history (daily summaries)
   const fetchUsageHistory = useCallback(async (startDate, endDate) => {
@@ -232,13 +241,17 @@ export const useHistory = () => {
 
       setStoredUsage(result.data);
       setUsageRange({ startDate, endDate });
+      load.succeeded();
     } catch (err) {
       setError(err.message);
+      // A failed range read must not price the header at zero pesos as though
+      // the user had genuinely consumed nothing over it.
+      load.failed(err);
       console.error('Error fetching usage history:', err);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [load.succeeded, load.failed]);
 
   // Today has no rolled-up document until midnight Manila, so it is assembled
   // from live outlet telemetry and merged in here. Without this the current day
@@ -272,6 +285,10 @@ export const useHistory = () => {
     // were priced with - the profile AND the user's own Block 1 figures.
     rateProfileId,
     supplyRates,
+    // "No Activity Yet", and the zeroed Records / kWh / Cost header, are all
+    // claims about the account. They need a read that came back.
+    showEmptyState: load.showEmptyState,
+    showOfflineState: load.showOfflineState,
     fetchActivityLogs,
     subscribeActivityLogs,
     fetchUsageHistory,

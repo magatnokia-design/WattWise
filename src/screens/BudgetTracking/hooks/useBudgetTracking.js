@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { budgetService } from '../../../services/firebase';
 import { auth } from '../../../services/firebase/config';
+import { useLoadOutcome } from '../../../hooks/useLoadTracker';
 
 const useBudgetTracking = () => {
   const [userId, setUserId] = useState(null);
@@ -13,6 +14,8 @@ const useBudgetTracking = () => {
   const [projectedCost, setProjectedCost] = useState(0);
   const [budgetHistory, setBudgetHistory] = useState([]);
   const [loading, setLoading] = useState(false);
+  // A zero budget and an unread one are not the same claim.
+  const load = useLoadOutcome();
 
   // Get current month details
   const now = new Date();
@@ -69,13 +72,17 @@ const useBudgetTracking = () => {
       const historyResult = await budgetService.getBudgetHistory(userId, 3);
       if (historyResult.success) {
         setBudgetHistory(historyResult.data);
+        load.succeeded();
+      } else {
+        load.failed(historyResult);
       }
     } catch (error) {
       console.error('Error fetching budget data:', error);
+      load.failed(error);
     } finally {
       setLoading(false);
     }
-  }, [currentDay, daysInMonth, userId]);
+  }, [currentDay, daysInMonth, userId, load.succeeded, load.failed]);
 
   useEffect(() => {
     if (!userId) return;
@@ -107,6 +114,8 @@ const useBudgetTracking = () => {
   }, [fetchBudgetData]);
 
   return {
+    showEmptyState: load.showEmptyState,
+    showOfflineState: load.showOfflineState,
     monthlyBudget,
     currentSpending,
     outlet1Spending,

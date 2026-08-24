@@ -26,6 +26,8 @@ import { RateNotice } from '../../components/common/RateNotice';
 import { WebAppNotice } from '../../components/common/WebAppNotice';
 import { WEB_APP_LINKS } from '../../constants/webApp';
 import { useDismissibleNotice } from '../../hooks/useDismissibleNotice';
+import { useLoadOutcome } from '../../hooks/useLoadTracker';
+import { OfflineBanner } from '../../components/common/OfflineNotice';
 
 const { width } = Dimensions.get('window');
 
@@ -418,6 +420,9 @@ export const AnalyticsScreen = ({ navigation }) => {
   const showRateNotice = !hasSupplyRates && rateNotice.visible;
   const [budget, setBudget] = useState({ monthlyBudget: 0, currentSpending: 0 });
   const [loading, setLoading] = useState(false);
+  // A flat chart and a zero bill are measurements. Neither may be drawn from a
+  // range that could not be read.
+  const load = useLoadOutcome();
   const [outlets, setOutlets] = useState([]);
   // Insights are dismissed by signature, so an insight returns when the figures
   // it quotes change. Session-scoped on purpose: a new day should start clean.
@@ -517,10 +522,16 @@ export const AnalyticsScreen = ({ navigation }) => {
           const dailyResult = await historyService.getDailyUsage(user.uid, {}, null, 1);
           if (!active) return;
 
-          setFallbackDaily(
-            dailyResult.success && dailyResult.data.length ? dailyResult.data[0] : null
-          );
+          if (!dailyResult.success) {
+            // Leaves the previous figure alone rather than nulling it, which
+            // renders as a measured zero for today.
+            load.failed(dailyResult);
+            return;
+          }
+
+          setFallbackDaily(dailyResult.data.length ? dailyResult.data[0] : null);
           setRangeEntries([]);
+          load.succeeded();
           return;
         }
 
@@ -532,9 +543,18 @@ export const AnalyticsScreen = ({ navigation }) => {
         );
         if (!active) return;
 
-        setRangeEntries(rangeResult.success ? rangeResult.data : []);
+        // An empty array here is a real answer - the range held no usage - and
+        // was previously also what a failed read produced, so an unreachable
+        // backend drew a flat chart and a zero bill for the month.
+        if (rangeResult.success) {
+          setRangeEntries(rangeResult.data);
+          load.succeeded();
+        } else {
+          load.failed(rangeResult);
+        }
       } catch (error) {
         console.error('Error loading analytics:', error);
+        load.failed(error);
       } finally {
         if (active) setLoading(false);
       }
@@ -757,6 +777,15 @@ export const AnalyticsScreen = ({ navigation }) => {
             url={WEB_APP_LINKS.analytics}
             onDismiss={webNotice.dismiss}
           />
+        )}
+
+        {/* A banner rather than replacing the charts: the "No signal" state
+            already on this screen means the Hub stopped reporting, which is a
+            different fact from the phone being unable to reach Firestore. Both
+            can be true at once, and conflating them would tell someone their
+            hardware had failed when their wi-fi had. */}
+        {load.showOfflineState && (
+          <OfflineBanner message="No connection — totals and charts can't be loaded right now." />
         )}
 
         {/* What is happening right now, straight from live telemetry. */}

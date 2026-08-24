@@ -2,12 +2,16 @@ import { useState, useCallback, useEffect } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { scheduleService } from '../../../services/firebase';
 import { auth } from '../../../services/firebase/config';
+import { useLoadOutcome } from '../../../hooks/useLoadTracker';
 
 export const useSchedule = () => {
   const [userId, setUserId] = useState(null);
   const [schedules, setSchedules] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  // `schedules` being empty is not on its own evidence that the user has no
+  // timers - it is also what an unread collection looks like. This says which.
+  const load = useLoadOutcome();
 
   // Track auth changes so listeners attach even when user loads after mount.
   useEffect(() => {
@@ -36,10 +40,12 @@ export const useSchedule = () => {
       (schedulesData) => {
         setSchedules(schedulesData);
         setLoading(false);
+        load.succeeded();
       },
       (err) => {
         setError(err.message);
         setLoading(false);
+        load.failed(err);
         console.error('Schedule subscription error:', err);
       }
     );
@@ -62,13 +68,18 @@ export const useSchedule = () => {
       }
 
       setSchedules(result.data);
+      load.succeeded();
     } catch (err) {
       setError(err.message);
+      // Ends the load without conceding that the user has no timers.
+      load.failed(err);
       console.error('Error fetching schedules:', err);
     } finally {
       setLoading(false);
     }
-  }, [userId]);
+    // The individual callbacks, not `load` - the hook returns a fresh object
+    // each render, so depending on it would rebuild this callback every time.
+  }, [userId, load.succeeded, load.failed]);
 
   // Add schedule
   const addSchedule = useCallback(async (scheduleData) => {
@@ -137,6 +148,10 @@ export const useSchedule = () => {
     schedules,
     loading,
     error,
+    // "No Timers Yet" is a claim about the account and needs a read that
+    // returned; `showOfflineState` covers the case where none did.
+    showEmptyState: load.showEmptyState,
+    showOfflineState: load.showOfflineState,
     fetchSchedules,
     addSchedule,
     deleteSchedule,

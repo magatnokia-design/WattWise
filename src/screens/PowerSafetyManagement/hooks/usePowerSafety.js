@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { safetyService } from '../../../services/firebase';
 import { auth } from '../../../services/firebase/config';
+import { useLoadOutcome } from '../../../hooks/useLoadTracker';
 
 // Two of the backend's 15s reading-write intervals, plus room for a slow
 // round trip. Long enough that a healthy device is never called stale between
@@ -30,6 +31,8 @@ const usePowerSafety = () => {
   const [protectionEnabled, setProtectionEnabled] = useState(true);
   const [alertHistory, setAlertHistory] = useState([]);
   const [loading, setLoading] = useState(false);
+  // An empty alert history is a safety claim. It needs a read that returned.
+  const load = useLoadOutcome();
 
   const applySafetyData = useCallback((safetyData) => {
     // Readings are only meaningful if the hardware wrote them recently.
@@ -83,13 +86,17 @@ const usePowerSafety = () => {
       const alertsResult = await safetyService.getAlertHistory(resolvedUserId, 10);
       if (alertsResult.success) {
         setAlertHistory(alertsResult.data);
+        load.succeeded();
+      } else {
+        load.failed(alertsResult);
       }
     } catch (error) {
       console.error('Error fetching safety data:', error);
+      load.failed(error);
     } finally {
       setLoading(false);
     }
-  }, [applySafetyData, userId]);
+  }, [applySafetyData, userId, load.succeeded, load.failed]);
 
   // Load safety data with real-time listener once auth resolves.
   useEffect(() => {
@@ -175,6 +182,8 @@ const usePowerSafety = () => {
   }, [fetchSafetyData]);
 
   return {
+    showEmptyState: load.showEmptyState,
+    showOfflineState: load.showOfflineState,
     safetyStage,
     readingsAreStale,
     outlet1Status,

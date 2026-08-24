@@ -9,6 +9,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { COLORS } from '../../../constants/colors';
+import { OfflineState } from '../../../components/common/OfflineNotice';
 import {
   describeLogDelivery,
   describeLogSource,
@@ -88,7 +89,15 @@ const ActivityLogItem = ({ item }) => {
   );
 };
 
-const ActivityLog = ({ logs = EMPTY_LOGS, loading = false, hasMore = false, onLoadMore }) => {
+const ActivityLog = ({
+  logs = EMPTY_LOGS,
+  loading = false,
+  hasMore = false,
+  onLoadMore,
+  // True only when nothing could be read. Defaults false so the component
+  // behaves exactly as before anywhere it is rendered without the prop.
+  showOfflineState = false,
+}) => {
   const renderItem = useCallback(({ item }) => (
     <ActivityLogItem item={item} />
   ), []);
@@ -105,6 +114,20 @@ const ActivityLog = ({ logs = EMPTY_LOGS, loading = false, hasMore = false, onLo
       );
     }
 
+    // Checked before the empty state: an unread log looks identical to an
+    // empty one from here, and only this branch knows which it is.
+    if (showOfflineState) {
+      return (
+        <OfflineState
+          compact
+          body={
+            'Your activity is safe — the app just needs a connection to load ' +
+            'it. Check your wi-fi or mobile data, then try again.'
+          }
+        />
+      );
+    }
+
     return (
       <View style={styles.emptyContainer}>
         <Text style={styles.emptyIcon}>📋</Text>
@@ -112,7 +135,7 @@ const ActivityLog = ({ logs = EMPTY_LOGS, loading = false, hasMore = false, onLo
         <Text style={styles.emptySub}>Outlet ON/OFF activity will appear here</Text>
       </View>
     );
-  }, [loading]);
+  }, [loading, showOfflineState]);
 
   const renderFooter = useCallback(() => {
     if (!hasMore || logs.length === 0) return null;
