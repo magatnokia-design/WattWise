@@ -20,6 +20,7 @@ async function markStaleDeviceCommands() {
 
   let usersProcessed = 0;
   let timedOutCount = 0;
+  let revertedCount = 0;
 
   try {
     const usersSnapshot = await db.collection('users').get();
@@ -102,6 +103,7 @@ async function markStaleDeviceCommands() {
         const outletId = String(commandData.outletId || '').trim();
         const revert = revertStatusForFailedCommand(commandData);
         if (outletId && revert) {
+          revertedCount += 1;
           batch.set(db.doc(`users/${userId}/outlets/${outletId}`), {
             status: revert.status,
             pendingStatus: admin.firestore.FieldValue.delete(),
@@ -147,6 +149,11 @@ async function markStaleDeviceCommands() {
     logger.info('Stale device command sweep completed', {
       usersProcessed,
       timedOutCount,
+      // Short of timedOutCount means some command carried no
+      // metadata.statusBefore and its outlet was left alone - true of anything
+      // queued before that field existed, and the signal to look at if outlets
+      // ever stop being put back.
+      revertedCount,
       cutoffMs,
     });
 
