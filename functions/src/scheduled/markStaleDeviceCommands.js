@@ -1,5 +1,6 @@
 const admin = require('firebase-admin');
 const logger = require('firebase-functions/logger');
+const { revertStatusForFailedCommand } = require('../lib/outletStatus');
 
 const COMMAND_ACK_TIMEOUT_MS = 45000;
 const MAX_STALE_COMMANDS_PER_USER = 30;
@@ -93,6 +94,21 @@ async function markStaleDeviceCommands() {
             receivedAt: admin.firestore.FieldValue.serverTimestamp(),
           },
         }, { merge: true });
+
+        // Put the outlet back to what it read before the command, and drop the
+        // pending marker so the next telemetry post is believed immediately.
+        // Without this a toggle sent to an offline Hub stayed showing the
+        // requested position for ever, next to a notification saying it failed.
+        const outletId = String(commandData.outletId || '').trim();
+        const revert = revertStatusForFailedCommand(commandData);
+        if (outletId && revert) {
+          batch.set(db.doc(`users/${userId}/outlets/${outletId}`), {
+            status: revert.status,
+            pendingStatus: admin.firestore.FieldValue.delete(),
+            pendingStatusUntilMs: admin.firestore.FieldValue.delete(),
+            lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
+          }, { merge: true });
+        }
 
         const commandId = commandDoc.id;
         const deviceId = String(commandData.deviceId || '').trim();

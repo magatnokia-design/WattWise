@@ -78,8 +78,38 @@ const isUncommandedStatusChange = (previous, reportedStatus) => {
   return stored !== reported;
 };
 
+/**
+ * What an outlet should read once a command has been given up on.
+ *
+ * resolveOutletStatus above only runs when telemetry arrives, and a device that
+ * never polled is a device that is not posting either. So a toggle issued to an
+ * offline Hub left `status` on the value the app asked for, permanently: the
+ * command timed out, the user was told it failed, and the outlet still showed
+ * itself switched on. It had to be switched back by hand.
+ *
+ * The command carries the status the outlet held when it was issued, so the
+ * honest revert is to that, not to a guess from the action. A command that
+ * timed out was never executed - the relay never moved - so the position before
+ * the command is still the position now.
+ *
+ * The exception is a command the device did execute whose acknowledgement was
+ * lost. Reverting is then briefly wrong, and self-corrects on the first
+ * telemetry post after the Hub returns, because clearing the pending marker
+ * hands the decision straight back to the device.
+ *
+ * @param {object} commandData The timed-out command document.
+ * @returns {{status: string}|null} null when there is nothing trustworthy to
+ *   revert to, in which case the outlet is left alone.
+ */
+const revertStatusForFailedCommand = (commandData = {}) => {
+  const before = String(commandData?.metadata?.statusBefore || '').trim().toLowerCase();
+  if (before !== 'on' && before !== 'off') return null;
+  return { status: before };
+};
+
 module.exports = {
   PENDING_STATUS_WINDOW_MS,
   resolveOutletStatus,
   isUncommandedStatusChange,
+  revertStatusForFailedCommand,
 };

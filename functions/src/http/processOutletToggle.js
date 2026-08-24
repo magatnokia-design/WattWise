@@ -120,6 +120,12 @@ async function processOutletToggle(request) {
       metadata: {
         outletNumber,
         historyLogId: historyRef.id,
+        // What the outlet read before this command. Free to capture - the
+        // document was already fetched above - and it is the only record of
+        // the pre-command position once `status` has been overwritten with
+        // the requested one. markStaleDeviceCommands reverts to it if the
+        // device never acknowledges.
+        statusBefore: String(outletData.status || 'off').trim().toLowerCase() === 'on' ? 'on' : 'off',
       },
     });
 
