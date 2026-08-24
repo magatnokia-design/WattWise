@@ -130,9 +130,17 @@ useEffect(() => {
     // the once-a-month P5.00 metering charge, so summing them would leave the
     // fee out entirely - just as summing days that each included it charged
     // the fee once per day, which is what this header used to show.
+    // Nothing measured means nothing to attribute, so the once-a-month
+    // P5.00 metering flat and its VAT stay out. Without this a brand new
+    // account - no Hub linked, no readings at all - reported P5.60 against
+    // "0 Records / 0.00 kWh", which is the same fault processDailyRollup
+    // fixed for the monthly budget in 1560684. The invoice for an empty
+    // month does still owe the flat; a screen labelled measured usage does
+    // not.
     const totalCost = calculatePelcoIIIBill(totalKwh, {
       supplyRates,
       profileId: rateProfileId,
+      includePeriodFlats: totalKwh > 0,
     }).totals.total;
 
     return {

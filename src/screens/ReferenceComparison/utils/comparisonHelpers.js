@@ -104,7 +104,14 @@ export const summarizeDailyEntries = (entries, { supplyRates = null, profileId =
 
   return {
     ...totals,
-    cost: calculatePelcoIIIBill(totals.kWh, { supplyRates, profileId }).totals.total,
+    // A month WattWise measured nothing in owes it nothing measured. This
+    // figure is labelled as measured usage, so an empty month reads P0.00
+    // rather than the bare metering flat.
+    cost: calculatePelcoIIIBill(totals.kWh, {
+      supplyRates,
+      profileId,
+      includePeriodFlats: totals.kWh > 0,
+    }).totals.total,
     outlet1Name: String(latest.outlet1Name || '').trim() || 'Outlet 1',
     outlet2Name: String(latest.outlet2Name || '').trim() || 'Outlet 2',
     daysRecorded: rows.length,

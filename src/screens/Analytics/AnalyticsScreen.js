@@ -633,7 +633,8 @@ export const AnalyticsScreen = ({ navigation }) => {
       date: endDate,
       supplyRates,
       profileId: rateProfileId || null,
-      includePeriodFlats: isBillingPeriod,
+      // ...and only when something was actually measured in it.
+      includePeriodFlats: isBillingPeriod && totalEnergy > 0,
       daysInPeriod: entries.length > 0 ? days.length : 0,
       billingDays: getDaysInMonth(endDate),
     });
