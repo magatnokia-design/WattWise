@@ -50,7 +50,7 @@ const HistoryScreen = () => {
   // a separate paginated fetch would fight with.
   const [logLimit, setLogLimit] = useState(ACTIVITY_PAGE_SIZE);
 
- const { activityLogs, usageHistory, loading, hasMore, rateProfileId, supplyRates, subscribeActivityLogs, fetchUsageHistory } = useHistory();
+ const { activityLogs, usageHistory, loading, hasMore, rateProfileId, supplyRates, showOfflineState, subscribeActivityLogs, fetchUsageHistory } = useHistory();
 
  const filterToOutletValue = useMemo(() => ({
    All: 'all',
@@ -158,18 +158,28 @@ useEffect(() => {
         <Text style={styles.headerSub}>Activity & usage records</Text>
       </View>
 
-      {/* Summary Cards */}
+      {/* Summary Cards
+          Dashed rather than zeroed when nothing could be read. A zero here is
+          a measurement - it says this range genuinely held no usage and cost
+          nothing - and printing one over an unread range is the same false
+          claim the empty states below were making. */}
       <View style={[styles.summaryRow, { paddingHorizontal: 16 }]}>
         <View style={[styles.summaryCard, { width: (width - 48) / 3 }]}>
-          <Text style={styles.summaryValue}>{summaryData.totalRecords}</Text>
+          <Text style={styles.summaryValue}>
+            {showOfflineState ? '—' : summaryData.totalRecords}
+          </Text>
           <Text style={styles.summaryLabel}>Records</Text>
         </View>
         <View style={[styles.summaryCard, { width: (width - 48) / 3 }]}>
-          <Text style={styles.summaryValue}>{summaryData.totalKwh}</Text>
+          <Text style={styles.summaryValue}>
+            {showOfflineState ? '—' : summaryData.totalKwh}
+          </Text>
           <Text style={styles.summaryLabel}>kWh Total</Text>
         </View>
         <View style={[styles.summaryCard, { width: (width - 48) / 3 }]}>
-          <Text style={styles.summaryValue}>{summaryData.totalCost}</Text>
+          <Text style={styles.summaryValue}>
+            {showOfflineState ? '—' : summaryData.totalCost}
+          </Text>
           <Text style={styles.summaryLabel}>Total Cost</Text>
         </View>
       </View>
@@ -237,6 +247,7 @@ useEffect(() => {
               loading={loading}
               hasMore={hasMore}
               onLoadMore={handleLoadMoreActivity}
+              showOfflineState={showOfflineState}
             />
           </>
         ) : (

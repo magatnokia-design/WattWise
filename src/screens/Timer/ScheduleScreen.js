@@ -13,6 +13,7 @@ import { COLORS } from '../../constants/colors';
 import TimerCard from './components/TimerCard';
 import AddTimerModal from './components/AddTimerModal';
 import { useSchedule } from './hooks/useSchedule';
+import { OfflineState } from '../../components/common/OfflineNotice';
 import {
   formatDuration,
   formatOutletName,
@@ -56,7 +57,14 @@ const ScheduleScreen = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [activeFilter, setActiveFilter] = useState('All');
 
-  const { schedules, loading, addSchedule, deleteSchedule, toggleSchedule } = useSchedule();
+  const {
+    schedules,
+    loading,
+    showOfflineState,
+    addSchedule,
+    deleteSchedule,
+    toggleSchedule,
+  } = useSchedule();
 
   // Ticks once a minute so the "next run" line stays honest without the
   // per-second re-render each TimerCard already does for its own countdown.
@@ -175,20 +183,33 @@ const ScheduleScreen = () => {
     />
   ), [handleDelete, handleToggle]);
 
+  // An unread collection and an empty one are both zero rows here, so the
+  // offline case has to be answered before "No Timers Yet" - which would
+  // otherwise tell a user with schedules that they have none.
   const renderEmpty = useMemo(() => (
-    <View style={styles.emptyContainer}>
-      <Text style={styles.emptyIcon}>⏱️</Text>
-      <Text style={styles.emptyTitle}>No Timers Yet</Text>
-      <Text style={styles.emptySub}>Add a timer to automate your outlets</Text>
-      <TouchableOpacity
-        style={styles.emptyAddBtn}
-        onPress={handleAddTimer}
-        activeOpacity={0.7}
-      >
-        <Text style={styles.emptyAddBtnText}>+ Add Timer</Text>
-      </TouchableOpacity>
-    </View>
-  ), [handleAddTimer]);
+    showOfflineState ? (
+      <OfflineState
+        compact
+        body={
+          'Your timers are safe — the app just needs a connection to load ' +
+          'them. Check your wi-fi or mobile data, then try again.'
+        }
+      />
+    ) : (
+      <View style={styles.emptyContainer}>
+        <Text style={styles.emptyIcon}>⏱️</Text>
+        <Text style={styles.emptyTitle}>No Timers Yet</Text>
+        <Text style={styles.emptySub}>Add a timer to automate your outlets</Text>
+        <TouchableOpacity
+          style={styles.emptyAddBtn}
+          onPress={handleAddTimer}
+          activeOpacity={0.7}
+        >
+          <Text style={styles.emptyAddBtnText}>+ Add Timer</Text>
+        </TouchableOpacity>
+      </View>
+    )
+  ), [handleAddTimer, showOfflineState]);
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>

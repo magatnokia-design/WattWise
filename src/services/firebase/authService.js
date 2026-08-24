@@ -18,6 +18,15 @@ import {
 
 const normalizeEmail = (email = '') => String(email).trim().toLowerCase();
 
+/**
+ * How long sign-out waits for the push-token cleanup before going ahead.
+ *
+ * Long enough that the write normally completes on a working connection, short
+ * enough that a user on a bad one is not left holding a button that appears
+ * dead. Sign-out itself is not on this budget - only the cleanup before it.
+ */
+const PUSH_CLEANUP_TIMEOUT_MS = 3000;
+
 const isExpectedAuthError = (code) => [
   'auth/invalid-credential',
   'auth/user-not-found',
@@ -172,7 +181,20 @@ export const authService = {
       const userId = auth.currentUser?.uid;
 
       if (pushToken && userId) {
-        await userService.removePushToken(userId, pushToken);
+        // Bounded, because this is the slow half of signing out and it must
+        // never become the reason someone cannot sign out at all. A Firestore
+        // write resolves when the server acknowledges it, so with no
+        // connection this promise simply stays pending - and an unbounded
+        // `await` here left the user tapping a button that did nothing.
+        //
+        // Losing the cleanup is the lesser harm: a stale token means the old
+        // account may push to this phone until the next sign-in re-registers
+        // it, whereas losing the sign-out strands the user in the account.
+        // Offline the write cannot land anyway.
+        await Promise.race([
+          userService.removePushToken(userId, pushToken),
+          new Promise((resolve) => setTimeout(resolve, PUSH_CLEANUP_TIMEOUT_MS)),
+        ]);
       }
       clearActivePushToken();
 

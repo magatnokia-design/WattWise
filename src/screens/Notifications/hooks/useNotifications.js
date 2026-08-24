@@ -1,12 +1,15 @@
 import { useState, useCallback, useEffect } from 'react';
 import { notificationService } from '../../../services/firebase';
 import { auth } from '../../../services/firebase/config';
+import { useLoadOutcome } from '../../../hooks/useLoadTracker';
 import { onAuthStateChanged } from 'firebase/auth';
 
 export const useNotifications = () => {
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(false);
+  // "No notifications" must not be said on the strength of a failed read.
+  const load = useLoadOutcome();
   const [error, setError] = useState(null);
 
   // Load notifications on mount with real-time listener
@@ -90,8 +93,10 @@ export const useNotifications = () => {
       }
 
       setNotifications(result.data);
+      load.succeeded();
     } catch (err) {
       setError(err.message);
+      load.failed(err);
       console.error('Error fetching notifications:', err);
     } finally {
       setLoading(false);
@@ -165,6 +170,8 @@ export const useNotifications = () => {
   }, []);
 
   return {
+    showEmptyState: load.showEmptyState,
+    showOfflineState: load.showOfflineState,
     notifications,
     unreadCount,
     loading,

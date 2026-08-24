@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, useMemo } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { comparisonService, historyService, userService } from '../../../services/firebase';
 import { auth } from '../../../services/firebase/config';
+import { useLoadOutcome } from '../../../hooks/useLoadTracker';
 import {
   MONTH_OPTION_COUNT,
   buildMonthOptions,
@@ -48,6 +49,8 @@ const useReferenceComparison = () => {
   // bill's own kWh with the same tariff the months were priced with.
   const [rates, setRates] = useState({});
   const [loading, setLoading] = useState(false);
+  // Comparing two months against an unread third is not a comparison.
+  const load = useLoadOutcome();
   const [error, setError] = useState(null);
 
   useEffect(() => {
@@ -114,13 +117,15 @@ const useReferenceComparison = () => {
       const bill = billResult.success ? billResult.data : null;
       // A stored row of all zeroes is the same as no bill on file.
       setActualBill(bill && (bill.totalCost > 0 || bill.totalKWh > 0) ? bill : null);
+      load.succeeded();
     } catch (err) {
       setError(err.message);
+      load.failed(err);
       console.error('Error loading comparison:', err);
     } finally {
       setLoading(false);
     }
-  }, [loadMonthTotals, monthA, monthB, userId]);
+  }, [loadMonthTotals, monthA, monthB, userId, load.succeeded, load.failed]);
 
   useEffect(() => {
     if (!userId) return;
@@ -188,6 +193,8 @@ const useReferenceComparison = () => {
   }, [monthA, userId]);
 
   return {
+    showEmptyState: load.showEmptyState,
+    showOfflineState: load.showOfflineState,
     monthOptions,
     // The selected month, and the one it is measured against. `previousMonth`
     // is exported so a screen can name the baseline it is showing; it is not

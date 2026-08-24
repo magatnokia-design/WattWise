@@ -16,6 +16,7 @@ import { SIZES, FONTS } from '../../constants/theme';
 import NotificationPanel from '../Notifications/components/NotificationPanel';
 import { useNotifications } from '../Notifications/hooks/useNotifications';
 import { RateNotice } from '../../components/common/RateNotice';
+import { OfflineState } from '../../components/common/OfflineNotice';
 import { useDismissibleNotice } from '../../hooks/useDismissibleNotice';
 import OutletControlModal from './components/OutletControlModal';
 import ApplianceSuggestion from './components/ApplianceSuggestion';
@@ -180,6 +181,7 @@ export const DashboardScreen = ({ navigation }) => {
     outlet2RelayStuck,
     isLoadingOutlets,
     hasNeverReported,
+    outletsUnreachable,
     totalEnergyKwh,
     totalPowerW,
     estimatedCost,
@@ -460,6 +462,21 @@ export const DashboardScreen = ({ navigation }) => {
           <Text style={styles.sectionTitle}>Smart Outlets</Text>
         </View>
 
+        {/* Nothing could be read, so nothing below is known. This has to be
+            tested before the setup prompt: both states show two empty outlet
+            documents, and only this one is entitled to say why. Telling a user
+            with a linked hub to go and link their hub is the failure this
+            whole change exists to stop. */}
+        {outletsUnreachable ? (
+          <OfflineState
+            body={
+              'Your outlets and readings are safe — the app just needs a ' +
+              'connection to load them. Check your wi-fi or mobile data, then ' +
+              'pull down to refresh.'
+            }
+          />
+        ) : null}
+
         {/* Before any device has ever reported, the two cards below have nothing
             to show and read as a broken app rather than an unfinished setup.
             This is the first screen after registration, so it is worth spending
@@ -490,7 +507,13 @@ export const DashboardScreen = ({ navigation }) => {
         ) : null}
 
         {/* Outlet Cards */}
-        <View style={[styles.outletsContainer, hasNeverReported ? styles.hidden : null]}>
+        {/* Hidden while unreachable too - two cards reading 0.0 W next to an
+            offline notice would contradict it, and the zeroes are not readings
+            but the absence of any. */}
+        <View style={[
+          styles.outletsContainer,
+          (hasNeverReported || outletsUnreachable) ? styles.hidden : null,
+        ]}>
           {/* Outlet 1 */}
           <View style={styles.outletCard}>
             <View style={styles.outletHeader}>

@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { userService, budgetService, outletService } from '../../../services/firebase';
 import { auth } from '../../../services/firebase/config';
+import { useLoadOutcome } from '../../../hooks/useLoadTracker';
 
 const toConfidencePercent = (rawConfidence) => {
   const parsed = Number(rawConfidence);
@@ -40,6 +41,9 @@ export const useSettings = () => {
   const [savedAppliances, setSavedAppliances] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  // Separates "this account has no hub and no saved appliances" from "none of
+  // the five reads that would have told me came back".
+  const load = useLoadOutcome();
 
   const fetchSettings = useCallback(async (requestedUserId) => {
     // Called two ways, and they pass different things:
@@ -84,6 +88,29 @@ export const useSettings = () => {
         outletService.getAllOutlets(currentUserId),
         outletService.getSavedAppliances(currentUserId),
       ]);
+
+      const results = [
+        preferencesResult,
+        profileResult,
+        budgetResult,
+        outletsResult,
+        savedAppliancesResult,
+      ];
+
+      // Every read above degrades to a default on failure, which is right when
+      // one of five fails and wrong when all five do. With no network all five
+      // fail together, and the defaults they degrade to spell out a specific
+      // and false story: no device ID, so "Not linked"; no appliances, so "No
+      // saved appliances yet"; no budget, so zero. That is the screen a user
+      // with a fully configured hub was being shown.
+      //
+      // So: nothing readable at all is treated as not having read, and the
+      // previous state is left alone for the screen to report over.
+      if (!results.some((result) => result?.success)) {
+        load.failed(results.find((result) => result && !result.success));
+        setLoading(false);
+        return;
+      }
 
       setSavedAppliances(savedAppliancesResult.success ? savedAppliancesResult.data : []);
 
@@ -141,6 +168,7 @@ export const useSettings = () => {
         esp32LastAckStatus: String(deviceHealth.lastAckStatus || '').trim(),
         esp32LastCommandTimeoutAtMs: Number(deviceHealth.lastCommandTimeoutAtMs || 0),
       });
+      load.succeeded();
     } catch (err) {
       // Deliberately keeps whatever is already on screen. Blanking to defaults
       // on a failed refresh is worse than showing slightly stale values: it
@@ -148,11 +176,12 @@ export const useSettings = () => {
       // and the data was correct a second earlier. Sign-out clears state via
       // the !currentUserId branch above, which is the only case that should.
       setError(err.message);
+      load.failed(err);
       console.error('Error fetching settings:', err);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [load.succeeded, load.failed]);
 
   // Load settings once auth is available and refresh on auth changes. Saved
   // appliances additionally stay subscribed: they are written by a Cloud
@@ -471,6 +500,10 @@ export const useSettings = () => {
     savedAppliances,
     loading,
     error,
+    // "Not linked" and "No saved appliances yet" are both claims about the
+    // account, so both need a read that returned.
+    showEmptyState: load.showEmptyState,
+    showOfflineState: load.showOfflineState,
     fetchSettings,
     updateSupplyRates,
     updateRateProfile,
