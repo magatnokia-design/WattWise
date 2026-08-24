@@ -3,6 +3,7 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { userService, budgetService, outletService } from '../../../services/firebase';
 import { auth } from '../../../services/firebase/config';
 import { useLoadOutcome } from '../../../hooks/useLoadTracker';
+import { isConnectivityError } from '../../../utils/connectivity';
 
 const toConfidencePercent = (rawConfidence) => {
   const parsed = Number(rawConfidence);
@@ -106,8 +107,20 @@ export const useSettings = () => {
       //
       // So: nothing readable at all is treated as not having read, and the
       // previous state is left alone for the screen to report over.
-      if (!results.some((result) => result?.success)) {
-        load.failed(results.find((result) => result && !result.success));
+      //
+      // Keyed on the profile as well as on all-five, because "Not linked" is
+      // derived from the profile alone. Requiring every read to fail was not
+      // enough - `getAllOutlets` used to report success unconditionally, so one
+      // laundered result kept this guard shut while the screen went on to claim
+      // no Hub was linked.
+      const everyReadFailed = !results.some((result) => result?.success);
+      const deviceStateUnknown =
+        !profileResult?.success && isConnectivityError(profileResult);
+
+      if (everyReadFailed || deviceStateUnknown) {
+        load.failed(
+          results.find((result) => result && !result.success) || profileResult
+        );
         setLoading(false);
         return;
       }

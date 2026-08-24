@@ -54,10 +54,12 @@ export const userService = {
       if (userDoc.exists()) {
         return { success: true, data: userDoc.data() };
       }
-      return { success: false, error: 'User not found' };
+      return { success: false, notFound: true, error: 'User not found' };
     } catch (error) {
       console.error('Error getting user profile:', error);
-      return { success: false, error: error.message };
+      // `code` carried through so callers can tell an unreachable backend from
+      // a rejected read without having to match on the message text.
+      return { success: false, error: error.message, code: error.code };
     }
   },
 

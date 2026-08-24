@@ -103,4 +103,49 @@ export const resolveLoadState = ({ isLoading, hasLoadedOnce, isUnreachable } = {
   return LOAD_STATE.READY;
 };
 
-export default { isConnectivityError, LOAD_STATE, resolveLoadState };
+/**
+ * Whether a service result represents a read that could not be performed.
+ *
+ * A document that is genuinely absent reports `notFound`, and that is an
+ * answer - a new account really does have no outlet documents yet. Anything
+ * else that failed is an absence of information, not information.
+ */
+export const isFailedRead = (result) =>
+  !!result && !result.success && !result.notFound;
+
+/**
+ * Whether a pair of document reads both failed to happen.
+ *
+ * `getAllOutlets` reads two documents and used to report `success: true`
+ * whatever came back, mapping failures to null. Offline that is a confident
+ * claim that the account has no outlets, which the Dashboard draws as "Link
+ * your WattWise unit" and Settings as "Not linked".
+ */
+export const bothReadsFailed = (first, second) =>
+  isFailedRead(first) && isFailedRead(second);
+
+/**
+ * Whether an empty listener snapshot means "nothing there" or "I don't know".
+ *
+ * Firestore listeners do not raise an error when the network drops. They go on
+ * serving the local cache and set `fromCache` on the snapshot, so an offline
+ * cold start delivers an empty snapshot through the SUCCESS path - which is
+ * why no error handler ever saw this and every list looked like a new account.
+ *
+ * Cached data that is not empty is real and worth showing. Only empty AND
+ * unconfirmed means the answer has not arrived.
+ *
+ * @param {number} count Documents in the snapshot.
+ * @param {{fromCache?: boolean}} meta Snapshot metadata.
+ */
+export const isUnconfirmedEmpty = (count, meta) =>
+  count === 0 && !!meta?.fromCache;
+
+export default {
+  isConnectivityError,
+  LOAD_STATE,
+  resolveLoadState,
+  isFailedRead,
+  bothReadsFailed,
+  isUnconfirmedEmpty,
+};

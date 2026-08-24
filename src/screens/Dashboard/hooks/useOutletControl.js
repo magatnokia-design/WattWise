@@ -4,7 +4,7 @@ import { outletService, userService } from '../../../services/firebase';
 import { auth } from '../../../services/firebase/config';
 import { onAuthStateChanged } from 'firebase/auth';
 import { calculatePelcoIIIBill, marginalRatePerKwh } from '../../../utils/billing';
-import { isConnectivityError } from '../../../utils/connectivity';
+import { isConnectivityError, isUnconfirmedEmpty } from '../../../utils/connectivity';
 import {
   deriveOutletRuntimeState,
   resolveSwitchingTo,
@@ -518,8 +518,22 @@ export const useOutletControl = () => {
 
       unsubscribeOutlets = outletService.subscribeToOutlets(
         user.uid,
-        (outlets) => {
+        (outlets, meta) => {
           outlets.forEach((outlet) => applyOutletData(outlet));
+
+          // An empty snapshot from the local cache is not an answer. Firestore
+          // listeners do not fail when the network drops - they keep serving
+          // cache and mark the snapshot - so this arrives down the success path
+          // and was being counted as a read that returned. On a cold start with
+          // nothing cached it is exactly the offline case.
+          //
+          // Cached data that is NOT empty is real and worth showing; only the
+          // empty-and-unconfirmed combination means "I have not heard back".
+          if (isUnconfirmedEmpty(outlets.length, meta)) {
+            markOutletsFailed({ code: 'unavailable' });
+            return;
+          }
+
           markOutletsLoaded();
         },
         (error) => {

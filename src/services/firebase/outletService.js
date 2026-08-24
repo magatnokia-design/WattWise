@@ -1,6 +1,7 @@
 import { doc, getDoc, onSnapshot, collection, setDoc } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from './config';
+import { bothReadsFailed } from '../../utils/connectivity';
 
 const normalizeOutletId = (outletIdOrNumber) => {
   if (typeof outletIdOrNumber === 'number') {
@@ -107,10 +108,12 @@ export const outletService = {
       if (outletDoc.exists()) {
         return { success: true, data: outletDoc.data() };
       }
-      return { success: false, error: 'Outlet not found' };
+      // A document that is genuinely absent, which is a real answer and must
+      // not be confused with a read that never happened.
+      return { success: false, notFound: true, error: 'Outlet not found' };
     } catch (error) {
       console.error('Error getting outlet data:', error);
-      return { success: false, error: error.message };
+      return { success: false, error: error.message, code: error.code };
     }
   },
 
@@ -119,7 +122,21 @@ export const outletService = {
     try {
       const outlet1 = await outletService.getOutletData(userId, 'outlet1');
       const outlet2 = await outletService.getOutletData(userId, 'outlet2');
-      
+
+      // This used to return `success: true` unconditionally, mapping any failed
+      // read to `null` and losing the reason. Offline that produced a confident
+      // "both outlets read fine, and there are none" - which the Dashboard drew
+      // as "Link your WattWise unit" and Settings as "Not linked", to users
+      // whose Hub was linked. A missing document is still a real answer; a read
+      // that could not be performed is not.
+      if (bothReadsFailed(outlet1, outlet2)) {
+        return {
+          success: false,
+          error: outlet1.error || outlet2.error || 'Could not read outlets',
+          code: outlet1.code || outlet2.code,
+        };
+      }
+
       return {
         success: true,
         data: {
@@ -186,7 +203,18 @@ export const outletService = {
         snapshot.forEach((doc) => {
           outlets[doc.id] = doc.data();
         });
-        onUpdate(outlets);
+        // A listener does NOT report an error when the network drops - it keeps
+        // serving from the local cache and flags the snapshot. On a cold start
+        // with nothing cached that is an empty snapshot delivered through the
+        // success path, which is why every screen looked like a new account
+        // offline and why no error handler ever saw it.
+        //
+        // `fromCache` is the only thing that distinguishes an empty result the
+        // server confirmed from one that means "I have not heard back".
+        onUpdate(outlets, {
+          fromCache: !!snapshot.metadata?.fromCache,
+          hasPendingWrites: !!snapshot.metadata?.hasPendingWrites,
+        });
       },
       (error) => {
         console.error('Error in outlets listener:', error);
@@ -199,11 +227,13 @@ export const outletService = {
   subscribeToOutlets: (userId, onUpdate, onError) => {
     return outletService.subscribeToAllOutlets(
       userId,
-      (outletsMap) => {
+      (outletsMap, meta) => {
         const outlets = Object.entries(outletsMap || {})
           .filter(([outletId]) => isSupportedOutletId(outletId))
           .map(([outletId, outletData]) => mapOutletDocToUiOutlet(outletId, outletData));
-        onUpdate(sortOutletsByNumber(outlets));
+        // Second argument carried through so callers can tell a server-confirmed
+        // empty result from a cache that has simply never been filled.
+        onUpdate(sortOutletsByNumber(outlets), meta);
       },
       onError
     );
