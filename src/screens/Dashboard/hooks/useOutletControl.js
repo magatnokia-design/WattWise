@@ -13,6 +13,7 @@ import {
   LIVE_POWER_THRESHOLD_W,
   HARDWARE_STALE_THRESHOLD_MS,
 } from '../utils/outletRuntime';
+import { getManilaDateKey } from '../../../utils/liveUsage';
 
 const DEFAULT_OUTLET_METRICS = {
   voltage: 0,
@@ -67,7 +68,22 @@ const buildOutletMetrics = (outlet = {}, isOutletOn = false, runtimeState = {}) 
   const voltage = toMetricNumber(outlet.voltage);
   const current = toMetricNumber(outlet.current);
   const power = toMetricNumber(outlet.power);
-  const energy = toMetricNumber(outlet.energy);
+  // Only an accumulator that belongs to TODAY counts as today's energy.
+  //
+  // Both branches below deliberately carry `energy` through when the
+  // instantaneous readings cannot be trusted, on the reasoning that a running
+  // total is still the last thing that was true about the outlet. That holds
+  // within a day and stops holding at midnight: once the date rolls over, the
+  // figure the hub last reported belongs to a day that has ended, and carrying
+  // it forward states it as consumption "since midnight" that never happened.
+  //
+  // Seen 27 Aug 2026 with the hub unplugged since the 24th - the dashboard read
+  // "Energy today 0.001 kWh" and priced it at P0.01, three days after the last
+  // reading. `resolveOutletEnergyForDate` in liveUsage.js already guards on
+  // this key; this is the same guard, applied where the card gets its figure.
+  const energyDateKey = String(outlet.energyDateKey || '');
+  const energyIsFromToday = !energyDateKey || energyDateKey === getManilaDateKey();
+  const energy = energyIsFromToday ? toMetricNumber(outlet.energy) : 0;
 
   const hasLiveLoad =
     runtimeState.hasLiveLoad === true ||
