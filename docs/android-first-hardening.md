@@ -7,7 +7,7 @@ This project now applies stricter backend protections for real hardware usage. U
 Required for all ESP32 HTTP calls:
 - deviceId in request body
 - deviceToken in body or x-device-token header
-- fresh timestamp (within 15s skew)
+- fresh timestamp (within 60s skew, `MAX_TIMESTAMP_SKEW_MS` in `functions/src/lib/deviceSecurity.js`)
 
 Endpoints:
 - updateOutletMetrics

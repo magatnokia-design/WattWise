@@ -24,10 +24,15 @@ jobs:
         include:
           - name: app
             path: .
-            # The app's remaining highs are all build tooling - metro, @expo/cli,
-            # postcss - which run on a developer machine and are not in the
-            # shipped bundle. Clearing them needs an Expo SDK major, so this
-            # gate is set at critical to stay honest rather than permanently red.
+            # The app's remaining highs are all build and dev-client tooling -
+            # currently expo-dev-client, expo-dev-launcher and expo-manifests,
+            # earlier metro, @expo/cli and postcss. None is imported from src/;
+            # they run on a developer machine or in a dev build and are not in
+            # the shipped bundle. Which packages sit here moves with the SDK, so
+            # treat the list as an example rather than a fixed set - the test is
+            # whether the advisory reaches the release APK, not its name.
+            # Clearing them needs an Expo SDK major, so this gate is set at
+            # critical to stay honest rather than permanently red.
             level: critical
           - name: functions
             path: functions
