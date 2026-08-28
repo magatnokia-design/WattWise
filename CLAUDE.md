@@ -235,3 +235,47 @@ the code over that doc for data flow). Current top-level structure under `users/
   file does" over the file itself (this repo has several stale/aspirational docs, notably
   `docs/firebase-schema.md`).
 - Windows/PowerShell dev environment - give PowerShell commands, not bash.
+- **Never run destructive commands without explicit confirmation first.** Deleting files,
+  overwriting them, force-pushing, hard-resetting, or wiping untracked files are all the
+  user's call, every time, stated explicitly - not inferred from a task that would be
+  tidier if they happened. `.claude/settings.json` denies the worst of them outright
+  (`rm -rf`, `git clean`, `git push --force`, `git reset --hard`), because a rule a model
+  can talk itself past is not a guardrail. `git clean` is on that list for a specific
+  reason: it would delete `secrets.h`, `android/`, and every other gitignored file that
+  cannot be recovered from the remote.
+
+## ESP32 toolchain (arduino-cli)
+
+The Hub is built with **arduino-cli**, not the Arduino IDE. Core and libraries live under
+`%LOCALAPPDATA%\Arduino15`, which is machine-local and not in the repo - a fresh machine
+rebuilds it from scratch:
+
+```powershell
+arduino-cli core install esp32:esp32          # 3.3.11, ~3 GB unpacked
+arduino-cli lib install "ArduinoJson@6.21.5"  # pinned - see below
+arduino-cli lib install "PZEM004Tv30"         # index name, NOT "PZEM-004T-v30"
+$build = "$PWD\.arduino-build"
+arduino-cli compile --fqbn esp32:esp32:esp32 docs/esp32/WattWise_ESP32_Relay_Cloud `
+  --libraries "$env:LOCALAPPDATA\Arduino15\libraries" --build-path $build
+arduino-cli upload  --fqbn esp32:esp32:esp32 -p COM<n> --input-dir $build
+```
+
+**Compile and upload must share an explicit `--build-path` / `--input-dir`.** The
+default cache directory is a hash of the build options, so a `compile` that passes
+`--libraries` and a plain `upload` resolve to *different* directories - and upload
+then flashes an older build while reporting a verified hash. That has already cost
+this project once (commit `a9429a7`): the device ran the fix under the previous
+version string until both commands were pinned to one path.
+
+**ArduinoJson is pinned to 6.21.5 and must stay there.** The sketch uses
+`StaticJsonDocument<N>` and `createNestedObject()`, both removed in ArduinoJson 7. An
+unpinned `lib install ArduinoJson` silently upgrades to 7.x and the build then fails with
+template errors that do not name the real cause. `arduino-cli lib upgrade` is denied in
+`.claude/settings.json` for exactly this reason.
+
+`data/PZEM004T-master.zip` in the sketch folder is the **wrong library** - it provides
+`PZEM004T.h`, while the sketch includes `<PZEM004Tv30.h>` from mandulaj's separate
+PZEM-004T-v30 project. Install from the library index, never from that zip.
+
+The sketch compiles to about **84% of program storage** on the default partition scheme,
+so there is roughly 200 KB of headroom. Check the size after any sizeable firmware change.

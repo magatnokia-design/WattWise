@@ -1,3 +1,19 @@
+> # ⚠️ OUTDATED - DO NOT USE AS PROJECT REFERENCE
+>
+> This file is **not** the firebase-basics skill doc it is supposed to be. A
+> WattWise handoff note was written over the vendored file at some point, so the
+> real skill-refresh instructions for Claude Code are missing (compare its
+> siblings `antigravity.md`, `gemini-cli.md`, `other-agents.md`, which still
+> hold theirs).
+>
+> **Its content is also wrong.** It states `outlet1 -> relay CH2 -> GPIO22`,
+> which is backwards. The real mapping is `outlet1 -> relay CH1 -> GPIO23`,
+> settled on 2026-08-15 by serial output from the running device and confirmed
+> by the firmware source. It also carries the resolved “WiseWatt vs WattWise”
+> name confusion and a stale next-steps list.
+>
+> **`/CLAUDE.md` at the repo root is the authority.** Read that instead.
+
 # WiseWatt / WattWise — Claude Code Project Memory
 
 > ⚠️ NAME CONFLICT UNRESOLVED: an earlier handoff called this project

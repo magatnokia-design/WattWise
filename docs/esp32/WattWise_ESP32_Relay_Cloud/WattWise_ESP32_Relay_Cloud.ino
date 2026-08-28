@@ -1,4 +1,7 @@
-#include <Arduino_BuiltIn.h>
+// Arduino_BuiltIn.h is injected by the Arduino IDE and does not exist for
+// arduino-cli, which fails the build on this line before reaching anything
+// else. Nothing here uses it - the Arduino core arrives through the ESP32
+// platform headers below - so it is dropped rather than stubbed.
 
 #include <WiFi.h>
 #include <WiFiClientSecure.h>

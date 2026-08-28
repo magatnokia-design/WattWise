@@ -3,19 +3,21 @@
 		"*.ino": "cpp"
 	},
 
-	// Kept in step with .vscode/c_cpp_properties.json. Both pointed at ESP32
-	// core 2.0.14 and at C:/Users/IDEAPAD/Documents/Arduino, neither of which
-	// exists on this machine - the installed core is 3.x and the libraries are
-	// under AppData/Local/Arduino15. With nothing resolving, every Arduino
-	// include went red and the errors spread into the headers the sketch pulls
-	// in, secrets.h among them.
+	// Kept in step with .vscode/c_cpp_properties.json. Both once pointed at ESP32
+	// core 2.0.14 and at a hardcoded C:/Users/IDEAPAD/... path. c_cpp_properties
+	// was fixed then; this file was not, so it still resolved nothing and every
+	// Arduino include went red, the errors spreading into the headers the sketch
+	// pulls in, secrets.h among them.
+	//
+	// Both files now use ${env:LOCALAPPDATA} and a * for the core version, so
+	// neither is tied to one machine or one core release.
 	"C_Cpp.default.includePath": [
 		"${workspaceFolder}/**",
-		"C:/Users/IDEAPAD/AppData/Local/Arduino15/libraries/**",
-		"C:/Users/IDEAPAD/AppData/Local/Arduino15/packages/esp32/hardware/esp32/*/cores/esp32",
-		"C:/Users/IDEAPAD/AppData/Local/Arduino15/packages/esp32/hardware/esp32/*/libraries/**",
-		"C:/Users/IDEAPAD/AppData/Local/Arduino15/packages/esp32/hardware/esp32/*/variants/esp32",
-		"C:/Users/IDEAPAD/AppData/Local/Arduino15/packages/esp32/tools/esp32-libs/*/include/**"
+		"${env:LOCALAPPDATA}/Arduino15/libraries/**",
+		"${env:LOCALAPPDATA}/Arduino15/packages/esp32/hardware/esp32/*/cores/esp32",
+		"${env:LOCALAPPDATA}/Arduino15/packages/esp32/hardware/esp32/*/libraries/**",
+		"${env:LOCALAPPDATA}/Arduino15/packages/esp32/hardware/esp32/*/variants/esp32",
+		"${env:LOCALAPPDATA}/Arduino15/packages/esp32/tools/esp32-libs/*/include/**"
 	],
 	"C_Cpp.default.defines": [
 		"ARDUINO=10607",
