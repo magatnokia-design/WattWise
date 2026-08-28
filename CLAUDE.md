@@ -243,6 +243,17 @@ the code over that doc for data flow). Current top-level structure under `users/
   can talk itself past is not a guardrail. `git clean` is on that list for a specific
   reason: it would delete `secrets.h`, `android/`, and every other gitignored file that
   cannot be recovered from the remote.
+- **A hard-won lesson goes in a file someone opens, not only in the commit message.**
+  Two of the most expensive traps in this project - that `compile` and `upload` must
+  share a build path, and that the Hub was running older firmware than the repo - were
+  recorded only in commit bodies (`a9429a7`, `f353428`). Both were excellent commit
+  messages and both were invisible: nobody reads `git log -p` before starting work, so
+  a full day went into rediscovering them after a laptop reset. Write the lesson here,
+  in `docs/`, or in the file it concerns - the commit message is the record of *why a
+  change was made*, not the place knowledge lives.
+- **Rebuilding this environment from nothing:** `docs/FRESH-MACHINE.md` is the runbook -
+  installs, logins, the three `npm ci` locations, the ESP32 toolchain, and what does and
+  does not survive a reset. It was written from an actual recovery, not from memory.
 
 ## ESP32 toolchain (arduino-cli)
 
