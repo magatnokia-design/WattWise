@@ -1,0 +1,870 @@
+<title>WattWise Data Dictionary</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Serif:wght@400;600&display=swap">
+
+<style>
+  :root {
+    --paper:       #FBFCFA;
+    --surface:     #FFFFFF;
+    --surface-2:   #F2F6F4;
+    --ink:         #0F1A16;
+    --ink-2:       #3B4A45;
+    --muted:       #6D7E78;
+    --rule:        #DBE3DF;
+    --rule-strong: #BDCBC5;
+    --accent:      #0E9F73;
+    --accent-soft: #E5F6EF;
+    --fix:         #A8342A;
+    --fix-soft:    #FBEBE9;
+    --fix-rule:    #E8C4C0;
+
+    /* Storage kind — carried over from the ERD so the two read as one set. */
+    --root-head:   #0E7A5A;
+    --root-fill:   #E4F5EE;
+    --root-ink:    #0A3C2C;
+    --sub-head:    #3C8F5C;
+    --sub-fill:    #EEF7F1;
+    --sub-ink:     #163520;
+    --top-head:    #2C5CA8;
+    --top-fill:    #EDF3FC;
+    --top-ink:     #14315E;
+    --emb-head:    #B08908;
+    --emb-fill:    #FDF6E3;
+    --emb-ink:     #4A3A05;
+
+    --s-2: 0.75rem;
+    --s-1: 0.8125rem;
+    --s0:  1.0625rem;
+    --s1:  1.25rem;
+    --s2:  1.5rem;
+    --s3:  2rem;
+    --s4:  2.6rem;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper:       #0C1411;
+      --surface:     #121D19;
+      --surface-2:   #172420;
+      --ink:         #E5EDE9;
+      --ink-2:       #B7C6C0;
+      --muted:       #85968F;
+      --rule:        #233229;
+      --rule-strong: #32443B;
+      --accent:      #45D5A3;
+      --accent-soft: #12312A;
+      --fix:         #F08C80;
+      --fix-soft:    #2C1815;
+      --fix-rule:    #4A2621;
+
+      --root-head:   #2FBE90;
+      --root-fill:   #10312A;
+      --root-ink:    #B6EAD6;
+      --sub-head:    #67B980;
+      --sub-fill:    #16291D;
+      --sub-ink:     #C3E6CD;
+      --top-head:    #6FA0E4;
+      --top-fill:    #14243C;
+      --top-ink:     #C4DAF6;
+      --emb-head:    #D9B23C;
+      --emb-fill:    #2C2609;
+      --emb-ink:     #F0DFA6;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --paper:       #0C1411;
+    --surface:     #121D19;
+    --surface-2:   #172420;
+    --ink:         #E5EDE9;
+    --ink-2:       #B7C6C0;
+    --muted:       #85968F;
+    --rule:        #233229;
+    --rule-strong: #32443B;
+    --accent:      #45D5A3;
+    --accent-soft: #12312A;
+    --fix:         #F08C80;
+    --fix-soft:    #2C1815;
+    --fix-rule:    #4A2621;
+
+    --root-head:   #2FBE90;
+    --root-fill:   #10312A;
+    --root-ink:    #B6EAD6;
+    --sub-head:    #67B980;
+    --sub-fill:    #16291D;
+    --sub-ink:     #C3E6CD;
+    --top-head:    #6FA0E4;
+    --top-fill:    #14243C;
+    --top-ink:     #C4DAF6;
+    --emb-head:    #D9B23C;
+    --emb-fill:    #2C2609;
+    --emb-ink:     #F0DFA6;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+    font-size: var(--s0);
+    line-height: 1.62;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: 60rem;
+    margin: 0 auto;
+    padding: var(--s4) 1.5rem 5rem;
+  }
+
+  /* ---- masthead ---- */
+  .masthead { border-bottom: 2px solid var(--ink); padding-bottom: var(--s2); }
+
+  .eyebrow {
+    font-family: 'IBM Plex Mono', ui-monospace, monospace;
+    font-size: var(--s-2);
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin: 0 0 0.7rem;
+  }
+
+  h1 {
+    font-family: 'IBM Plex Serif', Georgia, serif;
+    font-size: clamp(1.9rem, 5vw, 2.9rem);
+    line-height: 1.1;
+    font-weight: 600;
+    margin: 0 0 0.7rem;
+    text-wrap: balance;
+    letter-spacing: -0.015em;
+  }
+
+  .standfirst {
+    font-size: 1.1rem;
+    color: var(--ink-2);
+    margin: 0;
+    max-width: 40rem;
+  }
+
+  .stamp {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1.6rem;
+    margin-top: var(--s1);
+    font-family: 'IBM Plex Mono', ui-monospace, monospace;
+    font-size: var(--s-2);
+    color: var(--muted);
+  }
+  .stamp b { color: var(--ink-2); font-weight: 500; }
+
+  /* ---- sections ---- */
+  section { margin-top: var(--s4); }
+
+  h2 {
+    font-family: 'IBM Plex Serif', Georgia, serif;
+    font-size: 1.55rem;
+    font-weight: 600;
+    line-height: 1.2;
+    margin: 0 0 0.5rem;
+    text-wrap: balance;
+    letter-spacing: -0.01em;
+  }
+
+  h3 {
+    font-size: 1.05rem;
+    font-weight: 600;
+    margin: var(--s2) 0 0.4rem;
+  }
+
+  p { margin: 0 0 1rem; max-width: 40rem; }
+  p:last-child { margin-bottom: 0; }
+
+  .lede { color: var(--ink-2); }
+
+  code, .mono {
+    font-family: 'IBM Plex Mono', ui-monospace, monospace;
+    font-size: 0.86em;
+  }
+
+  code {
+    background: var(--surface-2);
+    padding: 0.1em 0.36em;
+    border-radius: 3px;
+    color: var(--ink);
+  }
+
+  /* ---- the mismatch cards ---- */
+  .mismatch {
+    display: grid;
+    gap: 1px;
+    background: var(--rule);
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    overflow: hidden;
+    margin-top: var(--s2);
+  }
+
+  .mm {
+    background: var(--surface);
+    padding: 1.1rem 1.2rem;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0.55rem;
+  }
+
+  @media (min-width: 46rem) {
+    .mm { grid-template-columns: 15rem 1fr; gap: 1.4rem; }
+  }
+
+  .mm-lhs { display: flex; flex-direction: column; gap: 0.4rem; }
+
+  .mm-title { font-weight: 600; font-size: 0.97rem; line-height: 1.35; }
+
+  .mm-was {
+    font-family: 'IBM Plex Mono', ui-monospace, monospace;
+    font-size: var(--s-2);
+    color: var(--fix);
+    background: var(--fix-soft);
+    border: 1px solid var(--fix-rule);
+    border-radius: 4px;
+    padding: 0.22rem 0.45rem;
+    align-self: flex-start;
+  }
+
+  .mm-body { font-size: 0.95rem; color: var(--ink-2); }
+  .mm-body p { max-width: none; margin-bottom: 0.6rem; }
+  .mm-body p:last-child { margin-bottom: 0; }
+
+  /* ---- entity cards ---- */
+  .kinds {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1.3rem;
+    margin: var(--s1) 0 0;
+    font-size: var(--s-1);
+    color: var(--ink-2);
+  }
+  .kinds span { display: inline-flex; align-items: center; gap: 0.42rem; }
+  .sw { width: 0.85rem; height: 0.85rem; border-radius: 3px; display: inline-block; }
+  .sw.r { background: var(--root-head); }
+  .sw.s { background: var(--sub-head); }
+  .sw.t { background: var(--top-head); }
+  .sw.e { background: var(--emb-head); }
+
+  .entity {
+    margin-top: var(--s2);
+    border: 1px solid var(--rule-strong);
+    border-radius: 8px;
+    overflow: hidden;
+    background: var(--surface);
+  }
+
+  .ent-head {
+    padding: 0.7rem 1rem;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.4rem 0.9rem;
+  }
+
+  .ent-name {
+    font-family: 'IBM Plex Mono', ui-monospace, monospace;
+    font-weight: 600;
+    font-size: 0.95rem;
+    letter-spacing: 0.02em;
+  }
+
+  .ent-path {
+    font-family: 'IBM Plex Mono', ui-monospace, monospace;
+    font-size: var(--s-2);
+    opacity: 0.85;
+  }
+
+  .ent-note {
+    padding: 0.65rem 1rem;
+    font-size: var(--s-1);
+    color: var(--ink-2);
+    background: var(--surface-2);
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .kind-r .ent-head { background: var(--root-fill); color: var(--root-ink); border-bottom: 2px solid var(--root-head); }
+  .kind-s .ent-head { background: var(--sub-fill);  color: var(--sub-ink);  border-bottom: 2px solid var(--sub-head); }
+  .kind-t .ent-head { background: var(--top-fill);  color: var(--top-ink);  border-bottom: 2px solid var(--top-head); }
+  .kind-e .ent-head { background: var(--emb-fill);  color: var(--emb-ink);  border-bottom: 2px solid var(--emb-head); }
+
+  .scroll { overflow-x: auto; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--s-1);
+    min-width: 40rem;
+  }
+
+  thead th {
+    text-align: left;
+    font-weight: 600;
+    font-size: var(--s-2);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted);
+    padding: 0.55rem 1rem;
+    border-bottom: 1px solid var(--rule-strong);
+    white-space: nowrap;
+  }
+
+  tbody td {
+    padding: 0.5rem 1rem;
+    border-bottom: 1px solid var(--rule);
+    vertical-align: top;
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:nth-child(even) td { background: color-mix(in srgb, var(--surface-2) 55%, transparent); }
+
+  td.f, td.t {
+    font-family: 'IBM Plex Mono', ui-monospace, monospace;
+    font-size: 0.8rem;
+    white-space: nowrap;
+  }
+  td.f { font-weight: 500; }
+  td.t { color: var(--ink-2); }
+  td.d { color: var(--ink-2); min-width: 16rem; }
+
+  .key {
+    font-family: 'IBM Plex Mono', ui-monospace, monospace;
+    font-size: 0.68rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    padding: 0.12rem 0.36rem;
+    border-radius: 3px;
+    white-space: nowrap;
+    display: inline-block;
+  }
+  .key.pk { background: var(--accent-soft); color: var(--root-head); border: 1px solid var(--root-head); }
+  .key.fk { background: var(--top-fill); color: var(--top-head); border: 1px solid var(--top-head); }
+  .key.lg { background: var(--emb-fill); color: var(--emb-head); border: 1px solid var(--emb-head); }
+
+  /* ---- correction table ---- */
+  .corrections { margin-top: var(--s2); border: 1px solid var(--rule-strong); border-radius: 8px; overflow: hidden; }
+  .corrections table { min-width: 44rem; }
+  .was { font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 0.78rem; color: var(--fix); text-decoration: line-through; text-decoration-thickness: 1px; white-space: nowrap; }
+  .now { font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 0.78rem; color: var(--accent); font-weight: 500; white-space: nowrap; }
+
+  /* ---- callout ---- */
+  .callout {
+    margin-top: var(--s2);
+    border: 1px solid var(--fix-rule);
+    background: var(--fix-soft);
+    border-radius: 8px;
+    padding: 1.1rem 1.2rem;
+  }
+  .callout h3 { margin-top: 0; color: var(--fix); }
+  .callout p { color: var(--ink-2); }
+  .callout p:last-child { margin-bottom: 0; }
+
+  .note {
+    margin-top: var(--s2);
+    border-left: 3px solid var(--accent);
+    background: var(--accent-soft);
+    padding: 0.9rem 1.1rem;
+    border-radius: 0 6px 6px 0;
+    font-size: var(--s-1);
+    color: var(--ink-2);
+  }
+  .note p { max-width: none; }
+
+  ol.steps { margin: var(--s1) 0 0; padding-left: 1.3rem; max-width: 40rem; }
+  ol.steps li { margin-bottom: 0.7rem; color: var(--ink-2); }
+  ol.steps li:last-child { margin-bottom: 0; }
+  ol.steps strong { color: var(--ink); }
+
+  ul.plain { margin: 0.6rem 0 0; padding-left: 1.2rem; max-width: 40rem; }
+  ul.plain li { margin-bottom: 0.5rem; color: var(--ink-2); }
+
+  footer {
+    margin-top: var(--s4);
+    padding-top: var(--s1);
+    border-top: 1px solid var(--rule);
+    font-size: var(--s-2);
+    color: var(--muted);
+    font-family: 'IBM Plex Mono', ui-monospace, monospace;
+    line-height: 1.7;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    a { transition: color 120ms ease; }
+  }
+  a { color: var(--accent); }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <p class="eyebrow">Appendix · Chapter III</p>
+    <h1>WattWise Data Dictionary</h1>
+    <p class="standfirst">Every field the running system writes, typed as Firestore actually stores it. Built to sit beside the corrected ERD, and to survive a panel member opening the Firebase console mid-defence.</p>
+    <div class="stamp">
+      <span><b>Verified</b> 29 August 2026</span>
+      <span><b>Against</b> functions/src/ and src/services/firebase/</span>
+      <span><b>Store</b> Cloud Firestore (nam5)</span>
+      <span><b>Entities</b> 16</span>
+    </div>
+  </header>
+
+  <section>
+    <h2>Short answer</h2>
+    <p class="lede">The dictionary you photographed belongs to <em>Pananam</em>, a different capstone on a relational database. It is a fine format to borrow and a dangerous one to copy, because every column in it encodes an assumption that is false for WattWise. Below is the dictionary in that same shape, with the types corrected to what the system stores.</p>
+    <p>Your ERD and this dictionary now agree. They did not before: the ERD was verified on 19 August and nine fields have been renamed, retyped, or added since. Those are listed further down, so you can correct the ERD rather than discover the gap during questioning.</p>
+  </section>
+
+  <section>
+    <h2>Why the relational template cannot be copied straight across</h2>
+    <p class="lede">Four assumptions in the Pananam tables, and what each becomes here. These are the rows a panel member with database experience will stop on.</p>
+
+    <div class="mismatch">
+
+      <div class="mm">
+        <div class="mm-lhs">
+          <span class="mm-title">Keys are strings, never integers</span>
+          <span class="mm-was">ID · Int(10) · PK</span>
+        </div>
+        <div class="mm-body">
+          <p>Firestore document IDs are strings, and WattWise's carry meaning: a user is keyed by their Firebase Auth UID, an outlet by the literal <code>"outlet1"</code>, a daily rollup by <code>"2026-08-28"</code>, a budget by <code>"2026-08"</code>. There is no auto-increment integer anywhere in the system.</p>
+          <p>Writing <code>Int(10)</code> in the dictionary is not a rounding error — it describes a database WattWise does not have, and one console screenshot disproves it.</p>
+        </div>
+      </div>
+
+      <div class="mm">
+        <div class="mm-lhs">
+          <span class="mm-title">Numbers are stored as numbers</span>
+          <span class="mm-was">EstimatedHarvest · Varchar(100)</span>
+        </div>
+        <div class="mm-body">
+          <p>Pananam types nearly every field <code>Varchar(100)</code>, harvest quantities included. WattWise cannot: energy, power, voltage, current and every peso amount are Firestore <code>number</code> fields, and the accuracy claims in Chapter IV are arithmetic performed on them directly.</p>
+          <p>A dictionary that types <code>totalEnergy</code> as text invites the obvious question of how you summed it.</p>
+        </div>
+      </div>
+
+      <div class="mm">
+        <div class="mm-lhs">
+          <span class="mm-title">The path is the foreign key</span>
+          <span class="mm-was">FarmerID · Int(10) · FK1</span>
+        </div>
+        <div class="mm-body">
+          <p>A relational child table needs a <code>FarmerID</code> column to say who owns the row. In Firestore the location says it: <code>users/abc123/outlets/outlet1</code> already encodes ownership, so there is no <code>userId</code> field on the outlet document and adding one would be redundant.</p>
+          <p>This is why the <em>Firestore path</em> column below is load-bearing rather than decorative. Only four genuine foreign keys survive — references to an outlet carried as an ordinary field, because the document does not live under that outlet.</p>
+        </div>
+      </div>
+
+      <div class="mm">
+        <div class="mm-lhs">
+          <span class="mm-title">Maps and arrays have no relational equivalent</span>
+          <span class="mm-was">— no column type —</span>
+        </div>
+        <div class="mm-body">
+          <p>Several WattWise fields are structured values: <code>thresholds</code> is a nested map, <code>applianceProfiles</code> and <code>pushTokens</code> are arrays, <code>applianceBreakdown</code> is an array of maps. A relational schema would normalise each into its own table.</p>
+          <p>Keeping them inline is deliberate and defensible — an appliance profile is meaningless apart from its user, and reading a user's thresholds should not cost a join. Type them <code>map</code> and <code>array</code>, and say why in the description column.</p>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="note">
+      <p>One more thing worth noticing rather than copying: in Pananam's own <code>CropClassification</code> table, <code>CropName</code> is marked <strong>FK1</strong> although it is that table's own descriptive name, and <code>tblCrop.CropClassification</code> is marked <strong>FK3</strong> while typed <code>Varchar(100)</code> rather than as the integer key it would have to reference. Mis-marked keys are the most common defect in a data dictionary. Check every <span class="key fk">FK</span> below against the path column — each one should point at a document that genuinely exists elsewhere.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>The dictionary</h2>
+    <p class="lede">Sixteen entities. Field names are the literal keys in Firestore, so any row here can be checked by opening the console and comparing character for character.</p>
+
+    <div class="kinds">
+      <span><i class="sw r"></i> Root document</span>
+      <span><i class="sw e"></i> Embedded in the root document</span>
+      <span><i class="sw s"></i> Subcollection under the user</span>
+      <span><i class="sw t"></i> Top-level collection</span>
+    </div>
+
+    <!-- USER -->
+    <div class="entity kind-r">
+      <div class="ent-head"><span class="ent-name">USER</span><span class="ent-path">users/{userId}</span></div>
+      <div class="ent-note">Document ID is the Firebase Auth UID. Every subcollection below hangs off this document, which is why no child carries a <code>userId</code> field.</div>
+      <div class="scroll"><table>
+        <thead><tr><th>Field name</th><th>Data type</th><th>Details</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td class="f">userId</td><td class="t">string</td><td><span class="key pk">PK</span></td><td class="d">Document ID. The Firebase Auth UID, not a field inside the document.</td></tr>
+          <tr><td class="f">name</td><td class="t">string</td><td></td><td class="d">Display name, kept in step with the Auth profile so email and app address the user identically.</td></tr>
+          <tr><td class="f">email</td><td class="t">string</td><td></td><td class="d">Sign-in address; also where invoices and alerts are sent.</td></tr>
+          <tr><td class="f">rateProfileId</td><td class="t">string · null</td><td></td><td class="d">Which PELCO III rate profile prices this account. Null until the user sets rates.</td></tr>
+          <tr><td class="f">supplyRates</td><td class="t">map</td><td></td><td class="d">Per-component tariff rates copied from the user's paper bill (generation, transmission, and the rest).</td></tr>
+          <tr><td class="f">hasSupplyRates</td><td class="t">boolean</td><td></td><td class="d">Whether real rates were entered. Distinguishes a priced bill from one estimated on seeded defaults.</td></tr>
+          <tr><td class="f">supplyRatesUpdatedAt</td><td class="t">timestamp</td><td></td><td class="d">When the rates were last edited.</td></tr>
+          <tr><td class="f">monthlyBudget</td><td class="t">number</td><td></td><td class="d">Budget carried forward into a new month before that month's budget document exists.</td></tr>
+          <tr><td class="f">applianceProfiles</td><td class="t">array&lt;map&gt;</td><td></td><td class="d">Learned appliance signatures, embedded rather than a subcollection. See APPLIANCE_PROFILE.</td></tr>
+          <tr><td class="f">pushTokens</td><td class="t">array&lt;string&gt;</td><td></td><td class="d">Expo push tokens. An array because one account may be signed in on more than one phone; entries are added and removed individually.</td></tr>
+          <tr><td class="f">device</td><td class="t">map</td><td></td><td class="d">The linked Hub: <code>deviceId</code>, <code>token</code>, <code>previousToken</code>, <code>previousTokenValidUntilMs</code>, <code>tokenRotatedAtMs</code>, <code>linkedAt</code>, <code>updatedAt</code>, <code>active</code>. The previous token stays valid for a 15-minute grace window so a rotation cannot strand a Hub mid-flash.</td></tr>
+          <tr><td class="f">deviceId</td><td class="t">string</td><td><span class="key lg">legacy</span></td><td class="d">Flat mirror of <code>device.deviceId</code>, still written and still read as a fallback by device authentication.</td></tr>
+          <tr><td class="f">deviceToken</td><td class="t">string</td><td><span class="key lg">legacy</span></td><td class="d">Flat mirror of <code>device.token</code>.</td></tr>
+          <tr><td class="f">isLifeline</td><td class="t">boolean</td><td></td><td class="d">Whether the account is billed on PELCO III's lifeline rate, which changes the tariff applied.</td></tr>
+          <tr><td class="f">preferences</td><td class="t">map</td><td></td><td class="d">Currency symbol, notification toggle, language.</td></tr>
+          <tr><td class="f">lastLogin</td><td class="t">timestamp</td><td></td><td class="d">Most recent sign-in.</td></tr>
+        </tbody>
+      </table></div>
+    </div>
+
+    <!-- APPLIANCE_PROFILE -->
+    <div class="entity kind-e">
+      <div class="ent-head"><span class="ent-name">APPLIANCE_PROFILE</span><span class="ent-path">users/{userId} → applianceProfiles[ ]</span></div>
+      <div class="ent-note">An array inside the user document, not a collection. Held on the <em>user</em> and not the outlet on purpose: an appliance moved from outlet 1 to outlet 2 keeps its learned profile instead of being re-learned.</div>
+      <div class="scroll"><table>
+        <thead><tr><th>Field name</th><th>Data type</th><th>Details</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td class="f">applianceName</td><td class="t">string</td><td><span class="key pk">key</span></td><td class="d">The name the user confirmed. Unique within the array.</td></tr>
+          <tr><td class="f">signatures</td><td class="t">array&lt;map&gt;</td><td></td><td class="d">Up to four measured power signatures per appliance, so one label can cover more than one operating regime.</td></tr>
+          <tr><td class="f">sampleCount</td><td class="t">number</td><td></td><td class="d">How many readings the signatures were built from.</td></tr>
+          <tr><td class="f">updatedAt</td><td class="t">timestamp</td><td></td><td class="d">When the profile was last taught.</td></tr>
+        </tbody>
+      </table></div>
+    </div>
+
+    <!-- OUTLET -->
+    <div class="entity kind-s">
+      <div class="ent-head"><span class="ent-name">OUTLET</span><span class="ent-path">users/{userId}/outlets/{outletId}</span></div>
+      <div class="ent-note">Exactly two per user. Document ID is the literal string <code>"outlet1"</code> or <code>"outlet2"</code> — a stable identifier, never generated. This is the widest document in the system because it carries live telemetry as well as state.</div>
+      <div class="scroll"><table>
+        <thead><tr><th>Field name</th><th>Data type</th><th>Details</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td class="f">outletId</td><td class="t">string</td><td><span class="key pk">PK</span></td><td class="d">Document ID: <code>"outlet1"</code> or <code>"outlet2"</code>.</td></tr>
+          <tr><td class="f">outletNumber</td><td class="t">number</td><td></td><td class="d">1 or 2. The numeric form other collections reference.</td></tr>
+          <tr><td class="f">applianceName</td><td class="t">string</td><td></td><td class="d">The name shown on the dashboard, set by the user or confirmed from a suggestion.</td></tr>
+          <tr><td class="f">status</td><td class="t">string</td><td></td><td class="d"><code>"on"</code> or <code>"off"</code>, as last reported by the Hub.</td></tr>
+          <tr><td class="f">pendingStatus</td><td class="t">string</td><td></td><td class="d">A switch requested but not yet confirmed by hardware. Deleted once the Hub reports the new state.</td></tr>
+          <tr><td class="f">pendingStatusUntilMs</td><td class="t">number</td><td></td><td class="d">When the pending state stops being honoured, so a lost command cannot freeze the display.</td></tr>
+          <tr><td class="f">voltage</td><td class="t">number</td><td></td><td class="d">Volts, from the PZEM sensor.</td></tr>
+          <tr><td class="f">current</td><td class="t">number</td><td></td><td class="d">Amperes.</td></tr>
+          <tr><td class="f">power</td><td class="t">number</td><td></td><td class="d">Watts drawn at the last reading.</td></tr>
+          <tr><td class="f">energy</td><td class="t">number</td><td><span class="key lg">alias</span></td><td class="d">Today's kWh. Kept as a mirror of <code>energyTodayKwh</code> for older client code.</td></tr>
+          <tr><td class="f">energyTodayKwh</td><td class="t">number</td><td></td><td class="d">Energy accumulated today, in kWh.</td></tr>
+          <tr><td class="f">energyDateKey</td><td class="t">string</td><td></td><td class="d">The Manila date <code>"YYYY-MM-DD"</code> the running total belongs to. Without it, yesterday's total was reported as today's.</td></tr>
+          <tr><td class="f">energyMeterKwh</td><td class="t">number</td><td></td><td class="d">The raw lifetime counter as the PZEM reports it, before any per-day arithmetic.</td></tr>
+          <tr><td class="f">energyPreviousDayKwh</td><td class="t">number</td><td></td><td class="d">Yesterday's total, retained so the midnight rollover can be audited.</td></tr>
+          <tr><td class="f">energyPreviousDateKey</td><td class="t">string</td><td></td><td class="d">The date the previous total belongs to.</td></tr>
+          <tr><td class="f">peakPowerTodayW</td><td class="t">number</td><td></td><td class="d">Highest wattage seen today.</td></tr>
+          <tr><td class="f">peakPowerTodayAtMs</td><td class="t">number</td><td></td><td class="d">When that peak occurred, epoch milliseconds.</td></tr>
+          <tr><td class="f">totalEnergy</td><td class="t">number</td><td></td><td class="d">Cumulative kWh across the life of the outlet.</td></tr>
+          <tr><td class="f">deviceId</td><td class="t">string</td><td><span class="key fk">FK</span></td><td class="d">Which Hub reported this outlet. References <code>devices/{deviceId}</code>.</td></tr>
+          <tr><td class="f">detectionState</td><td class="t">map</td><td></td><td class="d">The appliance-detection run in progress: <code>sampleCount</code>, <code>meanPower</code>, <code>m2Power</code>, <code>peakPower</code>, <code>activeSamples</code>, <code>highSamples</code>, <code>lowSamples</code>, <code>idleStreak</code>, <code>runStartedAtMs</code>, <code>lastSampleAtMs</code>, <code>modelVersion</code>. A run ends only when the outlet is switched off.</td></tr>
+          <tr><td class="f">applianceIdentity</td><td class="t">map</td><td></td><td class="d">What the outlet is named versus what it measures as: <code>namedAs</code>, <code>measuredAs</code>, <code>state</code>, <code>matchScore</code>, <code>recognised</code>, <code>confidence</code>, <code>unsupported</code>, <code>suggestionPending</code>, <code>updatedAtMs</code>. Suggestion only — it never renames anything by itself.</td></tr>
+          <tr><td class="f">chargingState</td><td class="t">map</td><td></td><td class="d">Tracks a battery charger through its taper so a finished charge can be reported once, not repeatedly.</td></tr>
+          <tr><td class="f">safety</td><td class="t">map</td><td></td><td class="d">Over-power condition for this outlet and for the pair: <code>overPower</code>, <code>overPowerAtMs</code>, <code>overPowerW</code>, <code>limitW</code>, <code>totalOverPower</code>, <code>totalLimitW</code>.</td></tr>
+          <tr><td class="f">relayFault</td><td class="t">map</td><td></td><td class="d">A relay commanded off that is still passing current: <code>state</code>, <code>firstSeenAtMs</code>, <code>observedW</code>, <code>confirmedAtMs</code>.</td></tr>
+          <tr><td class="f">metricsUpdatedAtMs</td><td class="t">number</td><td></td><td class="d">When telemetry last arrived, epoch milliseconds. Every screen showing a live figure checks this before trusting it.</td></tr>
+          <tr><td class="f">lastUpdated</td><td class="t">timestamp</td><td></td><td class="d">Server timestamp of the last write of any kind.</td></tr>
+        </tbody>
+      </table></div>
+    </div>
+
+    <!-- DEVICE_COMMAND -->
+    <div class="entity kind-s">
+      <div class="ent-head"><span class="ent-name">DEVICE_COMMAND</span><span class="ent-path">users/{userId}/device_commands/{commandId}</span></div>
+      <div class="ent-note">Auto-generated ID. The Hub is never pushed to — it polls <code>getDeviceCommand</code> for pending rows and reports back through <code>ackDeviceCommand</code>.</div>
+      <div class="scroll"><table>
+        <thead><tr><th>Field name</th><th>Data type</th><th>Details</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td class="f">commandId</td><td class="t">string</td><td><span class="key pk">PK</span></td><td class="d">Auto-generated document ID.</td></tr>
+          <tr><td class="f">action</td><td class="t">string</td><td></td><td class="d">What the Hub is asked to do, e.g. switch an outlet on or off.</td></tr>
+          <tr><td class="f">outletId</td><td class="t">string · null</td><td><span class="key fk">FK</span></td><td class="d">Target outlet. Null for a command aimed at the device rather than one outlet.</td></tr>
+          <tr><td class="f">deviceId</td><td class="t">string</td><td><span class="key fk">FK</span></td><td class="d">Hub the command was dispatched to. References <code>devices/{deviceId}</code>.</td></tr>
+          <tr><td class="f">reason</td><td class="t">string</td><td></td><td class="d">Why it was issued — manual, schedule, safety cut-off.</td></tr>
+          <tr><td class="f">source</td><td class="t">string</td><td></td><td class="d">Which part of the system issued it.</td></tr>
+          <tr><td class="f">delivery</td><td class="t">map</td><td></td><td class="d"><code>status</code>, <code>lastAckStatus</code>, <code>channel</code>, <code>timeoutMs</code>, <code>timedOut</code>, <code>updatedAt</code>. A command unacknowledged past its timeout is marked stale by a job running every minute.</td></tr>
+          <tr><td class="f">acknowledgment</td><td class="t">map</td><td></td><td class="d">What the Hub reported back, and when.</td></tr>
+          <tr><td class="f">metadata</td><td class="t">map</td><td></td><td class="d">Carries <code>historyLogId</code>, so a failed command can go back and annotate the history row it created.</td></tr>
+          <tr><td class="f">issuedAtMs</td><td class="t">number</td><td></td><td class="d">Issue time in epoch milliseconds, used for timeout arithmetic.</td></tr>
+          <tr><td class="f">issuedAt</td><td class="t">timestamp</td><td></td><td class="d">Server timestamp of issue.</td></tr>
+        </tbody>
+      </table></div>
+    </div>
+
+    <!-- SCHEDULE -->
+    <div class="entity kind-s">
+      <div class="ent-head"><span class="ent-name">SCHEDULE</span><span class="ent-path">users/{userId}/schedules/{scheduleId}</span></div>
+      <div class="ent-note">Auto-generated ID. Executed server-side by <code>checkScheduledTimers</code>, which runs every minute — a schedule the server has not received will not fire, however it looks on the phone.</div>
+      <div class="scroll"><table>
+        <thead><tr><th>Field name</th><th>Data type</th><th>Details</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td class="f">scheduleId</td><td class="t">string</td><td><span class="key pk">PK</span></td><td class="d">Auto-generated document ID.</td></tr>
+          <tr><td class="f">outlet</td><td class="t">string</td><td><span class="key fk">FK</span></td><td class="d"><code>"1"</code> or <code>"2"</code> — stored as a <em>string</em>, unlike the numeric <code>outlet</code> on history and notification rows.</td></tr>
+          <tr><td class="f">type</td><td class="t">string</td><td></td><td class="d"><code>"countdown"</code> or <code>"scheduled"</code>.</td></tr>
+          <tr><td class="f">action</td><td class="t">string</td><td></td><td class="d"><code>"ON"</code> or <code>"OFF"</code>.</td></tr>
+          <tr><td class="f">active</td><td class="t">boolean</td><td></td><td class="d">Whether the timer is armed.</td></tr>
+          <tr><td class="f">days</td><td class="t">array&lt;string&gt;</td><td></td><td class="d">Repeat days for a scheduled timer.</td></tr>
+          <tr><td class="f">scheduledTime</td><td class="t">string · null</td><td></td><td class="d"><code>"HH:MM"</code>. Null for a countdown.</td></tr>
+          <tr><td class="f">countdownTime</td><td class="t">string · null</td><td></td><td class="d"><code>"HH:MM:SS"</code> as entered. Null for a scheduled timer.</td></tr>
+          <tr><td class="f">countdownDuration</td><td class="t">number · null</td><td></td><td class="d">The same duration in seconds.</td></tr>
+          <tr><td class="f">countdownRemaining</td><td class="t">number · null</td><td></td><td class="d">Seconds left to run.</td></tr>
+          <tr><td class="f">countdownStartedAt</td><td class="t">timestamp · null</td><td></td><td class="d">When the countdown began.</td></tr>
+          <tr><td class="f">createdAt</td><td class="t">timestamp</td><td></td><td class="d">When the timer was created.</td></tr>
+          <tr><td class="f">lastTriggered</td><td class="t">timestamp · null</td><td></td><td class="d">Last time it fired. Null until it has.</td></tr>
+        </tbody>
+      </table></div>
+    </div>
+
+    <!-- POWER_SAFETY -->
+    <div class="entity kind-s">
+      <div class="ent-head"><span class="ent-name">POWER_SAFETY</span><span class="ent-path">users/{userId}/power_safety/settings</span></div>
+      <div class="ent-note">Exactly one document per user, with the fixed ID <code>"settings"</code>. These are the cloud's copy of the limits; the Hub enforces its own ceiling in firmware with no cloud call in the path.</div>
+      <div class="scroll"><table>
+        <thead><tr><th>Field name</th><th>Data type</th><th>Details</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td class="f">settings</td><td class="t">string</td><td><span class="key pk">PK</span></td><td class="d">Document ID. The fixed literal <code>"settings"</code>, not generated.</td></tr>
+          <tr><td class="f">currentStage</td><td class="t">string</td><td></td><td class="d">Present safety grade: normal, warning, critical.</td></tr>
+          <tr><td class="f">protectionEnabled</td><td class="t">boolean</td><td></td><td class="d">Whether automatic cut-off is armed.</td></tr>
+          <tr><td class="f">autoProtectionEnabled</td><td class="t">boolean</td><td></td><td class="d">Written alongside the above and kept equal to it.</td></tr>
+          <tr><td class="f">thresholds</td><td class="t">map</td><td></td><td class="d">Nested, not flat: <code>voltage.min</code>, <code>voltage.max</code>, <code>current.max</code>, <code>power.max</code>. Power is clamped to 500 W on write, the ceiling the hardware enforces.</td></tr>
+          <tr><td class="f">outlet1</td><td class="t">map</td><td></td><td class="d">Last readings for outlet 1: <code>voltage</code>, <code>current</code>, <code>power</code>.</td></tr>
+          <tr><td class="f">outlet2</td><td class="t">map</td><td></td><td class="d">The same for outlet 2.</td></tr>
+          <tr><td class="f">alerts</td><td class="t">array&lt;map&gt;</td><td></td><td class="d">Recent safety alerts raised for this account.</td></tr>
+          <tr><td class="f">lastCutoff</td><td class="t">timestamp · null</td><td></td><td class="d">When protection last opened a relay.</td></tr>
+          <tr><td class="f">lastUpdated</td><td class="t">timestamp</td><td></td><td class="d">Last write.</td></tr>
+        </tbody>
+      </table></div>
+    </div>
+
+    <!-- HISTORY_LOG -->
+    <div class="entity kind-s">
+      <div class="ent-head"><span class="ent-name">HISTORY_LOG</span><span class="ent-path">users/{userId}/history_logs/{logId}</span></div>
+      <div class="ent-note">One row per switch event, written when the switch is <em>requested</em>. A command that is never confirmed comes back and marks its own row, so the History screen can tell a real switch from an unconfirmed one.</div>
+      <div class="scroll"><table>
+        <thead><tr><th>Field name</th><th>Data type</th><th>Details</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td class="f">logId</td><td class="t">string</td><td><span class="key pk">PK</span></td><td class="d">Auto-generated document ID.</td></tr>
+          <tr><td class="f">outlet</td><td class="t">number</td><td><span class="key fk">FK</span></td><td class="d">1 or 2. Numeric here, unlike the string on SCHEDULE.</td></tr>
+          <tr><td class="f">outletName</td><td class="t">string</td><td></td><td class="d">Appliance name at the moment of the event, copied in rather than looked up — a log must not be rewritten by a later rename.</td></tr>
+          <tr><td class="f">action</td><td class="t">string</td><td></td><td class="d"><code>"on"</code> or <code>"off"</code>.</td></tr>
+          <tr><td class="f">source</td><td class="t">string</td><td></td><td class="d">manual, schedule, or safety.</td></tr>
+          <tr><td class="f">power</td><td class="t">number</td><td></td><td class="d">Watts being drawn at the moment of a switch-off; always 0 for a switch-on.</td></tr>
+          <tr><td class="f">delivery</td><td class="t">map</td><td></td><td class="d"><code>confirmed</code>, <code>status</code>, <code>commandId</code>, <code>markedAtMs</code>. Only written when the switch failed, so an unannotated row still means what it always meant.</td></tr>
+          <tr><td class="f">timestamp</td><td class="t">timestamp</td><td></td><td class="d">When the event was recorded.</td></tr>
+        </tbody>
+      </table></div>
+    </div>
+
+    <!-- HISTORY_DAILY -->
+    <div class="entity kind-s">
+      <div class="ent-head"><span class="ent-name">HISTORY_DAILY</span><span class="ent-path">users/{userId}/history_daily/{date}</span></div>
+      <div class="ent-note">Document ID is the date itself, <code>"2026-08-28"</code>. One row per date, not per outlet — both outlets are columns on the same row. Written by <code>processDailyRollup</code> at midnight, Asia/Manila.</div>
+      <div class="scroll"><table>
+        <thead><tr><th>Field name</th><th>Data type</th><th>Details</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td class="f">date</td><td class="t">string</td><td><span class="key pk">PK</span></td><td class="d">Document ID, <code>"YYYY-MM-DD"</code> in Manila time.</td></tr>
+          <tr><td class="f">outlet1Energy</td><td class="t">number</td><td></td><td class="d">kWh measured on outlet 1 that day.</td></tr>
+          <tr><td class="f">outlet2Energy</td><td class="t">number</td><td></td><td class="d">kWh measured on outlet 2.</td></tr>
+          <tr><td class="f">outlet1Name</td><td class="t">string</td><td></td><td class="d">Appliance name on outlet 1 that day, frozen at rollup.</td></tr>
+          <tr><td class="f">outlet2Name</td><td class="t">string</td><td></td><td class="d">The same for outlet 2.</td></tr>
+          <tr><td class="f">outlet1Cost</td><td class="t">number</td><td></td><td class="d">Pesos attributed to outlet 1.</td></tr>
+          <tr><td class="f">outlet2Cost</td><td class="t">number</td><td></td><td class="d">Pesos attributed to outlet 2.</td></tr>
+          <tr><td class="f">totalEnergy</td><td class="t">number</td><td></td><td class="d">Both outlets combined, kWh.</td></tr>
+          <tr><td class="f">cost</td><td class="t">number</td><td></td><td class="d">Total pesos for the day.</td></tr>
+          <tr><td class="f">bill</td><td class="t">map</td><td></td><td class="d">The PELCO III breakdown behind that figure, so a cost can be traced to the tariff components that produced it.</td></tr>
+          <tr><td class="f">applianceBreakdown</td><td class="t">array&lt;map&gt;</td><td></td><td class="d">Energy and cost per appliance name. The only place appliance identity affects a number — and it never feeds the bill total.</td></tr>
+          <tr><td class="f">peakPower</td><td class="t">number</td><td></td><td class="d">Highest wattage seen that day.</td></tr>
+          <tr><td class="f">peakHour</td><td class="t">number</td><td></td><td class="d">Hour of day, 0–23, when that peak occurred.</td></tr>
+          <tr><td class="f">createdAt</td><td class="t">timestamp</td><td></td><td class="d">When the rollup ran.</td></tr>
+        </tbody>
+      </table></div>
+    </div>
+
+    <!-- BUDGET -->
+    <div class="entity kind-s">
+      <div class="ent-head"><span class="ent-name">BUDGET</span><span class="ent-path">users/{userId}/budget/{month}</span></div>
+      <div class="ent-note">Document ID is the month, <code>"2026-08"</code>. Spending is recalculated by the daily rollup; alerts are raised by a Firestore trigger watching this document.</div>
+      <div class="scroll"><table>
+        <thead><tr><th>Field name</th><th>Data type</th><th>Details</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td class="f">month</td><td class="t">string</td><td><span class="key pk">PK</span></td><td class="d">Document ID, <code>"YYYY-MM"</code>.</td></tr>
+          <tr><td class="f">monthlyBudget</td><td class="t">number</td><td></td><td class="d">The pesos the user set as this month's limit.</td></tr>
+          <tr><td class="f">currentSpending</td><td class="t">number</td><td></td><td class="d">Pesos spent so far this month, both outlets.</td></tr>
+          <tr><td class="f">outlet1Spending</td><td class="t">number</td><td></td><td class="d">Attributed to outlet 1.</td></tr>
+          <tr><td class="f">outlet2Spending</td><td class="t">number</td><td></td><td class="d">Attributed to outlet 2.</td></tr>
+          <tr><td class="f">thresholds</td><td class="t">map</td><td></td><td class="d">Which alerts have already fired: <code>fifty</code>, <code>seventyFive</code>, <code>ninety</code>, <code>hundred</code>. Reset when the budget changes, because a flag set against a different figure is meaningless.</td></tr>
+          <tr><td class="f">lastUpdated</td><td class="t">timestamp</td><td></td><td class="d">Last write.</td></tr>
+        </tbody>
+      </table></div>
+    </div>
+
+    <!-- REFERENCE_COMPARISON -->
+    <div class="entity kind-s">
+      <div class="ent-head"><span class="ent-name">REFERENCE_COMPARISON</span><span class="ent-path">users/{userId}/reference_comparison/{month}</span></div>
+      <div class="ent-note">Document ID is the month. Holds the figures copied off the user's paper bill, so the system's estimate can be checked against the real thing.</div>
+      <div class="scroll"><table>
+        <thead><tr><th>Field name</th><th>Data type</th><th>Details</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td class="f">month</td><td class="t">string</td><td><span class="key pk">PK</span></td><td class="d">Document ID, <code>"YYYY-MM"</code> — the month the electricity was <em>used</em>, not the month the bill arrived.</td></tr>
+          <tr><td class="f">previousBillKWh</td><td class="t">number</td><td></td><td class="d">kWh printed on the paper bill.</td></tr>
+          <tr><td class="f">previousBillCost</td><td class="t">number</td><td></td><td class="d">Pesos printed on the paper bill.</td></tr>
+          <tr><td class="f">outlet1Energy</td><td class="t">number</td><td></td><td class="d">Optional user-entered breakdown for outlet 1.</td></tr>
+          <tr><td class="f">outlet2Energy</td><td class="t">number</td><td></td><td class="d">Optional breakdown for outlet 2.</td></tr>
+          <tr><td class="f">notes</td><td class="t">string</td><td></td><td class="d">Free text.</td></tr>
+          <tr><td class="f">createdAt</td><td class="t">timestamp</td><td></td><td class="d">When the bill was first entered.</td></tr>
+          <tr><td class="f">updatedAt</td><td class="t">timestamp</td><td></td><td class="d">When it was last edited.</td></tr>
+        </tbody>
+      </table></div>
+    </div>
+
+    <!-- INVOICE -->
+    <div class="entity kind-s">
+      <div class="ent-head"><span class="ent-name">INVOICE</span><span class="ent-path">users/{userId}/invoices/{invoiceId}</span></div>
+      <div class="ent-note">Auto-generated ID. Produced monthly, first as an estimate and then finalized once the month closes.</div>
+      <div class="scroll"><table>
+        <thead><tr><th>Field name</th><th>Data type</th><th>Details</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td class="f">invoiceId</td><td class="t">string</td><td><span class="key pk">PK</span></td><td class="d">Auto-generated document ID.</td></tr>
+          <tr><td class="f">billingMonth</td><td class="t">string</td><td></td><td class="d"><code>"YYYY-MM"</code>.</td></tr>
+          <tr><td class="f">readingDateFrom</td><td class="t">string</td><td></td><td class="d">First date covered.</td></tr>
+          <tr><td class="f">readingDateTo</td><td class="t">string</td><td></td><td class="d">Last date covered.</td></tr>
+          <tr><td class="f">totalKwh</td><td class="t">number</td><td></td><td class="d">Energy billed across both outlets.</td></tr>
+          <tr><td class="f">outlet1Kwh</td><td class="t">number</td><td></td><td class="d">Outlet 1's share.</td></tr>
+          <tr><td class="f">outlet2Kwh</td><td class="t">number</td><td></td><td class="d">Outlet 2's share.</td></tr>
+          <tr><td class="f">totalAmountDue</td><td class="t">number</td><td></td><td class="d">Pesos payable on the PELCO III tariff.</td></tr>
+          <tr><td class="f">effectiveRate</td><td class="t">number</td><td></td><td class="d">Pesos per kWh implied by the total — the figure comparable to a bill's headline rate.</td></tr>
+          <tr><td class="f">projectedTotal</td><td class="t">number</td><td></td><td class="d">End-of-month projection while the month is still running.</td></tr>
+          <tr><td class="f">supplyRates</td><td class="t">map</td><td></td><td class="d">The tariff actually applied, stored on the invoice so a later rate change cannot silently reprice history.</td></tr>
+          <tr><td class="f">isLifeline</td><td class="t">boolean</td><td></td><td class="d">Whether the lifeline rate was applied.</td></tr>
+          <tr><td class="f">applianceBreakdown</td><td class="t">array&lt;map&gt;</td><td></td><td class="d">Energy and cost per appliance name.</td></tr>
+          <tr><td class="f">status</td><td class="t">string</td><td></td><td class="d"><code>DRAFT</code>, <code>PENDING</code> or <code>FINALIZED</code>.</td></tr>
+          <tr><td class="f">generatedAt</td><td class="t">timestamp</td><td></td><td class="d">When the invoice was produced.</td></tr>
+          <tr><td class="f">finalizedAt</td><td class="t">timestamp · null</td><td></td><td class="d">When it was finalized. Null while still an estimate.</td></tr>
+        </tbody>
+      </table></div>
+    </div>
+
+    <!-- NOTIFICATION -->
+    <div class="entity kind-s">
+      <div class="ent-head"><span class="ent-name">NOTIFICATION</span><span class="ent-path">users/{userId}/notifications/{notificationId}</span></div>
+      <div class="ent-note">Auto-generated ID. The in-app list; push delivery is handled separately from the tokens on the user document.</div>
+      <div class="scroll"><table>
+        <thead><tr><th>Field name</th><th>Data type</th><th>Details</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td class="f">notificationId</td><td class="t">string</td><td><span class="key pk">PK</span></td><td class="d">Auto-generated document ID.</td></tr>
+          <tr><td class="f">type</td><td class="t">string</td><td></td><td class="d">cutoff, budget, device, daily summary.</td></tr>
+          <tr><td class="f">title</td><td class="t">string</td><td></td><td class="d">Headline shown in the list.</td></tr>
+          <tr><td class="f">message</td><td class="t">string</td><td></td><td class="d">Body text.</td></tr>
+          <tr><td class="f">outlet</td><td class="t">number · null</td><td><span class="key fk">FK</span></td><td class="d">Outlet concerned, 1 or 2. Null for anything account-wide.</td></tr>
+          <tr><td class="f">read</td><td class="t">boolean</td><td></td><td class="d">Whether the user has opened it.</td></tr>
+          <tr><td class="f">metadata</td><td class="t">map</td><td></td><td class="d">Structured detail behind the message — thresholds crossed, watts measured.</td></tr>
+          <tr><td class="f">timestamp</td><td class="t">timestamp</td><td></td><td class="d">When it was raised.</td></tr>
+        </tbody>
+      </table></div>
+    </div>
+
+    <!-- SECURITY_EVENT -->
+    <div class="entity kind-s">
+      <div class="ent-head"><span class="ent-name">SECURITY_EVENT</span><span class="ent-path">users/{userId}/security_events/{eventId}</span></div>
+      <div class="ent-note">Auto-generated ID. An append-only audit trail, expired automatically after 90 days by a Firestore TTL policy on <code>expireAt</code>.</div>
+      <div class="scroll"><table>
+        <thead><tr><th>Field name</th><th>Data type</th><th>Details</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td class="f">eventId</td><td class="t">string</td><td><span class="key pk">PK</span></td><td class="d">Auto-generated document ID.</td></tr>
+          <tr><td class="f">type</td><td class="t">string</td><td></td><td class="d">device_linked, device_transferred, device_unlinked, device_auth_failed, password_reset_requested, rate_limit_exceeded.</td></tr>
+          <tr><td class="f">detail</td><td class="t">string</td><td></td><td class="d">Sanitised description. Never contains a token or password.</td></tr>
+          <tr><td class="f">at</td><td class="t">timestamp</td><td></td><td class="d">When it happened.</td></tr>
+          <tr><td class="f">expireAt</td><td class="t">timestamp</td><td></td><td class="d">Deletion date, 90 days after the event.</td></tr>
+        </tbody>
+      </table></div>
+    </div>
+
+    <!-- DEVICE -->
+    <div class="entity kind-t">
+      <div class="ent-head"><span class="ent-name">DEVICE</span><span class="ent-path">devices/{deviceId}</span></div>
+      <div class="ent-note">Top level, not under a user — the hardware exists before it is paired, and only one account may hold it at a time. Document ID is the Hub's own identifier, e.g. <code>ESP32_ROOM_A</code>.</div>
+      <div class="scroll"><table>
+        <thead><tr><th>Field name</th><th>Data type</th><th>Details</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td class="f">deviceId</td><td class="t">string</td><td><span class="key pk">PK</span></td><td class="d">Document ID. The identifier burned into the firmware.</td></tr>
+          <tr><td class="f">userId</td><td class="t">string</td><td><span class="key fk">FK</span></td><td class="d">Account currently holding this Hub. References <code>users/{userId}</code>. Many devices to one user; one user per device.</td></tr>
+          <tr><td class="f">pendingCommandIds</td><td class="t">array&lt;string&gt;</td><td></td><td class="d">A queue, not a pointer. A single <code>lastCommandId</code> meant two commands issued inside one poll interval left the earlier one unreachable.</td></tr>
+          <tr><td class="f">lastCommand</td><td class="t">map</td><td></td><td class="d">Summary of the most recent dispatch.</td></tr>
+          <tr><td class="f">lastCommandDeadlineAtMs</td><td class="t">number</td><td></td><td class="d">When the newest command is considered timed out.</td></tr>
+          <tr><td class="f">health</td><td class="t">map</td><td></td><td class="d"><code>status</code>, <code>statusReason</code>, <code>updatedAtMs</code> and the command pointers behind them. Drives the Hub status shown in Settings.</td></tr>
+          <tr><td class="f">lastMetricsAtMs</td><td class="t">number</td><td></td><td class="d">Last telemetry POST. Enforces a minimum 700 ms interval between uploads.</td></tr>
+          <tr><td class="f">lastPayloadTimestampMs</td><td class="t">number</td><td></td><td class="d">Timestamp of the last accepted payload. A reading at or before it is rejected as a replay.</td></tr>
+          <tr><td class="f">updatedAt</td><td class="t">timestamp</td><td></td><td class="d">Last write.</td></tr>
+        </tbody>
+      </table></div>
+    </div>
+
+    <!-- MAIL -->
+    <div class="entity kind-t">
+      <div class="ent-head"><span class="ent-name">MAIL</span><span class="ent-path">mail/{mailId}</span></div>
+      <div class="ent-note">Top level and deliberately without a user reference — an outbound queue drained by the Firestore <em>Trigger Email</em> extension, which writes the <code>delivery</code> field back itself.</div>
+      <div class="scroll"><table>
+        <thead><tr><th>Field name</th><th>Data type</th><th>Details</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td class="f">mailId</td><td class="t">string</td><td><span class="key pk">PK</span></td><td class="d">Auto-generated document ID.</td></tr>
+          <tr><td class="f">to</td><td class="t">string</td><td></td><td class="d">Recipient address.</td></tr>
+          <tr><td class="f">message</td><td class="t">map</td><td></td><td class="d">Subject and HTML body.</td></tr>
+          <tr><td class="f">delivery</td><td class="t">map</td><td></td><td class="d">Send state, written by the extension rather than by WattWise.</td></tr>
+        </tbody>
+      </table></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Nine rows to correct in the ERD</h2>
+    <p class="lede">The ERD artifact was verified on 19 August. These fields have been renamed, retyped or added since, so the two documents currently contradict each other. Fix the ERD, not this table.</p>
+
+    <div class="corrections scroll"><table>
+      <thead><tr><th>Entity</th><th>ERD says</th><th>System stores</th><th>Why it matters</th></tr></thead>
+      <tbody>
+        <tr><td class="f">USER</td><td class="was">expoPushToken · string</td><td class="now">pushTokens · array</td><td class="d">One account can be signed in on several phones. A single string cannot describe it.</td></tr>
+        <tr><td class="f">USER</td><td class="was">deviceId · string</td><td class="now">device · map</td><td class="d">The link carries a token, a previous token, a rotation time and an active flag — not just an ID.</td></tr>
+        <tr><td class="f">OUTLET</td><td class="was">— 12 fields absent —</td><td class="now">energyDateKey, …</td><td class="d">The day-boundary and peak-power fields postdate the ERD. <code>energyDateKey</code> in particular is the fix for yesterday's kWh being shown as today's.</td></tr>
+        <tr><td class="f">POWER_SAFETY</td><td class="was">stage</td><td class="now">currentStage</td><td class="d">Plain rename; the ERD name does not exist in the document.</td></tr>
+        <tr><td class="f">POWER_SAFETY</td><td class="was">{powerMax, voltageMin…}</td><td class="now">{power:{max}, voltage:{min,max}}</td><td class="d">The map is nested, not flat. A panel reading the flat form and opening the console sees neither key.</td></tr>
+        <tr><td class="f">BUDGET</td><td class="was">budgetAmount</td><td class="now">monthlyBudget</td><td class="d">Rename.</td></tr>
+        <tr><td class="f">BUDGET</td><td class="was">alertsSent · map</td><td class="now">thresholds · map</td><td class="d">Both name and contents differ — the keys are <code>fifty</code>, <code>seventyFive</code>, <code>ninety</code>, <code>hundred</code>.</td></tr>
+        <tr><td class="f">SCHEDULE</td><td class="was">outlet · number</td><td class="now">outlet · string</td><td class="d">Written through <code>String(...)</code>. HISTORY_LOG and NOTIFICATION really do store it as a number, so the inconsistency is real and worth stating rather than smoothing over.</td></tr>
+        <tr><td class="f">NOTIFICATION</td><td class="was">createdAt</td><td class="now">timestamp</td><td class="d">Rename. Also affects any query you describe as ordering by <code>createdAt</code>.</td></tr>
+        <tr><td class="f">INVOICE</td><td class="was">totalAmount</td><td class="now">totalAmountDue</td><td class="d">Rename, plus <code>effectiveRate</code>, <code>projectedTotal</code> and <code>supplyRates</code> which the ERD omits.</td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <section>
+    <h2>One thing neither document currently mentions</h2>
+
+    <div class="callout">
+      <h3>There is a Realtime Database write in the command path</h3>
+      <p>When a command is dispatched, <code>deviceCommandDispatcher.js</code> writes the Firestore document and then attempts a second write to the Firebase <em>Realtime Database</em> at <code>devices/{deviceId}/commands/{outletId}</code>. On success it records <code>delivery.channel = "firestore+rtdb"</code>; on failure it logs a warning, sets <code>"firestore"</code>, and carries on.</p>
+      <p><strong>Nothing reads it.</strong> The firmware calls exactly three URLs — <code>updateOutletMetrics</code>, <code>getDeviceCommand</code> and <code>ackDeviceCommand</code> — all Cloud Functions over HTTPS. There is no Realtime Database client in the sketch, and <code>firebase.json</code> declares no database, no rules file and no instance. It is a leftover from the original push-based design that the poll-based flow replaced.</p>
+      <p>You do not need to document it as an entity, and you should not draw it on the ERD. You do need to be able to answer it, because a panel member browsing the Firebase console may find a Realtime Database node sitting there. <strong>Settle it before the defence:</strong> open any recent document under <code>device_commands</code> and read <code>delivery.channel</code>. If every row says <code>"firestore"</code>, the write has been failing all along and the node is empty. If any says <code>"firestore+rtdb"</code>, it is landing, and one sentence in Chapter III should say it is a redundant dispatch mirror that no client consumes.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>Making the claim checkable</h2>
+    <p class="lede">The value of a data dictionary at a defence is that it can be opened and compared. Four checks, in the order a panel would run them.</p>
+    <ol class="steps">
+      <li><strong>Open one document of each kind.</strong> Firebase console → Firestore → <code>users</code> → your UID. Every path in the tables above appears as a literal folder name. If a path is wrong, it is wrong visibly and immediately.</li>
+      <li><strong>Check one field name character for character.</strong> <code>currentStage</code>, not <code>stage</code>. <code>monthlyBudget</code>, not <code>budgetAmount</code>. These are the rows a careful reader spot-checks.</li>
+      <li><strong>Confirm a type by its colour.</strong> The console renders numbers, strings, booleans and maps distinctly. Every field typed <code>number</code> here should render as a number there — that is the check that disproves the <code>Varchar(100)</code> habit.</li>
+      <li><strong>Show that the path is the key.</strong> Open <code>users/{uid}/outlets/outlet1</code> and point out there is no <code>userId</code> field on it. That single observation carries the whole argument for why this dictionary is not shaped like Pananam's.</li>
+    </ol>
+
+    <h3>If you are asked why an ERD at all for a document database</h3>
+    <p>The entities and their relationships are real regardless of the store. What changes is that the subcollection path <em>is</em> the foreign key. Everything a relational schema would express as a <code>userID</code> column, Firestore expresses as location — which is why USER is the parent in the diagram rather than a column on every table, and why only four true foreign keys appear in this dictionary.</p>
+  </section>
+
+  <footer>
+    Verified 29 August 2026 against functions/src/ and src/services/firebase/ — field names come from the code that writes them, not from docs/firebase-schema.md, which is the original design document and is stale in places.<br>
+    Field lists are the load-bearing keys; a small number of housekeeping fields are omitted for legibility, and are marked where a map's contents are summarised inline.<br>
+    Companion to the WattWise Entity Relationship Diagram. Where the two disagree, this document is the later reading.
+  </footer>
+
+</div>
