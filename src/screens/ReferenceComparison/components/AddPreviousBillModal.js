@@ -9,7 +9,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
-  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../../../constants/colors';
@@ -20,12 +19,21 @@ const AddPreviousBillModal = ({ visible, selectedMonth, previousData, onClose, o
   const [outlet1, setOutlet1] = useState('');
   const [outlet2, setOutlet2] = useState('');
 
+  // Both of these stay inside the modal rather than opening a second one on top
+  // of it. The error names a field the user can see; the delete confirmation
+  // replaces the footer, so the row being deleted stays visible while it is
+  // being confirmed.
+  const [error, setError] = useState(null);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+
   useEffect(() => {
     if (visible) {
       setKWh(previousData.kWh > 0 ? previousData.kWh.toString() : '');
       setCost(previousData.cost > 0 ? previousData.cost.toString() : '');
       setOutlet1(previousData.outlet1 > 0 ? previousData.outlet1.toString() : '');
       setOutlet2(previousData.outlet2 > 0 ? previousData.outlet2.toString() : '');
+      setError(null);
+      setConfirmingDelete(false);
     }
   }, [visible, previousData]);
 
@@ -44,14 +52,16 @@ const AddPreviousBillModal = ({ visible, selectedMonth, previousData, onClose, o
     const outlet2Value = parseFloat(outlet2) || 0;
 
     if (!kWh || isNaN(kWhValue) || kWhValue < 0) {
-      Alert.alert('Invalid Input', 'Please enter a valid energy usage (kWh)');
+      setError('Enter the energy usage in kWh, exactly as printed on the bill.');
       return;
     }
 
     if (!cost || isNaN(costValue) || costValue < 0) {
-      Alert.alert('Invalid Input', 'Please enter a valid cost amount');
+      setError('Enter the total cost in pesos, exactly as printed on the bill.');
       return;
     }
+
+    setError(null);
 
     onSave({
       kWh: kWhValue,
@@ -66,26 +76,20 @@ const AddPreviousBillModal = ({ visible, selectedMonth, previousData, onClose, o
 
   const handleDelete = () => {
     if (!onDelete) return;
+    setError(null);
+    setConfirmingDelete(true);
+  };
 
-    Alert.alert(
-      'Delete this bill?',
-      `This will remove the actual bill you saved for ${getBillMonthLabel()}.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            const result = await onDelete();
-            if (result?.success) {
-              onClose();
-            } else {
-              Alert.alert('Delete failed', result?.error || 'Please try again.');
-            }
-          },
-        },
-      ]
-    );
+  const handleConfirmDelete = async () => {
+    const result = await onDelete();
+
+    if (result?.success) {
+      onClose();
+      return;
+    }
+
+    setConfirmingDelete(false);
+    setError(result?.error || 'The saved bill could not be deleted. Please try again.');
   };
 
   return (
@@ -147,7 +151,10 @@ const AddPreviousBillModal = ({ visible, selectedMonth, previousData, onClose, o
                 <TextInput
                   style={styles.input}
                   value={kWh}
-                  onChangeText={setKWh}
+                  onChangeText={(text) => {
+                    setKWh(text);
+                    if (error) setError(null);
+                  }}
                   placeholder="0.00"
                   keyboardType="decimal-pad"
                   placeholderTextColor={COLORS.textLight}
@@ -164,7 +171,10 @@ const AddPreviousBillModal = ({ visible, selectedMonth, previousData, onClose, o
                 <TextInput
                   style={styles.input}
                   value={cost}
-                  onChangeText={setCost}
+                  onChangeText={(text) => {
+                    setCost(text);
+                    if (error) setError(null);
+                  }}
                   placeholder="0.00"
                   keyboardType="decimal-pad"
                   placeholderTextColor={COLORS.textLight}
@@ -216,30 +226,60 @@ const AddPreviousBillModal = ({ visible, selectedMonth, previousData, onClose, o
             </View>
           </ScrollView>
 
-          <View style={styles.footer}>
-            {hasExistingData && (
+          {error ? (
+            <View style={styles.errorBanner}>
+              <Ionicons name="alert-circle" size={16} color={COLORS.error} />
+              <Text style={styles.errorText}>{error}</Text>
+            </View>
+          ) : null}
+
+          {confirmingDelete ? (
+            <View style={styles.confirmBar}>
+              <Text style={styles.confirmText}>
+                Remove the actual bill saved for {getBillMonthLabel()}? This cannot be undone.
+              </Text>
+              <View style={styles.footer}>
+                <TouchableOpacity
+                  style={[styles.button, styles.cancelButton]}
+                  onPress={() => setConfirmingDelete(false)}
+                >
+                  <Text style={styles.cancelText}>Keep</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.button, styles.deleteButton]}
+                  onPress={handleConfirmDelete}
+                >
+                  <Text style={styles.deleteText}>Delete</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ) : (
+            <View style={styles.footer}>
+              {hasExistingData && (
+                <TouchableOpacity
+                  style={[styles.button, styles.deleteButton]}
+                  onPress={handleDelete}
+                >
+                  <Text style={styles.deleteText}>Delete</Text>
+                </TouchableOpacity>
+              )}
+
               <TouchableOpacity
-                style={[styles.button, styles.deleteButton]}
-                onPress={handleDelete}
+                style={[styles.button, styles.cancelButton]}
+                onPress={onClose}
               >
-                <Text style={styles.deleteText}>Delete</Text>
+                <Text style={styles.cancelText}>Cancel</Text>
               </TouchableOpacity>
-            )}
 
-            <TouchableOpacity
-              style={[styles.button, styles.cancelButton]}
-              onPress={onClose}
-            >
-              <Text style={styles.cancelText}>Cancel</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.button, styles.saveButton]}
-              onPress={handleSave}
-            >
-              <Text style={styles.saveText}>Save Data</Text>
-            </TouchableOpacity>
-          </View>
+              <TouchableOpacity
+                style={[styles.button, styles.saveButton]}
+                onPress={handleSave}
+              >
+                <Text style={styles.saveText}>Save Data</Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
       </KeyboardAvoidingView>
     </Modal>
@@ -391,6 +431,35 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: COLORS.primary,
     lineHeight: 18,
+  },
+  errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    marginHorizontal: 16,
+    marginBottom: 4,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    backgroundColor: '#FEF2F2',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#FECACA',
+  },
+  errorText: {
+    flex: 1,
+    fontSize: 13,
+    lineHeight: 19,
+    color: COLORS.error,
+  },
+  confirmBar: {
+    backgroundColor: '#FEF2F2',
+  },
+  confirmText: {
+    fontSize: 13,
+    lineHeight: 19,
+    color: COLORS.textDark,
+    paddingHorizontal: 16,
+    paddingTop: 14,
   },
   footer: {
     flexDirection: 'row',

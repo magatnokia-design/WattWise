@@ -5,9 +5,9 @@ import {
   StyleSheet,
   TouchableOpacity,
   ActivityIndicator,
-  Alert,
 } from 'react-native';
 import { COLORS } from '../../../constants/colors';
+import AppDialog from '../../../components/common/AppDialog';
 import { describeUsageRows } from '../utils/historyHelpers';
 
 /**
@@ -30,6 +30,7 @@ import { describeUsageRows } from '../utils/historyHelpers';
  */
 export const ExportUsageCard = ({ usage = [] }) => {
   const [busy, setBusy] = useState(false);
+  const [dialog, setDialog] = useState(null);
 
   const rowCount = usage.filter((row) => row?.date).length;
   const hasRows = rowCount > 0;
@@ -60,10 +61,12 @@ export const ExportUsageCard = ({ usage = [] }) => {
       });
 
       if (!(await Sharing.isAvailableAsync())) {
-        Alert.alert(
-          'Sharing unavailable',
-          'This device cannot open a share sheet, so the file cannot be handed anywhere.'
-        );
+        setDialog({
+          icon: '📤',
+          tone: 'warning',
+          title: 'This device cannot share files',
+          message: 'The workbook was created, but there is no share sheet to hand it to, so it cannot leave the app.',
+        });
         return;
       }
 
@@ -73,10 +76,12 @@ export const ExportUsageCard = ({ usage = [] }) => {
         UTI: 'org.openxmlformats.spreadsheetml.sheet',
       });
     } catch (error) {
-      Alert.alert(
-        'Export failed',
-        error?.message || 'The file could not be created. Please try again.'
-      );
+      setDialog({
+        icon: '⚠️',
+        tone: 'danger',
+        title: 'The export did not finish',
+        message: error?.message || 'The workbook could not be created. Please try again.',
+      });
     } finally {
       setBusy(false);
     }
@@ -116,6 +121,10 @@ export const ExportUsageCard = ({ usage = [] }) => {
         Energy and cost per outlet, one row per day. Opens in Excel or Sheets,
         already formatted.
       </Text>
+
+      {dialog ? (
+        <AppDialog {...dialog} confirmLabel="Got it" onConfirm={() => setDialog(null)} />
+      ) : null}
     </View>
   );
 };

@@ -8,7 +8,6 @@ import {
   TouchableOpacity,
   KeyboardAvoidingView,
   Platform,
-  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../../../constants/colors';
@@ -16,9 +15,14 @@ import { COLORS } from '../../../constants/colors';
 const SetBudgetModal = ({ visible, currentBudget, onClose, onSave }) => {
   const [budget, setBudget] = useState('');
 
+  // Inline rather than a dialog: the field that needs fixing is right here, and
+  // a second layer over a modal would cover it.
+  const [error, setError] = useState(null);
+
   useEffect(() => {
     if (visible) {
       setBudget(currentBudget > 0 ? currentBudget.toString() : '');
+      setError(null);
     }
   }, [visible, currentBudget]);
 
@@ -26,9 +30,11 @@ const SetBudgetModal = ({ visible, currentBudget, onClose, onSave }) => {
     const budgetValue = parseFloat(budget);
 
     if (!budget || isNaN(budgetValue) || budgetValue <= 0) {
-      Alert.alert('Invalid Budget', 'Please enter a valid budget amount');
+      setError('Enter a budget above ₱0 to track spending against.');
       return;
     }
+
+    setError(null);
 
     onSave(budgetValue);
     onClose();
@@ -73,13 +79,18 @@ const SetBudgetModal = ({ visible, currentBudget, onClose, onSave }) => {
               <TextInput
                 style={styles.input}
                 value={budget}
-                onChangeText={setBudget}
+                onChangeText={(text) => {
+                  setBudget(text);
+                  if (error) setError(null);
+                }}
                 placeholder="0.00"
                 keyboardType="decimal-pad"
                 placeholderTextColor={COLORS.textLight}
                 autoFocus
               />
             </View>
+
+            {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
             <View style={styles.suggestionsContainer}>
               <Text style={styles.suggestionsLabel}>Quick Select:</Text>
@@ -195,6 +206,12 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: '600',
     color: COLORS.text,
+  },
+  errorText: {
+    fontSize: 13,
+    lineHeight: 19,
+    color: COLORS.error,
+    marginBottom: 14,
   },
   suggestionsContainer: {
     marginBottom: 8,

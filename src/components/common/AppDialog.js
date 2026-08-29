@@ -18,6 +18,11 @@ import { COLORS } from '../../constants/colors';
  * Mount it conditionally - `{state ? <AppDialog .../> : null}` - rather than
  * leaving it mounted with `visible={false}`. React Native still renders a
  * Modal's children while it is hidden.
+ *
+ * `onDismiss` exists for the one case the two-button rule does not cover: a
+ * dialog whose *cancel* slot carries a real second choice rather than "go
+ * away". Backing out of that must not perform either choice, and without a
+ * separate handler it would perform the cancel one.
  */
 const TONES = {
   primary: { accent: COLORS.primary, tint: '#ECFDF5' },
@@ -35,6 +40,7 @@ export const AppDialog = ({
   cancelLabel,
   onConfirm,
   onCancel,
+  onDismiss,
   confirmDisabled = false,
 }) => {
   const palette = TONES[tone] || TONES.primary;
@@ -43,7 +49,7 @@ export const AppDialog = ({
   // there is no cancel - a one-button dialog is an acknowledgement, so
   // dismissing it and pressing OK mean the same thing. With two buttons they do
   // not, and backing out must never be read as consent.
-  const dismiss = onCancel || (cancelLabel ? undefined : onConfirm);
+  const dismiss = onDismiss || onCancel || (cancelLabel ? undefined : onConfirm);
 
   return (
     <Modal

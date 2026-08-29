@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Switch, TouchableOpacity, TextInput, Alert } from 'react-native';
+import { View, Text, StyleSheet, Switch, TouchableOpacity, TextInput } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../../../constants/colors';
+import AppDialog from '../../../components/common/AppDialog';
 
 const MAX_POWER_W = 500;
 
@@ -11,6 +12,7 @@ const ProtectionSettings = ({ enabled, onToggle, thresholds, onSaveThresholds })
   const [voltageMax, setVoltageMax] = useState(String(thresholds?.voltage?.max ?? 260));
   const [currentMax, setCurrentMax] = useState(String(thresholds?.current?.max ?? 10));
   const [powerMax, setPowerMax] = useState(String(thresholds?.power?.max ?? 500));
+  const [dialog, setDialog] = useState(null);
 
   useEffect(() => {
     setVoltageMin(String(thresholds?.voltage?.min ?? 190));
@@ -44,17 +46,32 @@ const ProtectionSettings = ({ enabled, onToggle, thresholds, onSaveThresholds })
       || Number.isNaN(nextThresholds.current.max)
       || Number.isNaN(nextThresholds.power.max)
     ) {
-      Alert.alert('Invalid values', 'Please enter valid numeric thresholds.');
+      setDialog({
+        icon: '⚠️',
+        tone: 'danger',
+        title: 'Those are not numbers',
+        message: 'Every threshold has to be a number. Check the fields and try again.',
+      });
       return;
     }
 
     if (rawPowerMax > MAX_POWER_W) {
-      Alert.alert('Power limit capped', `Max power is capped at ${MAX_POWER_W}W.`);
+      setDialog({
+        icon: '🛡️',
+        tone: 'warning',
+        title: 'Power limit capped',
+        message: `The maximum this hardware will enforce is ${MAX_POWER_W} W per outlet, so that is what was saved.`,
+      });
       setPowerMax(String(MAX_POWER_W));
     }
 
     if (nextThresholds.voltage.min >= nextThresholds.voltage.max) {
-      Alert.alert('Invalid voltage range', 'Voltage min must be less than voltage max.');
+      setDialog({
+        icon: '⚠️',
+        tone: 'danger',
+        title: 'That voltage range is inverted',
+        message: 'The minimum has to be lower than the maximum. Swap the two values and try again.',
+      });
       return;
     }
 
@@ -65,7 +82,12 @@ const ProtectionSettings = ({ enabled, onToggle, thresholds, onSaveThresholds })
 
     const result = await onSaveThresholds(nextThresholds);
     if (!result?.success) {
-      Alert.alert('Unable to save thresholds', result?.error || 'Please try again.');
+      setDialog({
+        icon: '⚠️',
+        tone: 'danger',
+        title: 'The thresholds were not saved',
+        message: result?.error || 'The previous limits are still in force. Please try again.',
+      });
       return;
     }
 
@@ -193,6 +215,14 @@ const ProtectionSettings = ({ enabled, onToggle, thresholds, onSaveThresholds })
           </View>
         )}
       </View>
+
+      {dialog ? (
+        <AppDialog
+          {...dialog}
+          confirmLabel={dialog.confirmLabel || 'Got it'}
+          onConfirm={() => setDialog(null)}
+        />
+      ) : null}
     </View>
   );
 };

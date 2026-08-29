@@ -2,7 +2,6 @@ import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
-  Alert,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
@@ -12,6 +11,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { COLORS } from '../../constants/colors';
 import TimerCard from './components/TimerCard';
 import AddTimerModal from './components/AddTimerModal';
+import AppDialog from '../../components/common/AppDialog';
 import { useSchedule } from './hooks/useSchedule';
 import { OfflineState } from '../../components/common/OfflineNotice';
 import {
@@ -55,6 +55,7 @@ const secondsUntilRun = (item, nowMs) => {
 
 const ScheduleScreen = () => {
   const [modalVisible, setModalVisible] = useState(false);
+  const [dialog, setDialog] = useState(null);
   const [activeFilter, setActiveFilter] = useState('All');
 
   const {
@@ -93,38 +94,47 @@ const ScheduleScreen = () => {
       return result;
     }
 
-    Alert.alert('Unable to save timer', result?.error || 'Please try again.');
+    // No dialog here - AddTimerModal stays open and prints the reason above its
+    // Save button, next to the fields the user would have to change.
     return result;
   }, [addSchedule]);
 
   // Deleting a timer is destructive and was previously a single unguarded tap,
   // unlike every other destructive action in the app.
   const handleDelete = useCallback((id, description) => {
-    Alert.alert(
-      'Delete Timer',
-      description
-        ? `Delete the timer for ${description}? This cannot be undone.`
-        : 'Delete this timer? This cannot be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            const result = await deleteSchedule(id);
-            if (!result?.success) {
-              Alert.alert('Unable to delete timer', result?.error || 'Please try again.');
-            }
-          },
-        },
-      ]
-    );
+    setDialog({
+      icon: '🗑️',
+      tone: 'danger',
+      title: 'Delete this timer?',
+      message: description
+        ? `The timer for ${description} will be removed. This cannot be undone.`
+        : 'The timer will be removed. This cannot be undone.',
+      confirmLabel: 'Delete',
+      cancelLabel: 'Keep',
+      onConfirm: async () => {
+        setDialog(null);
+        const result = await deleteSchedule(id);
+        if (!result?.success) {
+          setDialog({
+            icon: '⚠️',
+            tone: 'danger',
+            title: 'The timer was not deleted',
+            message: result?.error || 'It is still in the list. Please try again.',
+          });
+        }
+      },
+    });
   }, [deleteSchedule]);
 
   const handleToggle = useCallback(async (id, active) => {
     const result = await toggleSchedule(id, active);
     if (!result?.success) {
-      Alert.alert('Unable to update timer', result?.error || 'Please try again.');
+      setDialog({
+        icon: '⚠️',
+        tone: 'danger',
+        title: 'The timer did not change',
+        message: result?.error || 'It kept its previous setting. Please try again.',
+      });
     }
   }, [toggleSchedule]);
 
@@ -284,6 +294,15 @@ const ScheduleScreen = () => {
         onSave={handleSave}
         saving={loading}
       />
+
+      {dialog ? (
+        <AppDialog
+          {...dialog}
+          confirmLabel={dialog.confirmLabel || 'Got it'}
+          onCancel={() => setDialog(null)}
+          onConfirm={dialog.onConfirm || (() => setDialog(null))}
+        />
+      ) : null}
     </SafeAreaView>
   );
 };

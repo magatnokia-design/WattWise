@@ -3,7 +3,6 @@ import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
-  Alert,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
@@ -15,6 +14,7 @@ import { COLORS } from '../../constants/colors';
 import { SIZES, FONTS } from '../../constants/theme';
 import NotificationPanel from '../Notifications/components/NotificationPanel';
 import { useNotifications } from '../Notifications/hooks/useNotifications';
+import AppDialog from '../../components/common/AppDialog';
 import { RateNotice } from '../../components/common/RateNotice';
 import { OfflineState } from '../../components/common/OfflineNotice';
 import { useDismissibleNotice } from '../../hooks/useDismissibleNotice';
@@ -287,6 +287,9 @@ export const DashboardScreen = ({ navigation }) => {
   // during the round trip instead of queueing duplicate writes.
   const [isNamingOutlet, setIsNamingOutlet] = useState(null);
 
+  // One dialog at a time, held as its own props - the same shape Settings uses.
+  const [dialog, setDialog] = useState(null);
+
   // Handle toggle outlet
   const handleToggleOutlet = (outletNumber) => {
     setControlModal({ visible: true, outlet: outletNumber });
@@ -303,7 +306,19 @@ export const DashboardScreen = ({ navigation }) => {
       return;
     }
 
-    Alert.alert('Toggle Failed', result.error || 'Unable to update outlet status right now.');
+    // The confirmation sheet closes on failure too - it has nothing left to
+    // confirm, and leaving it open would put this dialog on top of another
+    // Modal. Deferred past its fade for the same reason.
+    setControlModal({ visible: false, outlet: null });
+    setTimeout(() => {
+      setDialog({
+        icon: '⚠️',
+        tone: 'danger',
+        title: 'The outlet did not switch',
+        message: result.error
+          || 'The command could not reach the Hub. Check that it is powered and online, then try again.',
+      });
+    }, 300);
   };
 
   const toggleSuggestionWhy = (outletNumber) => {
@@ -330,7 +345,12 @@ export const DashboardScreen = ({ navigation }) => {
       });
 
       if (!result.success) {
-        Alert.alert('Update Failed', result.error || 'Unable to apply the appliance name.');
+        setDialog({
+          icon: '⚠️',
+          tone: 'danger',
+          title: 'The name was not applied',
+          message: result.error || 'The outlet kept its previous name. Please try again.',
+        });
         return;
       }
 
@@ -339,11 +359,13 @@ export const DashboardScreen = ({ navigation }) => {
       // Naming always lands; learning the signature needs a few seconds of live
       // measurement, so say so instead of failing silently.
       if (!result.learned) {
-        Alert.alert(
-          'Saved as name only',
-          result.learnError ||
-            'Named, but not saved as a signature yet - keep it running for a few seconds and confirm again.'
-        );
+        setDialog({
+          icon: '📝',
+          tone: 'warning',
+          title: 'Saved as a name only',
+          message: result.learnError
+            || 'The outlet is named, but its power signature was not learned yet. Keep the appliance running for a few seconds and confirm again.',
+        });
       }
     } finally {
       setIsNamingOutlet(null);
@@ -705,6 +727,14 @@ export const DashboardScreen = ({ navigation }) => {
         visible={notificationVisible}
         onClose={() => setNotificationVisible(false)}
       />
+
+      {dialog ? (
+        <AppDialog
+          {...dialog}
+          confirmLabel={dialog.confirmLabel || 'Got it'}
+          onConfirm={() => setDialog(null)}
+        />
+      ) : null}
     </SafeAreaView>
   );
 };

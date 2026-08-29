@@ -5,7 +5,6 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Alert,
   Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -120,25 +119,47 @@ const SettingsScreen = ({ navigation }) => {
   // Tapping a saved appliance offers both actions. Renaming used to mean
   // forgetting and re-teaching, which discards the measured run the signature
   // was built from - so the non-destructive option is offered first.
+  // Three outcomes, two buttons: Rename takes the accent slot because it is the
+  // one that keeps the measured run, Forget takes the outline slot and opens its
+  // own confirmation, and backing out does neither. That last part is why
+  // `onDismiss` is passed - here the cancel slot is a real choice, not an exit.
   const handleSavedAppliancePress = useCallback((label) => {
-    Alert.alert(
-      label,
-      'Rename keeps the measured power signature. Forget deletes it, and detection falls back to the built-in appliance profiles.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Rename', onPress: () => setRenamingAppliance(label) },
-        {
-          text: 'Forget',
-          style: 'destructive',
-          onPress: async () => {
-            const result = await removeSavedAppliance(label);
-            if (!result.success) {
-              Alert.alert('Remove Failed', result.error || 'Unable to remove saved appliance.');
-            }
-          },
-        },
-      ]
-    );
+    const forget = async () => {
+      setDialog(null);
+      const result = await removeSavedAppliance(label);
+      if (!result.success) {
+        setDialog({
+          icon: '⚠️',
+          tone: 'danger',
+          title: 'Could not forget it',
+          message: result.error || 'The saved appliance is still there. Please try again.',
+        });
+      }
+    };
+
+    setDialog({
+      icon: '🔌',
+      title: label,
+      message: 'Rename keeps the measured power signature. Forget deletes it, and detection falls back to the built-in appliance profiles.',
+      confirmLabel: 'Rename',
+      cancelLabel: 'Forget',
+      onConfirm: () => {
+        setDialog(null);
+        setRenamingAppliance(label);
+      },
+      onCancel: () => {
+        setDialog({
+          icon: '🗑️',
+          tone: 'danger',
+          title: `Forget ${label}?`,
+          message: 'The power signature measured for this appliance is deleted. Detection falls back to the built-in profiles, which are less accurate for it until it is learned again.',
+          confirmLabel: 'Forget',
+          cancelLabel: 'Keep',
+          onConfirm: forget,
+        });
+      },
+      onDismiss: () => setDialog(null),
+    });
   }, [removeSavedAppliance]);
 
   const handleRenameSavedAppliance = useCallback(
@@ -163,8 +184,10 @@ const SettingsScreen = ({ navigation }) => {
   const handleRateSave = useCallback(async (rates) => {
     const result = await updateSupplyRates(rates);
 
+    // No dialog on failure: SupplyRateModal stays open and prints the reason
+    // under the fields the user has to correct. An alert on top of that said the
+    // same thing twice and covered the form while doing it.
     if (!result.success) {
-      Alert.alert('Unable to save rates', result.error || 'Please try again.');
       return result;
     }
 
@@ -356,8 +379,10 @@ const SettingsScreen = ({ navigation }) => {
 
   const handleDeviceSave = useCallback(async (deviceData) => {
     const result = await updateDeviceSettings(deviceData);
+
+    // Same reasoning as the rates above - ESP32DeviceModal renders the error
+    // inline beside the field that caused it.
     if (!result.success) {
-      Alert.alert('Unable to save device settings', result.error || 'Please try again.');
       return result;
     }
 
@@ -366,27 +391,34 @@ const SettingsScreen = ({ navigation }) => {
 
   const handleDeviceUnlink = useCallback(() => {
     if (!settings.esp32Linked) {
-      Alert.alert('No Linked Device', 'There is no device linked to this account.');
+      setDialog({
+        icon: '📡',
+        title: 'No device linked',
+        message: 'There is no Hub linked to this account yet. Scan its QR code to pair one.',
+      });
       return;
     }
 
-    Alert.alert(
-      'Remove Device',
-      `Remove ${settings.esp32DeviceId} from this account? Telemetry and commands from this hardware will be rejected until you link it again by scanning its QR code.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Remove',
-          style: 'destructive',
-          onPress: async () => {
-            const result = await clearDeviceSettings();
-            if (!result.success) {
-              Alert.alert('Unable to remove device', result.error || 'Please try again.');
-            }
-          },
-        },
-      ]
-    );
+    setDialog({
+      icon: '🗑️',
+      tone: 'danger',
+      title: 'Remove this device?',
+      message: `Telemetry and commands from ${settings.esp32DeviceId} will be rejected until you link it again by scanning its QR code.`,
+      confirmLabel: 'Remove',
+      cancelLabel: 'Keep',
+      onConfirm: async () => {
+        setDialog(null);
+        const result = await clearDeviceSettings();
+        if (!result.success) {
+          setDialog({
+            icon: '⚠️',
+            tone: 'danger',
+            title: 'Could not remove the device',
+            message: result.error || 'It is still linked to this account. Please try again.',
+          });
+        }
+      },
+    });
   }, [clearDeviceSettings, settings.esp32DeviceId, settings.esp32Linked]);
 
   const handleScanDeviceQR = useCallback(() => {
@@ -401,9 +433,23 @@ const SettingsScreen = ({ navigation }) => {
   // identical device state.
   const handleDeviceScanned = useCallback(async (deviceData) => {
     const result = await updateDeviceSettings(deviceData);
+
     if (result.success) {
-      Alert.alert('Device Linked', `${deviceData.deviceId} is now linked to your account.`);
+      // Deferred past the scanner's slide-out. The scanner closes itself the
+      // moment this returns, and a Modal mounted in the same frame as another
+      // Modal's dismissal can end up behind it - so the confirmation waits for a
+      // settled screen. `Alert.alert` did not need this; it was a native dialog
+      // outside React's view hierarchy.
+      setTimeout(() => {
+        setDialog({
+          icon: '✅',
+          title: 'Device linked',
+          message: `${deviceData.deviceId} is now linked to your account. Readings should appear on the dashboard within a few seconds.`,
+          confirmLabel: 'Done',
+        });
+      }, 400);
     }
+
     return result;
   }, [updateDeviceSettings]);
 
@@ -743,7 +789,9 @@ const SettingsScreen = ({ navigation }) => {
       {dialog ? (
         <AppDialog
           {...dialog}
-          onCancel={() => setDialog(null)}
+          confirmLabel={dialog.confirmLabel || 'Got it'}
+          onCancel={dialog.onCancel || (() => setDialog(null))}
+          onDismiss={dialog.onDismiss || (() => setDialog(null))}
           onConfirm={dialog.onConfirm || (() => setDialog(null))}
         />
       ) : null}

@@ -2,7 +2,6 @@ import React, { useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
-  Alert,
   StyleSheet,
   Modal,
   TouchableOpacity,
@@ -42,6 +41,11 @@ const AddTimerModal = ({ visible, onClose, onSave, saving = false }) => {
   const [schedHours, setSchedHours] = useState(0);
   const [schedMinutes, setSchedMinutes] = useState(0);
 
+  // Shown in the form rather than a dialog. This modal is where the mistake was
+  // made and where it has to be corrected, so the message belongs beside the
+  // Save button - not on a second layer covering the fields it is about.
+  const [error, setError] = useState(null);
+
   const handleDayToggle = useCallback((day) => {
     setSelectedDays(prev =>
       prev.includes(day) ? prev.filter(d => d !== day) : [...prev, day]
@@ -49,6 +53,7 @@ const AddTimerModal = ({ visible, onClose, onSave, saving = false }) => {
   }, []);
 
   const resetForm = useCallback(() => {
+    setError(null);
     setTimerType('countdown');
     setSelectedOutlet('1');
     setSelectedAction('ON');
@@ -61,13 +66,15 @@ const AddTimerModal = ({ visible, onClose, onSave, saving = false }) => {
   }, []);
 
   const handleSave = useCallback(async () => {
+    setError(null);
+
     if (timerType === 'countdown' && hours === 0 && minutes === 0 && seconds === 0) {
-      Alert.alert('Invalid duration', 'Set a countdown duration greater than 0 seconds.');
+      setError('Set a countdown duration greater than 0 seconds.');
       return;
     }
 
     if (timerType === 'scheduled' && selectedDays.length === 0) {
-      Alert.alert('Select repeat days', 'Choose at least one day for a scheduled timer.');
+      setError('Choose at least one day for a scheduled timer.');
       return;
     }
 
@@ -94,7 +101,10 @@ const AddTimerModal = ({ visible, onClose, onSave, saving = false }) => {
     const result = await onSave(scheduleData);
     if (result?.success) {
       resetForm();
+      return;
     }
+
+    setError(result?.error || 'The timer could not be saved. Please try again.');
   }, [
     timerType,
     selectedOutlet,
@@ -257,6 +267,12 @@ const AddTimerModal = ({ visible, onClose, onSave, saving = false }) => {
               </>
             )}
 
+            {error ? (
+              <View style={styles.errorBanner}>
+                <Text style={styles.errorText}>{error}</Text>
+              </View>
+            ) : null}
+
             {/* Action Buttons */}
             <View style={styles.actionRow}>
               <TouchableOpacity
@@ -284,6 +300,20 @@ const AddTimerModal = ({ visible, onClose, onSave, saving = false }) => {
 };
 
 const styles = StyleSheet.create({
+  errorBanner: {
+    marginTop: 16,
+    backgroundColor: '#FEF2F2',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+  },
+  errorText: {
+    fontSize: 13,
+    lineHeight: 19,
+    color: COLORS.error,
+  },
   overlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
