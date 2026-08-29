@@ -255,6 +255,24 @@ the code over that doc for data flow). Current top-level structure under `users/
   installs, logins, the three `npm ci` locations, the ESP32 toolchain, and what does and
   does not survive a reset. It was written from an actual recovery, not from memory.
 
+- **A stored reading is not a live one. Check when it was written.** Firestore holds
+  the last value the ESP32 posted indefinitely, so `power`, `energy` and their
+  siblings read exactly the same whether they arrived a second ago or three days
+  ago. Every screen that shows one has to ask its age. This shape has now been
+  fixed three times in three places, always after it reached a user:
+  - `9069b9e` - yesterday’s kWh reported as today’s on the dashboard, because a
+    running total was carried across midnight. Guarded on `energyDateKey`.
+  - `e5b3e25` - Analytics summing a frozen `power` field into "14.1 W drawing now"
+    beside its own "No signal" pill, while Home showed 0.0 W for the same outlet.
+  - `0e59ed2` - the Daily tab substituting the last rolled-up day when today had no
+    consumption, printing 28 August under a "Daily" badge on the 29th.
+
+  The three guards already exist - `energyDateKey` for a day, `hasFreshTelemetry`
+  (12 s) for an instant, `buildOutletMetrics` for the dashboard. **Before adding a
+  screen that reads telemetry, find which of those applies and use it.** The bug is
+  never the value; it is presenting a value from one moment as though it belonged
+  to another, with nothing on screen naming which moment it came from.
+
 ## ESP32 toolchain (arduino-cli)
 
 The Hub is built with **arduino-cli**, not the Arduino IDE. Core and libraries live under
