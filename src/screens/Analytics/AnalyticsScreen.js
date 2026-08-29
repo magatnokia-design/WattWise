@@ -440,13 +440,24 @@ export const AnalyticsScreen = ({ navigation }) => {
     [outlets, rateProfileId, supplyRates]
   );
 
-  const liveTotalPowerW = liveAppliances.reduce((sum, item) => sum + toNumber(item.powerW), 0);
-  const liveCostPerHour = liveAppliances.reduce((sum, item) => sum + toNumber(item.costPerHour), 0);
   // Telemetry arrives every couple of seconds while the device is connected.
   const telemetryIsStale = !outlets.some((outlet) => {
     const updatedMs = Number(outlet?.metricsUpdatedAtMs) || 0;
     return updatedMs > 0 && Date.now() - updatedMs < HARDWARE_STALE_THRESHOLD_MS;
   });
+
+  // Zeroed rather than carried forward once the Hub stops posting. `power` is a
+  // stored field, not a stream - it holds its last value indefinitely, so summing
+  // it after telemetry stops totals a load that is no longer connected. Home
+  // already zeroes on this same condition through buildOutletMetrics, and the two
+  // screens disagreeing is what put "14.1 W drawing now" on Analytics opposite
+  // "0.0 W - No reading" on Home, for the same outlet at the same moment.
+  const liveTotalPowerW = telemetryIsStale
+    ? 0
+    : liveAppliances.reduce((sum, item) => sum + toNumber(item.powerW), 0);
+  const liveCostPerHour = telemetryIsStale
+    ? 0
+    : liveAppliances.reduce((sum, item) => sum + toNumber(item.costPerHour), 0);
 
   useEffect(() => {
     if (!user?.uid) {

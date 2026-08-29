@@ -53,60 +53,76 @@ const LiveUsagePanel = ({ appliances = [], totalPowerW = 0, costPerHour = 0, isS
         )}
       </View>
 
-      <View style={styles.heroRow}>
-        <View>
-          <Text style={styles.heroValue}>{formatWatts(totalPowerW)}</Text>
-          <Text style={styles.heroLabel}>drawing now</Text>
-        </View>
-        <View style={styles.heroDivider} />
-        <View>
-          <Text style={styles.heroValue}>{formatCurrency(costPerHour)}</Text>
-          <Text style={styles.heroLabel}>per hour at this rate</Text>
-        </View>
-      </View>
+      {/* A frozen `power` field reads exactly like a live one, so presenting the
+          last values under "drawing now" asserted a load that had stopped. The
+          web client already gated this panel on freshness and said so in its own
+          comment; the phone never got the same fix, and reported 14.1 W drawing
+          for an outlet its own Home tab showed as 0.0 W with no reading.
 
-      {appliances.map((appliance, index) => {
-        const power = Number(appliance.powerW) || 0;
-        const widthPercent = power > 0 ? Math.max(4, (power / maxPower) * 100) : 0;
-
-        return (
-          <View key={appliance.outletNumber} style={styles.row}>
-            <View style={styles.rowHeader}>
-              <Text style={styles.applianceName} numberOfLines={1}>
-                {appliance.applianceName}
-              </Text>
-              <StatusPill appliance={appliance} />
-            </View>
-
-            <View style={styles.track}>
-              {widthPercent > 0 ? (
-                <View
-                  style={[
-                    styles.fill,
-                    {
-                      width: `${widthPercent}%`,
-                      backgroundColor: CHART_COLORS.series[index % CHART_COLORS.series.length],
-                    },
-                  ]}
-                />
-              ) : null}
-            </View>
-
-            <View style={styles.rowFooter}>
-              <Text style={styles.rowMetric}>{formatWatts(power)}</Text>
-              <Text style={styles.rowMeta}>
-                {appliance.energyKwh.toFixed(3)} kWh today · {formatCurrency(appliance.costToday)}
-              </Text>
-            </View>
-          </View>
-        );
-      })}
-
+          The numbers were real. Presenting them as current was not. */}
       {isStale ? (
-        <Text style={styles.staleNote}>
-          Showing the last reading received. Live values resume when the device reconnects.
-        </Text>
-      ) : null}
+        <View style={styles.empty}>
+          <Text style={styles.emptyTitle}>No readings in the last 12 seconds</Text>
+          <Text style={styles.emptyBody}>
+            The Hub may still be connected — Settings tracks that separately, because
+            checking for commands is silent. This panel fills in while readings are
+            actually arriving. Switching an outlet usually starts them again.
+          </Text>
+        </View>
+      ) : (
+        <>
+        <View style={styles.heroRow}>
+          <View>
+            <Text style={styles.heroValue}>{formatWatts(totalPowerW)}</Text>
+            <Text style={styles.heroLabel}>drawing now</Text>
+          </View>
+          <View style={styles.heroDivider} />
+          <View>
+            <Text style={styles.heroValue}>{formatCurrency(costPerHour)}</Text>
+            <Text style={styles.heroLabel}>per hour at this rate</Text>
+          </View>
+        </View>
+
+        {appliances.map((appliance, index) => {
+          const power = Number(appliance.powerW) || 0;
+          const widthPercent = power > 0 ? Math.max(4, (power / maxPower) * 100) : 0;
+
+          return (
+            <View key={appliance.outletNumber} style={styles.row}>
+              <View style={styles.rowHeader}>
+                <Text style={styles.applianceName} numberOfLines={1}>
+                  {appliance.applianceName}
+                </Text>
+                <StatusPill appliance={appliance} />
+              </View>
+
+              <View style={styles.track}>
+                {widthPercent > 0 ? (
+                  <View
+                    style={[
+                      styles.fill,
+                      {
+                        width: `${widthPercent}%`,
+                        backgroundColor: CHART_COLORS.series[index % CHART_COLORS.series.length],
+                      },
+                    ]}
+                  />
+                ) : null}
+              </View>
+
+              <View style={styles.rowFooter}>
+                <Text style={styles.rowMetric}>{formatWatts(power)}</Text>
+                <Text style={styles.rowMeta}>
+                  {appliance.energyKwh.toFixed(3)} kWh today · {formatCurrency(appliance.costToday)}
+                </Text>
+              </View>
+            </View>
+          );
+        })}
+
+        </>
+      )}
+
     </View>
   );
 };
@@ -230,11 +246,19 @@ const styles = StyleSheet.create({
     color: COLORS.textLight,
     textAlign: 'right',
   },
-  staleNote: {
+  empty: {
+    paddingVertical: 18,
+    gap: 6,
+  },
+  emptyTitle: {
+    ...FONTS.body,
+    color: COLORS.textDark,
+    fontWeight: '700',
+  },
+  emptyBody: {
     ...FONTS.small,
     color: COLORS.textLight,
-    marginTop: 12,
-    lineHeight: 16,
+    lineHeight: 18,
   },
 });
 
