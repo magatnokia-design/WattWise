@@ -582,9 +582,21 @@ export const AnalyticsScreen = ({ navigation }) => {
   // telemetry update, which is what makes today's figures move in real time.
   const analytics = useMemo(() => {
     if (selectedTab === 'Daily') {
-      // Today first. Only when nothing has been measured yet does this fall
-      // back to the last rolled-up day.
-      const dailyEntry = liveTodayEntry || fallbackDaily;
+      // Today, and only today. This read `liveTodayEntry || fallbackDaily`, so
+      // on a day with no consumption yet it substituted the last rolled-up day
+      // and printed it under a "Daily" badge with nothing naming the date - on
+      // 29 Aug it showed 28 Aug’s 0.01 kWh and P0.09 as though they were
+      // today’s. That is the same substitution 9069b9e removed from the
+      // dashboard; Analytics kept its own copy of it.
+      //
+      // A quiet day is information. It reports as zero, and the note below says
+      // when the last measured day actually was, so the figure is never silently
+      // borrowed from another date.
+      const dailyEntry = liveTodayEntry;
+
+      const lastMeasuredLabel = !dailyEntry && fallbackDaily?.date
+        ? formatShortDate(new Date(`${fallbackDaily.date}T00:00:00`))
+        : '';
 
       const totalEnergy = toNumber(dailyEntry?.totalEnergy);
       const outlet1Total = toNumber(dailyEntry?.outlet1Energy);
@@ -618,6 +630,9 @@ export const AnalyticsScreen = ({ navigation }) => {
           applianceUsage: aggregateApplianceUsage(dailyEntry ? [dailyEntry] : []),
           outlet1Name: String(dailyEntry?.outlet1Name || '').trim(),
           outlet2Name: String(dailyEntry?.outlet2Name || '').trim(),
+          emptyDayNote: lastMeasuredLabel
+            ? `Nothing measured today. Last recorded usage was ${lastMeasuredLabel}.`
+            : '',
         },
         chartLabels: ['Outlet 1', 'Outlet 2', 'Total'],
         chartData: [outlet1Total, outlet2Total, totalEnergy],
@@ -819,6 +834,9 @@ export const AnalyticsScreen = ({ navigation }) => {
           <Text style={styles.summarySubValue}>
             {formatCurrency(summary.totalCost)} estimated cost
           </Text>
+          {summary.emptyDayNote ? (
+            <Text style={styles.summaryNote}>{summary.emptyDayNote}</Text>
+          ) : null}
         </View>
 
         {/* Tabs */}
@@ -1058,6 +1076,13 @@ const styles = StyleSheet.create({
     ...FONTS.body,
     color: COLORS.white,
     opacity: 0.8,
+  },
+  summaryNote: {
+    ...FONTS.small,
+    color: COLORS.white,
+    opacity: 0.85,
+    marginTop: 8,
+    lineHeight: 17,
   },
   tabsContainer: {
     flexDirection: 'row',
