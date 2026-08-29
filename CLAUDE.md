@@ -273,6 +273,38 @@ the code over that doc for data flow). Current top-level structure under `users/
   never the value; it is presenting a value from one moment as though it belonged
   to another, with nothing on screen naming which moment it came from.
 
+- **A Firestore write does not fail when the phone is offline. It waits.**
+  `setDoc`, `updateDoc`, `addDoc` and `deleteDoc` resolve when the *server*
+  acknowledges, so with no route there the promise neither resolves nor rejects -
+  it stays pending, the `await` never returns, and the button spins until the
+  connection comes back. Nothing in the SDK times it out. Four save paths shipped
+  that way (add/delete/toggle a timer, save safety thresholds) and each one just
+  hung. **Wrap every raw Firestore write in `withWriteTimeout`**
+  (`src/utils/connectivity.js`); `httpsCallable` does not need it, because
+  callables reject on their own.
+
+  It reports `pending: true`, not failure, and the distinction is load-bearing.
+  Firestore has already applied the write to the local cache and queued it, so
+  the listener has fired and the change is on screen. Tell the user it failed and
+  they press Save again - and an `addDoc` retried that way creates a *second*
+  row once the connection returns. The wording that matches what they can see is
+  "saved here, not sent yet". Two caveats belong in that message: the change may
+  well land later, and `getFirestore` is configured with no disk cache, so
+  killing the app drops the queue.
+
+  Reads are the opposite - `getDoc` rejects offline - which is why
+  `setMonthlyBudget` (a `getDoc` then a write) always failed cleanly while the
+  pure writes hung.
+
+- **A hook that computes `showOfflineState` and a screen that ignores it is the
+  same bug wearing a seatbelt.** `useLoadTracker` / `useLoadOutcome` exist so an
+  empty list is never mistaken for an empty account, and four screens requested
+  the flag and never rendered it - Budget Tracking, Power Safety, Reference
+  Comparison, Notifications. **Grep for the flag before assuming a screen is
+  covered.** And a hook's `useState` defaults are not the account: Power Safety
+  drew 200-250 V, 10 A and 2000 W as the user's own limits, four times what the
+  firmware enforces, because nothing tracked whether a read had landed.
+
 - **`Alert.alert` is gone from `src/` and does not come back.** It rendered a dark
   grey slab with cyan text on the test handset - a palette this app contains
   nowhere else - and it cannot carry an icon or mark a destructive action as
