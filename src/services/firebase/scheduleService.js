@@ -142,7 +142,11 @@ export const scheduleService = {
         snapshot.forEach((scheduleDoc) => {
           schedules.push(normalizeScheduleData(scheduleDoc.id, scheduleDoc.data()));
         });
-        onUpdate(schedules);
+
+        // A listener never errors when the network drops - it keeps serving the
+        // local cache and marks the snapshot. Passing the metadata on is the
+        // only way the caller can tell an empty account from an empty cache.
+        onUpdate(schedules, snapshot.metadata);
       },
       (error) => {
         console.error('Error in schedules listener:', error);

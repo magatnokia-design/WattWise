@@ -5,6 +5,11 @@ import { auth } from '../../../services/firebase/config';
 import { buildLiveTodayEntry, withLiveToday } from '../../../utils/liveUsage';
 import { formatDate, formatTime, getTimestampMs, splitDailyDate } from '../utils/historyHelpers';
 import { useLoadOutcome } from '../../../hooks/useLoadTracker';
+import {
+  isUnconfirmedEmpty,
+  UNREACHABLE_READ_RESULT,
+  UNCONFIRMED_GRACE_MS,
+} from '../../../utils/connectivity';
 
 const toNumber = (value) => {
   const parsed = Number(value);
@@ -103,6 +108,16 @@ export const useHistory = () => {
   const [lastDoc, setLastDoc] = useState(null);
   const [hasMore, setHasMore] = useState(true);
   const lastDocRef = useRef(null);
+
+  // Pending decision on a listener snapshot that was empty and came from the
+  // cache. Cancelled the moment the server confirms anything.
+  const unconfirmedTimer = useRef(null);
+  const clearUnconfirmed = useCallback(() => {
+    if (unconfirmedTimer.current) {
+      clearTimeout(unconfirmedTimer.current);
+      unconfirmedTimer.current = null;
+    }
+  }, []);
   // An empty log and an unreadable one are the same zero rows on screen. This
   // is what separates "you have no activity" from "I could not fetch any".
   const load = useLoadOutcome();
@@ -198,26 +213,53 @@ export const useHistory = () => {
     setLoading(true);
     setError(null);
 
-    return historyService.subscribeToActivityLogs(
+    const unsubscribe = historyService.subscribeToActivityLogs(
       userId,
       filters,
-      (logs) => {
+      (logs, meta) => {
         const normalizedLogs = normalizeActivityLogs(logs);
         setActivityLogs(normalizedLogs);
         setHasMore(normalizedLogs.length >= limitCount);
         lastDocRef.current = null;
         setLastDoc(null);
         setLoading(false);
+
+        // A listener reports an offline cold start through this success path,
+        // not the error one below: an empty snapshot marked as served from
+        // cache. Treating it as a real answer is what made an untouched
+        // account and an unreachable one look identical. Held briefly rather
+        // than acted on, because the first snapshot is served from cache even
+        // when the server is a moment behind - see UNCONFIRMED_GRACE_MS.
+        if (isUnconfirmedEmpty(normalizedLogs.length, meta)) {
+          if (!unconfirmedTimer.current) {
+            unconfirmedTimer.current = setTimeout(() => {
+              unconfirmedTimer.current = null;
+              load.failed(UNREACHABLE_READ_RESULT);
+            }, UNCONFIRMED_GRACE_MS);
+          }
+          return;
+        }
+
+        clearUnconfirmed();
         load.succeeded();
       },
       (subscriptionError) => {
         setError(subscriptionError?.message || 'Failed to subscribe to activity logs');
         setLoading(false);
+        clearUnconfirmed();
         load.failed(subscriptionError);
       },
       limitCount
     );
-  }, [load.succeeded, load.failed]);
+
+    // The pending unconfirmed-empty decision belongs to this subscription, so
+    // it has to die with it - a filter change tears the listener down and the
+    // timer would otherwise fire against the next one.
+    return () => {
+      clearUnconfirmed();
+      unsubscribe();
+    };
+  }, [load.succeeded, load.failed, clearUnconfirmed]);
 
   // Fetch usage history (daily summaries)
   const fetchUsageHistory = useCallback(async (startDate, endDate) => {

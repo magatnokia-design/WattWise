@@ -1,5 +1,6 @@
 import { doc, getDoc, setDoc, updateDoc, collection, query, orderBy, limit, getDocs } from 'firebase/firestore';
 import { db } from './config';
+import { isUnconfirmedEmpty, UNREACHABLE_READ_RESULT } from '../../utils/connectivity';
 
 const monthLabelFromKey = (monthKey) => {
   const date = new Date(`${monthKey}-01T00:00:00`);
@@ -124,6 +125,12 @@ export const budgetService = {
           budget: Number(data.monthlyBudget || 0),
         });
       });
+
+      // An offline query resolves from the cache rather than rejecting, so an
+      // empty result here is only meaningful if the server actually answered.
+      if (isUnconfirmedEmpty(history.length, snapshot.metadata)) {
+        return UNREACHABLE_READ_RESULT;
+      }
 
       return { success: true, data: history };
     } catch (error) {

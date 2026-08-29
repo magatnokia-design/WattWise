@@ -11,6 +11,7 @@ import {
   onSnapshot,
 } from 'firebase/firestore';
 import { db } from './config';
+import { isUnconfirmedEmpty, UNREACHABLE_READ_RESULT } from '../../utils/connectivity';
 import { addDoc } from 'firebase/firestore';
 
 export const notificationService = {
@@ -38,6 +39,13 @@ export const notificationService = {
       snapshot.forEach((doc) => {
         notifications.push({ id: doc.id, ...doc.data() });
       });
+
+      // Nothing, from a cache that was never filled, is not the same as
+      // nothing. Without this the panel said "You're all caught up" to a user
+      // whose unread alerts simply had not been fetched.
+      if (isUnconfirmedEmpty(notifications.length, snapshot.metadata)) {
+        return UNREACHABLE_READ_RESULT;
+      }
 
       return { success: true, data: notifications };
     } catch (error) {

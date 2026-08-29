@@ -252,6 +252,8 @@ export const DashboardScreen = ({ navigation }) => {
   // Budget summary. Reloaded whenever the screen regains focus so a change made
   // on the Budget Tracking screen is reflected on returning here.
   const [budget, setBudget] = useState({ monthlyBudget: 0, currentSpending: 0 });
+  // Whether the figures above came from a read that returned.
+  const [budgetKnown, setBudgetKnown] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -262,8 +264,18 @@ export const DashboardScreen = ({ navigation }) => {
         if (!userId) return;
 
         const result = await budgetService.getCurrentMonthBudget(userId);
-        if (!active || !result.success) return;
+        if (!active) return;
 
+        // A failed read left this card sitting at ₱0.00 / ₱0.00 with "Tap to
+        // set a monthly budget" - directly below the card that had just said
+        // the app could not reach WattWise. Two panels on one screen, one of
+        // them confidently wrong.
+        if (!result.success) {
+          setBudgetKnown(false);
+          return;
+        }
+
+        setBudgetKnown(true);
         setBudget({
           monthlyBudget: toMetricNumber(result.data?.monthlyBudget),
           currentSpending: toMetricNumber(result.data?.currentSpending),
@@ -704,16 +716,20 @@ export const DashboardScreen = ({ navigation }) => {
           <View style={styles.budgetHeader}>
             <Text style={styles.budgetTitle}>Monthly Budget</Text>
             <Text style={styles.budgetAmount}>
-              ₱{formatPeso(budget.currentSpending)} / ₱{formatPeso(budget.monthlyBudget)}
+              {budgetKnown
+                ? `₱${formatPeso(budget.currentSpending)} / ₱${formatPeso(budget.monthlyBudget)}`
+                : '—'}
             </Text>
           </View>
           <View style={styles.budgetBar}>
-            <View style={[styles.budgetFill, { width: `${budgetPercent}%` }]} />
+            <View style={[styles.budgetFill, { width: `${budgetKnown ? budgetPercent : 0}%` }]} />
           </View>
           <Text style={styles.budgetRemaining}>
-            {budget.monthlyBudget > 0
-              ? `₱${formatPeso(budgetRemaining)} remaining`
-              : 'Tap to set a monthly budget'}
+            {!budgetKnown
+              ? 'Not loaded — needs a connection'
+              : budget.monthlyBudget > 0
+                ? `₱${formatPeso(budgetRemaining)} remaining`
+                : 'Tap to set a monthly budget'}
           </Text>
         </TouchableOpacity>
 

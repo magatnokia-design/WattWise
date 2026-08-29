@@ -11,6 +11,7 @@ import {
   deleteDoc,
 } from 'firebase/firestore';
 import { db } from './config';
+import { isUnconfirmedEmpty, UNREACHABLE_READ_RESULT } from '../../utils/connectivity';
 
 export const comparisonService = {
   // Get all comparison data (last 6 months)
@@ -28,6 +29,13 @@ export const comparisonService = {
       snapshot.forEach((doc) => {
         comparisons.push({ id: doc.id, ...doc.data() });
       });
+
+      // See UNREACHABLE_READ_RESULT: offline this resolves from an empty cache
+      // rather than rejecting, and "no bills saved" is a claim about the
+      // account that a cache miss cannot support.
+      if (isUnconfirmedEmpty(comparisons.length, snapshot.metadata)) {
+        return UNREACHABLE_READ_RESULT;
+      }
 
       return { success: true, data: comparisons };
     } catch (error) {

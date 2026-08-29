@@ -4,7 +4,9 @@ import assert from 'node:assert/strict';
 import {
   withWriteTimeout,
   isConnectivityError,
+  isUnconfirmedEmpty,
   PENDING_WRITE_RESULT,
+  UNREACHABLE_READ_RESULT,
 } from '../src/utils/connectivity.js';
 
 /*
@@ -64,5 +66,55 @@ test('the pending result reads as a connectivity failure to the rest of the app'
 test('the pending result is frozen, so one caller cannot reword it for the next', () => {
   assert.throws(() => {
     PENDING_WRITE_RESULT.error = 'something else';
+  });
+});
+
+/*
+ * The bug these next tests exist for, observed on a handset 29 August 2026.
+ *
+ * Power Safety showed its offline card and Budget Tracking, Compare Usage and
+ * Notifications did not - all four screens read the same flag, all four had
+ * just been wired to render it. The difference was one layer down:
+ *
+ *   getDoc  on a missing single document, offline -> REJECTS
+ *   getDocs on a query,                   offline -> RESOLVES, empty, fromCache
+ *
+ * Power Safety's first read is power_safety/settings, a single document, so it
+ * threw and the flag went up. The other three run queries, which came back
+ * `success: true, data: []` through the success path. Every hook then called
+ * load.succeeded(), hasLoadedOnce went true, and showOfflineState could never
+ * become true no matter what the screen did with it.
+ */
+test('an empty query served from cache is not an answer', () => {
+  assert.equal(isUnconfirmedEmpty(0, { fromCache: true }), true);
+});
+
+test('an empty query the server confirmed is an answer - the account is empty', () => {
+  // The regression risk in the other direction: a genuinely new account must
+  // still reach its empty state rather than a permanent offline notice.
+  assert.equal(isUnconfirmedEmpty(0, { fromCache: false }), false);
+});
+
+test('cached rows that are not empty are real and must still be shown', () => {
+  // Warm start with no connection. Data in hand outranks a later failure.
+  assert.equal(isUnconfirmedEmpty(3, { fromCache: true }), false);
+});
+
+test('missing metadata is treated as confirmed rather than assumed offline', () => {
+  assert.equal(isUnconfirmedEmpty(0, undefined), false);
+  assert.equal(isUnconfirmedEmpty(0, {}), false);
+});
+
+test('the unreachable-read result routes to the offline state', () => {
+  // The whole point: services return this instead of an empty success, and
+  // useLoadTracker.failed() must recognise it as connectivity, not as a
+  // malformed document.
+  assert.equal(isConnectivityError(UNREACHABLE_READ_RESULT), true);
+  assert.equal(UNREACHABLE_READ_RESULT.success, false);
+});
+
+test('the unreachable-read result is frozen', () => {
+  assert.throws(() => {
+    UNREACHABLE_READ_RESULT.success = true;
   });
 });

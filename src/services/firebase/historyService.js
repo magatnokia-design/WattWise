@@ -11,6 +11,7 @@ import {
   getDoc,
 } from 'firebase/firestore';
 import { db } from './config';
+import { isUnconfirmedEmpty, UNREACHABLE_READ_RESULT } from '../../utils/connectivity';
 
 const getTimestampMs = (value) => {
   if (!value) return 0;
@@ -66,6 +67,12 @@ export const historyService = {
 
       logs.sort((a, b) => getTimestampMs(b.timestamp) - getTimestampMs(a.timestamp));
 
+      // Only on the first page. A later page coming back empty from cache is
+      // the end of the list, not an unreachable server.
+      if (!lastDoc && isUnconfirmedEmpty(logs.length, snapshot.metadata)) {
+        return UNREACHABLE_READ_RESULT;
+      }
+
       return {
         success: true,
         data: logs,
@@ -99,7 +106,10 @@ export const historyService = {
           });
 
           logs.sort((a, b) => getTimestampMs(b.timestamp) - getTimestampMs(a.timestamp));
-          onUpdate(logs);
+
+          // Metadata is passed on because a listener does not error offline -
+          // it serves the cache and marks the snapshot.
+          onUpdate(logs, snapshot.metadata);
         },
         (error) => {
           console.error('Error subscribing to activity logs:', error);
@@ -142,6 +152,11 @@ export const historyService = {
       snapshot.forEach((doc) => {
         usage.push({ id: doc.id, ...doc.data() });
       });
+
+      // First page only, for the same reason as the activity log above.
+      if (!lastDoc && isUnconfirmedEmpty(usage.length, snapshot.metadata)) {
+        return UNREACHABLE_READ_RESULT;
+      }
 
       return {
         success: true,
@@ -187,6 +202,13 @@ export const historyService = {
       snapshot.forEach((doc) => {
         usage.push({ id: doc.id, ...doc.data() });
       });
+
+      // The read behind Compare Usage and the Analytics month totals. An empty
+      // cache here is what produced "Nothing recorded for Aug 2026" on a phone
+      // with no connection and a month of readings on the server.
+      if (isUnconfirmedEmpty(usage.length, snapshot.metadata)) {
+        return UNREACHABLE_READ_RESULT;
+      }
 
       return { success: true, data: usage };
     } catch (error) {

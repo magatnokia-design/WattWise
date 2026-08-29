@@ -142,6 +142,47 @@ export const isUnconfirmedEmpty = (count, meta) =>
   count === 0 && !!meta?.fromCache;
 
 /**
+ * What a query reports when its empty result came from an empty cache.
+ *
+ * `getDoc` on a single document rejects when the client is offline and the
+ * document is not cached - which is why the Power Safety screen, whose first
+ * read is `power_safety/settings`, correctly showed an offline state while
+ * three others did not. A *query* behaves differently: `getDocs` falls back to
+ * the local cache and resolves with an empty snapshot, so it reaches the caller
+ * through the success path with `success: true, data: []`.
+ *
+ * Every hook then called `load.succeeded()`, `hasLoadedOnce` went true, and
+ * `showOfflineState` could never become true no matter what the screen did with
+ * it. The screens were wired correctly; the flag was never raised.
+ *
+ * Returning this instead makes the read look like what it is: not an answer.
+ * `isConnectivityError` recognises the code, so it routes to the offline state
+ * exactly like a rejected single-document read.
+ */
+/**
+ * How long a listener's empty cached snapshot is given before it counts.
+ *
+ * `getDocs` resolves once, so an empty cached result there is final. A
+ * *listener* is different: it delivers a first snapshot from the local cache
+ * immediately, even when the phone is online and the server answer is a moment
+ * behind. On a cold start that first snapshot is empty and marked `fromCache`,
+ * which looks exactly like being offline.
+ *
+ * Reporting it straight away would flash "Can't reach WattWise" on History and
+ * Schedule at every launch. Waiting forever would leave a genuinely offline
+ * screen spinning, which is the bug this whole file exists to prevent. So the
+ * empty snapshot is held, and only becomes an unreachable read if the server
+ * has still said nothing by the time this elapses.
+ */
+export const UNCONFIRMED_GRACE_MS = 2500;
+
+export const UNREACHABLE_READ_RESULT = Object.freeze({
+  success: false,
+  code: 'unavailable',
+  error: 'Could not reach Cloud Firestore — the empty result came from a local cache.',
+});
+
+/**
  * How long a write waits for the server before the UI stops waiting with it.
  *
  * Generous enough to cover a slow connection and a cold Cloud Functions start,
@@ -206,6 +247,7 @@ export default {
   isFailedRead,
   bothReadsFailed,
   isUnconfirmedEmpty,
+  UNREACHABLE_READ_RESULT,
   withWriteTimeout,
   WRITE_TIMEOUT_MS,
   PENDING_WRITE_RESULT,
