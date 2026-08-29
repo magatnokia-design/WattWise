@@ -334,6 +334,13 @@ The Hub is built with **arduino-cli**, not the Arduino IDE. Core and libraries l
 `%LOCALAPPDATA%\Arduino15`, which is machine-local and not in the repo - a fresh machine
 rebuilds it from scratch:
 
+**The capstone paper says the firmware was written in the Arduino IDE, and that is
+correct - do not "fix" it to say arduino-cli.** The sketch was authored in the IDE from
+9 Aug 2026 (`f3b0532` carries `#include <Arduino_BuiltIn.h>`, a header only the IDE
+injects); arduino-cli came later, on 28 Aug in `24fc0f5`, as the build path after the
+laptop reset - which is why that include had to go. Written in the IDE, built with the
+CLI. Both true, and the paper describes the writing.
+
 ```powershell
 arduino-cli core install esp32:esp32          # 3.3.11, ~3 GB unpacked
 arduino-cli lib install "ArduinoJson@6.21.5"  # pinned - see below
