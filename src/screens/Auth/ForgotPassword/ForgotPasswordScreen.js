@@ -7,12 +7,12 @@ import {
   KeyboardAvoidingView, 
   Platform, 
   ScrollView,
-  TouchableOpacity,
-  Alert
+  TouchableOpacity
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Input } from '../../../components/common/Input';
 import { Button } from '../../../components/common/Button';
+import AppDialog from '../../../components/common/AppDialog';
 import { authService } from '../../../services/firebase';
 import { COLORS } from '../../../constants/colors';
 import { SIZES, FONTS } from '../../../constants/theme';
@@ -21,6 +21,7 @@ export const ForgotPasswordScreen = ({ navigation }) => {
   const [email, setEmail] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [dialog, setDialog] = useState(null);
 
   const validate = () => {
     if (!email) {
@@ -54,32 +55,49 @@ const handleResetPassword = async () => {
     //     hunting through older emails after re-requesting always fails.
     //   - The sender has a poor reputation and routinely lands in spam, which is
     //     what makes people re-request in the first place.
-    Alert.alert(
-      'Reset link sent',
-      `Sent to ${normalizedEmail}.\n\n` +
-        '• The link expires in 1 hour.\n' +
-        '• Check your spam folder — it arrives from support@wattwise.site.\n' +
-        '• If you request another, only the newest link works.',
-      [{ text: 'OK', onPress: () => navigation.navigate('Login') }]
-    );
+    setDialog({
+      icon: '✉️',
+      tone: 'primary',
+      title: 'Reset link sent',
+      message:
+        `Sent to ${normalizedEmail}.\n\n`
+        + '• The link expires in 1 hour.\n'
+        + '• Check your spam folder — it arrives from support@wattwise.site.\n'
+        + '• If you request another, only the newest link works.',
+      confirmLabel: 'Back to sign in',
+      onConfirm: () => navigation.navigate('Login'),
+    });
   } catch (error) {
-    let errorMessage = 'Failed to send reset email';
-    
-    if (error.code === 'auth/user-not-found') {
-      errorMessage = 'No account found with this email';
-    } else if (error.code === 'not-found') {
-      errorMessage = 'No account found with this email';
-    } else if (error.code === 'auth/invalid-email') {
-      errorMessage = 'Invalid email address';
-    } else if (error.code === 'invalid-argument') {
-      errorMessage = 'Please enter a valid email address';
-    } else if (error.code === 'auth/too-many-requests') {
-      errorMessage = 'Too many attempts. Please wait and try again.';
-    } else if (error.message) {
-      errorMessage = error.message;
+    // Tone separates a fault the person can correct from one that only needs
+    // waiting out. The OS dialog could express neither, so every failure here
+    // looked the same as every other.
+    const notFound = error.code === 'auth/user-not-found' || error.code === 'not-found';
+    const badEmail = error.code === 'auth/invalid-email' || error.code === 'invalid-argument';
+
+    if (error.code === 'auth/too-many-requests') {
+      setDialog({
+        icon: '⏳',
+        tone: 'warning',
+        title: 'Too many attempts',
+        message: 'Wait a few minutes before requesting another reset link.',
+      });
+    } else if (notFound || badEmail) {
+      setDialog({
+        icon: '📧',
+        tone: 'danger',
+        title: notFound ? 'No account with that email' : 'That email looks wrong',
+        message: notFound
+          ? 'Nothing is registered to that address. Check the spelling, or create an account.'
+          : 'Enter the address you registered with and try again.',
+      });
+    } else {
+      setDialog({
+        icon: '⚠️',
+        tone: 'danger',
+        title: 'Could not send the link',
+        message: error.message || 'Something went wrong. Try again in a moment.',
+      });
     }
-    
-    Alert.alert('Error', errorMessage);
   } finally {
     setLoading(false);
   }
@@ -131,6 +149,13 @@ const handleResetPassword = async () => {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {dialog ? (
+        <AppDialog
+          {...dialog}
+          onConfirm={dialog.onConfirm || (() => setDialog(null))}
+        />
+      ) : null}
     </SafeAreaView>
   );
 };

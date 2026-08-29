@@ -8,21 +8,85 @@ import {
   Platform, 
   ScrollView,
   TouchableOpacity,
-  Image,
-  Alert
+  Image
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Input } from '../../../components/common/Input';
 import { Button } from '../../../components/common/Button';
 import { Wordmark } from '../../../components/common/Wordmark';
+import AppDialog from '../../../components/common/AppDialog';
 import { authService } from '../../../services/firebase';
 import { COLORS } from '../../../constants/colors';
 import { SIZES, FONTS } from '../../../constants/theme';
+
+/**
+ * What each sign-in failure says, and how it looks.
+ *
+ * These went through `Alert.alert`, which renders the OS dialog - on this
+ * handset a dark grey slab with cyan text, a palette the app contains nowhere
+ * else. It also cannot carry an icon or distinguish a network fault from a
+ * wrong password, so every failure looked identical and none of them looked
+ * like WattWise.
+ *
+ * Tone does the sorting: `warning` for something outside the account that will
+ * pass, `danger` for something the person has to correct. Each message ends on
+ * the action to take, because an error that only names the fault leaves the
+ * reader where it found them.
+ */
+const SIGN_IN_ERRORS = {
+  'auth/invalid-credential': {
+    icon: '🔑',
+    tone: 'danger',
+    title: 'Those details did not match',
+    message: 'The email and password do not match an account. Check both and try again — or reset the password if you cannot recall it.',
+  },
+  'auth/wrong-password': {
+    icon: '🔑',
+    tone: 'danger',
+    title: 'Those details did not match',
+    message: 'The email and password do not match an account. Check both and try again — or reset the password if you cannot recall it.',
+  },
+  'auth/user-not-found': {
+    icon: '🔑',
+    tone: 'danger',
+    title: 'Those details did not match',
+    message: 'The email and password do not match an account. Check both and try again — or create an account if you have not registered.',
+  },
+  'auth/too-many-requests': {
+    icon: '⏳',
+    tone: 'warning',
+    title: 'Too many attempts',
+    message: 'Sign-in is paused for a few minutes after several failed tries. Wait a moment, then try again, or reset your password.',
+  },
+  'auth/network-request-failed': {
+    icon: '📡',
+    tone: 'warning',
+    title: 'No connection',
+    message: 'WattWise could not reach the server. Check your internet connection — and any VPN or firewall — then try again. Nothing was sent.',
+  },
+};
+
+const FALLBACK_SIGN_IN_ERROR = {
+  icon: '⚠️',
+  tone: 'danger',
+  title: 'Could not sign in',
+  message: 'Something went wrong while signing in. Try again in a moment.',
+};
+
+// The code is the authority; a raw Firebase message is only ever a last resort,
+// because those are written for developers and read as noise on a login screen.
+export const resolveSignInError = (error) => {
+  const known = SIGN_IN_ERRORS[error?.code];
+  if (known) return known;
+  if (error?.message) return { ...FALLBACK_SIGN_IN_ERROR, message: error.message };
+  return FALLBACK_SIGN_IN_ERROR;
+};
 
 export const LoginScreen = ({ navigation }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [errors, setErrors] = useState({});
+  const [dialog, setDialog] = useState(null);
 
   // Clears a field's validation message as soon as the user edits it.
   //
@@ -73,23 +137,7 @@ const handleLogin = async () => {
     
     // Navigation handled by AppNavigator
   } catch (error) {
-    let errorMessage = 'Login failed';
-    
-    if (error.code === 'auth/invalid-credential') {
-      errorMessage = 'Invalid email or password';
-    } else if (error.code === 'auth/user-not-found') {
-      errorMessage = 'No account found with this email';
-    } else if (error.code === 'auth/wrong-password') {
-      errorMessage = 'Incorrect password';
-    } else if (error.code === 'auth/too-many-requests') {
-      errorMessage = 'Too many failed attempts. Try again later';
-    } else if (error.code === 'auth/network-request-failed') {
-      errorMessage = 'Network error. Check internet, VPN/firewall, then try again.';
-    } else if (error.message) {
-      errorMessage = error.message;
-    }
-    
-    Alert.alert('Error', errorMessage);
+    setDialog(resolveSignInError(error));
   } finally {
     setLoading(false);
   }
@@ -166,6 +214,16 @@ const handleLogin = async () => {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* Mounted conditionally: React Native renders a Modal’s children even
+          while it is hidden, so a permanently-mounted one is live UI. */}
+      {dialog ? (
+        <AppDialog
+          {...dialog}
+          confirmLabel="Got it"
+          onConfirm={() => setDialog(null)}
+        />
+      ) : null}
     </SafeAreaView>
   );
 };

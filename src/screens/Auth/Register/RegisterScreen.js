@@ -8,13 +8,13 @@ import {
   Platform, 
   ScrollView,
   TouchableOpacity,
-  Image,
-  Alert
+  Image
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Input } from '../../../components/common/Input';
 import { Button } from '../../../components/common/Button';
 import { Wordmark } from '../../../components/common/Wordmark';
+import AppDialog from '../../../components/common/AppDialog';
 import { authService, initializationService } from '../../../services/firebase';
 import { COLORS } from '../../../constants/colors';
 import { SIZES, FONTS } from '../../../constants/theme';
@@ -29,6 +29,7 @@ export const RegisterScreen = ({ navigation }) => {
   });
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
+  const [dialog, setDialog] = useState(null);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
 
   const updateFormData = (field, value) => {
@@ -78,7 +79,12 @@ export const RegisterScreen = ({ navigation }) => {
     }
     
     if (!acceptedTerms) {
-      Alert.alert('Error', 'Please accept the terms and conditions');
+      setDialog({
+        icon: '📝',
+        tone: 'warning',
+        title: 'Terms not accepted',
+        message: 'Tick the box to accept the terms and conditions before creating your account.',
+      });
       return false;
     }
     
@@ -118,35 +124,59 @@ const handleRegister = async () => {
 
     if (!initResult.success) {
       console.error('Failed to initialize user data:', initResult.error);
-      Alert.alert(
-        'Warning',
-        'Account created but setup incomplete. Please contact support.'
-      );
+      setDialog({
+        icon: '⚠️',
+        tone: 'warning',
+        title: 'Account created, setup incomplete',
+        message: 'Your account exists and you are signed in, but some of its data could not be prepared. Sign out and back in first; if it persists, contact support@wattwise.site.',
+      });
     }
 
     // User automatically logged in, AppNavigator handles onboarding
   } catch (error) {
-    let errorMessage = 'Registration failed';
-    
     if (error.code === 'auth/email-already-in-use') {
-      errorMessage = 'Email already in use';
+      setDialog({
+        icon: '📧',
+        tone: 'danger',
+        title: 'That email is already registered',
+        message: 'Sign in with it instead, or reset the password if you cannot recall it.',
+      });
     } else if (error.code === 'auth/invalid-email') {
-      errorMessage = 'Invalid email address';
+      setDialog({
+        icon: '📧',
+        tone: 'danger',
+        title: 'That email looks wrong',
+        message: 'Check the address and try again.',
+      });
     } else if (
       error.code === 'auth/weak-password'
       || error.code === 'auth/password-does-not-meet-requirements'
     ) {
-      // The form checks the same rules before submitting, so reaching this means
-      // the server disagreed with the form - a policy tightened in the console,
-      // or a client old enough to predate it. Repeat the rules rather than say
-      // "too weak", which leaves the user guessing which one they missed.
-      errorMessage = 'Password must be at least 8 characters and include an '
-        + 'uppercase letter, a lowercase letter and a number.';
-    } else if (error.message) {
-      errorMessage = error.message;
+      // The form checks these same rules before submitting, so reaching here
+      // means the server disagreed with the form - a policy tightened in the
+      // console, or a build old enough to predate it. Repeat the rules rather
+      // than say "too weak", which leaves the reader guessing which one failed.
+      setDialog({
+        icon: '🔑',
+        tone: 'danger',
+        title: 'Password is not strong enough',
+        message: 'Use at least 8 characters, including an uppercase letter, a lowercase letter and a number.',
+      });
+    } else if (error.code === 'auth/network-request-failed') {
+      setDialog({
+        icon: '📡',
+        tone: 'warning',
+        title: 'No connection',
+        message: 'WattWise could not reach the server. Check your internet connection — and any VPN or firewall — then try again. No account was created.',
+      });
+    } else {
+      setDialog({
+        icon: '⚠️',
+        tone: 'danger',
+        title: 'Could not create the account',
+        message: error.message || 'Something went wrong. Try again in a moment.',
+      });
     }
-    
-    Alert.alert('Error', errorMessage);
   } finally {
     setLoading(false);
   }
@@ -271,6 +301,10 @@ const handleRegister = async () => {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {dialog ? (
+        <AppDialog {...dialog} onConfirm={() => setDialog(null)} />
+      ) : null}
     </SafeAreaView>
   );
 };
