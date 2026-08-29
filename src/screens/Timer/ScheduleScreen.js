@@ -94,8 +94,25 @@ const ScheduleScreen = () => {
       return result;
     }
 
-    // No dialog here - AddTimerModal stays open and prints the reason above its
-    // Save button, next to the fields the user would have to change.
+    // A pending write is not a failure. Firestore has already applied it to the
+    // local cache, so the listener has fired and the timer is in the list
+    // behind this modal - it just has not reached the server. Closing and
+    // reporting success is what matches what the user can see; telling them it
+    // failed would invite a second Save, and that one would create a duplicate
+    // once the connection returned.
+    if (result?.pending) {
+      setModalVisible(false);
+      setDialog({
+        icon: '📡',
+        tone: 'warning',
+        title: 'Saved here, not sent yet',
+        message: 'The timer is in your list, but it has not reached the server. It will sync when you are back online — keep WattWise open, because closing it drops the change.',
+      });
+      return { success: true, pending: true };
+    }
+
+    // No dialog for anything else - AddTimerModal stays open and prints the
+    // reason above its Save button, next to the fields the user would change.
     return result;
   }, [addSchedule]);
 
@@ -114,6 +131,17 @@ const ScheduleScreen = () => {
       onConfirm: async () => {
         setDialog(null);
         const result = await deleteSchedule(id);
+
+        if (result?.pending) {
+          setDialog({
+            icon: '📡',
+            tone: 'warning',
+            title: 'Removed here, not sent yet',
+            message: 'The timer is gone from your list, but the server has not been told. It will sync when you are back online — keep WattWise open, because closing it drops the change.',
+          });
+          return;
+        }
+
         if (!result?.success) {
           setDialog({
             icon: '⚠️',
@@ -128,6 +156,17 @@ const ScheduleScreen = () => {
 
   const handleToggle = useCallback(async (id, active) => {
     const result = await toggleSchedule(id, active);
+
+    if (result?.pending) {
+      setDialog({
+        icon: '📡',
+        tone: 'warning',
+        title: 'Changed here, not sent yet',
+        message: 'The switch has moved, but the server has not been told, so the timer will not run until this reaches it. Keep WattWise open until you are back online.',
+      });
+      return;
+    }
+
     if (!result?.success) {
       setDialog({
         icon: '⚠️',

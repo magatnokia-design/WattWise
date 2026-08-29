@@ -90,6 +90,13 @@ export const useSchedule = () => {
 
       const result = await scheduleService.createSchedule(userId, scheduleData);
 
+      // Passed through rather than thrown. A pending write has been applied to
+      // the local cache and is queued for the server, which is a different
+      // outcome from a rejected one and the screen words it differently.
+      if (result.pending) {
+        return result;
+      }
+
       if (!result.success) {
         throw new Error(result.error);
       }
@@ -111,6 +118,13 @@ export const useSchedule = () => {
 
       const result = await scheduleService.deleteSchedule(userId, scheduleId);
 
+      // Passed through rather than thrown. A pending write has been applied to
+      // the local cache and is queued for the server, which is a different
+      // outcome from a rejected one and the screen words it differently.
+      if (result.pending) {
+        return result;
+      }
+
       if (!result.success) {
         throw new Error(result.error);
       }
@@ -131,6 +145,13 @@ export const useSchedule = () => {
       if (!userId) throw new Error('User not authenticated');
 
       const result = await scheduleService.updateSchedule(userId, scheduleId, { active });
+
+      // Passed through rather than thrown. A pending write has been applied to
+      // the local cache and is queued for the server, which is a different
+      // outcome from a rejected one and the screen words it differently.
+      if (result.pending) {
+        return result;
+      }
 
       if (!result.success) {
         throw new Error(result.error);

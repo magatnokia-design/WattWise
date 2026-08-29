@@ -584,14 +584,19 @@ export const useOutletControl = () => {
       const result = await outletService.toggleOutlet(userId, outletNumber, newStatus);
 
       if (!result.success) {
-        throw new Error(result.error);
+        // Returned rather than thrown, because `new Error(result.error)` drops
+        // `code` - and the code is the only thing that tells "this phone has no
+        // connection" apart from "the Hub refused". The Dashboard words those
+        // two failures differently and cannot do it from the message alone.
+        setPendingToggle((previous) => ({ ...previous, [key]: null }));
+        return result;
       }
 
       return { success: true };
     } catch (error) {
       setPendingToggle((previous) => ({ ...previous, [key]: null }));
       console.error('Error toggling outlet:', error);
-      return { success: false, error: error.message };
+      return { success: false, error: error.message, code: error.code };
     } finally {
       setIsToggling(false);
     }

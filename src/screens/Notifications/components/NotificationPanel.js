@@ -11,6 +11,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { COLORS } from '../../../constants/colors';
 import NotificationItem from './NotificationItem';
+import { OfflineState } from '../../../components/common/OfflineNotice';
 import { useNotifications } from '../hooks/useNotifications';
 
 const NotificationPanel = ({ visible, onClose }) => {
@@ -22,6 +23,7 @@ const NotificationPanel = ({ visible, onClose }) => {
     markAsRead,
     markAllAsRead,
     clearAll,
+    showOfflineState,
   } = useNotifications();
 
   const handleMarkAllRead = useCallback(() => {
@@ -43,13 +45,26 @@ const NotificationPanel = ({ visible, onClose }) => {
     </>
   ), [handleItemPress, notifications.length]);
 
+  // "You're all caught up" is a claim, and an empty list offline does not
+  // support it - the notifications are on the account, unread, and simply were
+  // not fetched. Saying the opposite is how a missed budget or safety alert
+  // gets read as no alert at all.
   const renderEmpty = useMemo(() => (
-    <View style={styles.emptyContainer}>
-      <Text style={styles.emptyIcon}>🔔</Text>
-      <Text style={styles.emptyTitle}>No Notifications</Text>
-      <Text style={styles.emptySub}>You're all caught up!</Text>
-    </View>
-  ), []);
+    showOfflineState ? (
+      <OfflineState
+        compact
+        style={styles.offline}
+        title="Can't load your notifications"
+        body="They are stored on your account and need a connection to read. Any you have not seen are still there."
+      />
+    ) : (
+      <View style={styles.emptyContainer}>
+        <Text style={styles.emptyIcon}>🔔</Text>
+        <Text style={styles.emptyTitle}>No Notifications</Text>
+        <Text style={styles.emptySub}>You&apos;re all caught up!</Text>
+      </View>
+    )
+  ), [showOfflineState]);
 
   const renderHeader = useMemo(() => (
     <View style={styles.listHeader}>
@@ -234,6 +249,9 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: COLORS.border,
     marginLeft: 70,
+  },
+  offline: {
+    margin: 20,
   },
   emptyContainer: {
     alignItems: 'center',

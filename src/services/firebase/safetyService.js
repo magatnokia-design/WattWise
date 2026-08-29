@@ -1,5 +1,6 @@
 import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
 import { db } from './config';
+import { withWriteTimeout } from '../../utils/connectivity';
 
 const getSafetyRef = (userId) => doc(db, 'users', userId, 'power_safety', 'settings');
 const MAX_POWER_W = 500;
@@ -234,8 +235,11 @@ export const safetyService = {
         payload.thresholds = normalizeThresholds(updates);
       }
 
-      await setDoc(safetyRef, payload, { merge: true });
-      return { success: true };
+      // Bounded: offline this write never rejects, and Save sat spinning with
+      // the old limits still in force and nothing on screen saying so.
+      return await withWriteTimeout(
+        setDoc(safetyRef, payload, { merge: true }).then(() => ({ success: true }))
+      );
     } catch (error) {
       console.error('Error updating thresholds:', error);
       return { success: false, error: error.message };

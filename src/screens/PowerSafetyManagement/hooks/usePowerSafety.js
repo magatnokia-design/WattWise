@@ -29,6 +29,9 @@ const usePowerSafety = () => {
     power: { max: 2000 },
   });
   const [protectionEnabled, setProtectionEnabled] = useState(true);
+  // Whether the two values above were read from the account or are still this
+  // hook's placeholders. See applySafetyData.
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
   const [alertHistory, setAlertHistory] = useState([]);
   const [loading, setLoading] = useState(false);
   // An empty alert history is a safety claim. It needs a read that returned.
@@ -63,6 +66,13 @@ const usePowerSafety = () => {
     });
     setThresholds(safetyData.thresholds);
     setProtectionEnabled(safetyData.protectionEnabled);
+
+    // The thresholds above now came from the account. Until this is true they
+    // are this hook's own initial values - 200-250 V, 10 A, 2000 W, protection
+    // on - which are not the user's settings and must not be drawn as if they
+    // were. On a safety screen that misreading is the whole point: 2000 W is
+    // four times the limit this hardware actually enforces.
+    setSettingsLoaded(true);
   }, []);
 
   // Fetch safety data
@@ -116,6 +126,7 @@ const usePowerSafety = () => {
         setOutlet1Status({ voltage: 0, current: 0, power: 0 });
         setOutlet2Status({ voltage: 0, current: 0, power: 0 });
         setAlertHistory([]);
+        setSettingsLoaded(false);
         setLoading(false);
         return;
       }
@@ -144,6 +155,13 @@ const usePowerSafety = () => {
 
       const result = await safetyService.updateThresholds(userId, { protectionEnabled: value });
 
+      // Queued but not sent. The switch still moves, because Firestore has
+      // applied it locally and will deliver it - the caller says so on screen.
+      if (result.pending) {
+        setProtectionEnabled(value);
+        return result;
+      }
+
       if (!result.success) {
         throw new Error(result.error);
       }
@@ -163,6 +181,11 @@ const usePowerSafety = () => {
       const result = await safetyService.updateThresholds(userId, {
         thresholds: nextThresholds,
       });
+
+      if (result.pending) {
+        setThresholds(nextThresholds);
+        return result;
+      }
 
       if (!result.success) {
         throw new Error(result.error);
@@ -190,6 +213,7 @@ const usePowerSafety = () => {
     outlet2Status,
     thresholds,
     protectionEnabled,
+    settingsLoaded,
     alertHistory,
     loading,
     handleToggleProtection,

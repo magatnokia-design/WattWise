@@ -81,6 +81,22 @@ const ProtectionSettings = ({ enabled, onToggle, thresholds, onSaveThresholds })
     }
 
     const result = await onSaveThresholds(nextThresholds);
+
+    // The Hub enforces its own 500 W ceiling in firmware, with no cloud call in
+    // the path, so an unsent change never leaves the outlets unprotected - it
+    // only leaves them on the *previous* limits. Worth saying, because "not
+    // saved" on a safety screen reads as "not protected".
+    if (result?.pending) {
+      setDialog({
+        icon: '📡',
+        tone: 'warning',
+        title: 'Saved here, not sent yet',
+        message: 'Your new limits have not reached the server, so the Hub is still enforcing the previous ones. They will sync when you are back online — keep WattWise open, because closing it drops the change.',
+      });
+      setIsEditing(false);
+      return;
+    }
+
     if (!result?.success) {
       setDialog({
         icon: '⚠️',

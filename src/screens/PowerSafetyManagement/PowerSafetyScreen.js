@@ -14,6 +14,7 @@ import SafetyStatusCard from './components/SafetyStatusCard';
 import ThresholdCard from './components/ThresholdCard';
 import ProtectionSettings from './components/ProtectionSettings';
 import AlertHistoryList from './components/AlertHistoryList';
+import { OfflineState } from '../../components/common/OfflineNotice';
 import usePowerSafety from './hooks/usePowerSafety';
 
 const PowerSafetyScreen = ({ navigation }) => {
@@ -24,8 +25,9 @@ const PowerSafetyScreen = ({ navigation }) => {
     outlet2Status,
     thresholds,
     protectionEnabled,
+    settingsLoaded,
     alertHistory,
-    loading,
+    showOfflineState,
     handleToggleProtection,
     handleSaveThresholds,
     handleRefresh,
@@ -66,41 +68,68 @@ const PowerSafetyScreen = ({ navigation }) => {
           />
         }
       >
-        {/* Current Safety Stage */}
-        <SafetyStatusCard stage={safetyStage} readingsAreStale={readingsAreStale} />
-
-        {/* Outlet Status Cards */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Outlet Status</Text>
-          <View style={styles.outletContainer}>
-            <ThresholdCard
-              outletName="Outlet 1"
-              status={outlet1Status}
-              thresholds={thresholds}
-              isStale={readingsAreStale}
-            />
-            <ThresholdCard
-              outletName="Outlet 2"
-              status={outlet2Status}
-              thresholds={thresholds}
-              isStale={readingsAreStale}
+        {/* Nothing below here may be drawn from placeholder values. Both the
+            limits and the alert history are claims about this account, and
+            until a read returns, the hook is holding its own defaults - which
+            on this screen would read as "your ceiling is 2000 W" and "you have
+            never had an alert". */}
+        {showOfflineState ? (
+          <View style={styles.section}>
+            <OfflineState
+              title="Can't reach your safety settings"
+              body="Your limits and alert history live on your account, and the app needs a connection to read them. The Hub is unaffected — it enforces its limits on the device itself, with no connection involved."
+              onRetry={onRefresh}
             />
           </View>
-        </View>
+        ) : (
+          <>
+            {/* Current Safety Stage */}
+            <SafetyStatusCard stage={safetyStage} readingsAreStale={readingsAreStale} />
 
-        {/* Protection Settings */}
-        <ProtectionSettings
-          enabled={protectionEnabled}
-          onToggle={handleToggleProtection}
-          thresholds={thresholds}
-          onSaveThresholds={handleSaveThresholds}
-        />
+            {settingsLoaded ? (
+              <>
+                {/* Outlet Status Cards */}
+                <View style={styles.section}>
+                  <Text style={styles.sectionTitle}>Outlet Status</Text>
+                  <View style={styles.outletContainer}>
+                    <ThresholdCard
+                      outletName="Outlet 1"
+                      status={outlet1Status}
+                      thresholds={thresholds}
+                      isStale={readingsAreStale}
+                    />
+                    <ThresholdCard
+                      outletName="Outlet 2"
+                      status={outlet2Status}
+                      thresholds={thresholds}
+                      isStale={readingsAreStale}
+                    />
+                  </View>
+                </View>
 
-        {/* Alert History */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Alert History</Text>
-          <AlertHistoryList alerts={alertHistory} />
-        </View>
+                {/* Protection Settings */}
+                <ProtectionSettings
+                  enabled={protectionEnabled}
+                  onToggle={handleToggleProtection}
+                  thresholds={thresholds}
+                  onSaveThresholds={handleSaveThresholds}
+                />
+
+                {/* Alert History */}
+                <View style={styles.section}>
+                  <Text style={styles.sectionTitle}>Alert History</Text>
+                  <AlertHistoryList alerts={alertHistory} />
+                </View>
+              </>
+            ) : (
+              <View style={styles.section}>
+                <View style={styles.pending}>
+                  <Text style={styles.pendingText}>Reading your safety settings…</Text>
+                </View>
+              </View>
+            )}
+          </>
+        )}
 
         {/* Info Footer */}
         <View style={styles.infoFooter}>
@@ -159,6 +188,18 @@ const styles = StyleSheet.create({
   },
   outletContainer: {
     gap: 12,
+  },
+  pending: {
+    backgroundColor: COLORS.white,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    paddingVertical: 28,
+    alignItems: 'center',
+  },
+  pendingText: {
+    fontSize: 13,
+    color: COLORS.textLight,
   },
   infoFooter: {
     flexDirection: 'row',

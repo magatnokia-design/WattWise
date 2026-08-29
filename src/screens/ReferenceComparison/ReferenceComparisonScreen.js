@@ -16,6 +16,7 @@ import AddPreviousBillModal from './components/AddPreviousBillModal';
 import useReferenceComparison from './hooks/useReferenceComparison';
 import { buildTrend, explainAccuracy, formatMonthShort } from './utils/comparisonHelpers';
 import { WebAppNotice } from '../../components/common/WebAppNotice';
+import { OfflineState } from '../../components/common/OfflineNotice';
 import { WEB_APP_LINKS } from '../../constants/webApp';
 import { useDismissibleNotice } from '../../hooks/useDismissibleNotice';
 
@@ -35,6 +36,7 @@ const ReferenceComparisonScreen = ({ navigation }) => {
     selectMonth,
     saveActualBill,
     deleteActualBill,
+    showOfflineState,
     refresh,
   } = useReferenceComparison();
 
@@ -107,6 +109,17 @@ const ReferenceComparisonScreen = ({ navigation }) => {
           />
         )}
 
+        {/* Without a read, `totals.daysRecorded` is 0 and this screen says the
+            month has no measurements and no saved bill - which is what a month
+            that genuinely has neither looks like. */}
+        {showOfflineState ? (
+          <OfflineState
+            style={styles.offline}
+            body="This month's readings and any bill you saved are stored on your account, and the app needs a connection to read them. Nothing has been lost."
+            onRetry={onRefresh}
+          />
+        ) : (
+        <>
         <MonthComparePicker
           monthOptions={monthOptions}
           month={month}
@@ -345,6 +358,8 @@ const ReferenceComparisonScreen = ({ navigation }) => {
             </TouchableOpacity>
           )}
         </View>
+        </>
+        )}
       </ScrollView>
 
       <AddPreviousBillModal
@@ -443,6 +458,10 @@ const styles = StyleSheet.create({
   },
   body: {
     paddingHorizontal: 20,
+    marginTop: 20,
+  },
+  offline: {
+    marginHorizontal: 20,
     marginTop: 20,
   },
   billSection: {

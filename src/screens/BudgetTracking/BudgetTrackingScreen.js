@@ -15,6 +15,7 @@ import SpendingBreakdown from './components/SpendingBreakdown';
 import AlertThresholds from './components/AlertThresholds';
 import ProjectedCost from './components/ProjectedCost';
 import SetBudgetModal from './components/SetBudgetModal';
+import { OfflineState } from '../../components/common/OfflineNotice';
 import useBudgetTracking from './hooks/useBudgetTracking';
 
 const BudgetTrackingScreen = ({ navigation }) => {
@@ -28,7 +29,7 @@ const BudgetTrackingScreen = ({ navigation }) => {
     daysInMonth,
     currentDay,
     budgetHistory,
-    loading,
+    showOfflineState,
     handleSetBudget,
     handleRefresh,
   } = useBudgetTracking();
@@ -77,6 +78,18 @@ const BudgetTrackingScreen = ({ navigation }) => {
           />
         }
       >
+        {/* Every figure below is an assertion about the account - a ₱0 budget,
+            nothing spent, "Under budget". With no read behind them they are
+            all zero, which is the empty state of a new account rather than
+            the truth about this one. */}
+        {showOfflineState ? (
+          <OfflineState
+            style={styles.offline}
+            body="Your budget and this month's spending are stored on your account, and the app needs a connection to read them. Nothing has been lost or reset."
+            onRetry={onRefresh}
+          />
+        ) : (
+        <>
         {/* Budget Progress */}
         <BudgetProgressCard
           monthlyBudget={monthlyBudget}
@@ -159,6 +172,8 @@ const BudgetTrackingScreen = ({ navigation }) => {
             </View>
           </View>
         )}
+        </>
+        )}
 
         {/* Info Footer */}
         <View style={styles.infoFooter}>
@@ -208,6 +223,10 @@ const styles = StyleSheet.create({
   },
   scrollView: {
     flex: 1,
+  },
+  offline: {
+    marginHorizontal: 20,
+    marginTop: 20,
   },
   // Clears the Android navigation bar so the last card is fully reachable.
   scrollContent: {

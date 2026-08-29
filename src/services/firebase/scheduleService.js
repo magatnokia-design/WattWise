@@ -12,6 +12,7 @@ import {
   onSnapshot,
 } from 'firebase/firestore';
 import { db } from './config';
+import { withWriteTimeout } from '../../utils/connectivity';
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const DAY_LABEL_TO_INDEX = {
@@ -234,9 +235,16 @@ export const scheduleService = {
         lastTriggered: null,
       };
 
+      // Bounded, because a Firestore write offline never rejects - it stays
+      // pending and the Save button spins forever. See withWriteTimeout.
       const schedulesRef = collection(db, 'users', userId, 'schedules');
-      const createdDoc = await addDoc(schedulesRef, payload);
-      return { success: true, id: createdDoc.id };
+      const created = await withWriteTimeout(
+        addDoc(schedulesRef, payload).then((createdDoc) => ({
+          success: true,
+          id: createdDoc.id,
+        }))
+      );
+      return created;
     } catch (error) {
       console.error('Error creating schedule:', error);
       return { success: false, error: error.message };
@@ -246,11 +254,12 @@ export const scheduleService = {
   // Update schedule (toggle active/inactive)
   updateSchedule: async (userId, scheduleId, updates) => {
     try {
-      await updateDoc(
-        doc(db, 'users', userId, 'schedules', scheduleId),
-        updates
+      return await withWriteTimeout(
+        updateDoc(
+          doc(db, 'users', userId, 'schedules', scheduleId),
+          updates
+        ).then(() => ({ success: true }))
       );
-      return { success: true };
     } catch (error) {
       console.error('Error updating schedule:', error);
       return { success: false, error: error.message };
@@ -260,8 +269,10 @@ export const scheduleService = {
   // Delete schedule
   deleteSchedule: async (userId, scheduleId) => {
     try {
-      await deleteDoc(doc(db, 'users', userId, 'schedules', scheduleId));
-      return { success: true };
+      return await withWriteTimeout(
+        deleteDoc(doc(db, 'users', userId, 'schedules', scheduleId))
+          .then(() => ({ success: true }))
+      );
     } catch (error) {
       console.error('Error deleting schedule:', error);
       return { success: false, error: error.message };
@@ -271,11 +282,12 @@ export const scheduleService = {
   // Toggle schedule active status
   toggleScheduleActive: async (userId, scheduleId, active) => {
     try {
-      await updateDoc(
-        doc(db, 'users', userId, 'schedules', scheduleId),
-        { active }
+      return await withWriteTimeout(
+        updateDoc(
+          doc(db, 'users', userId, 'schedules', scheduleId),
+          { active }
+        ).then(() => ({ success: true }))
       );
-      return { success: true };
     } catch (error) {
       console.error('Error toggling schedule:', error);
       return { success: false, error: error.message };

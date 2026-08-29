@@ -141,6 +141,64 @@ export const bothReadsFailed = (first, second) =>
 export const isUnconfirmedEmpty = (count, meta) =>
   count === 0 && !!meta?.fromCache;
 
+/**
+ * How long a write waits for the server before the UI stops waiting with it.
+ *
+ * Generous enough to cover a slow connection and a cold Cloud Functions start,
+ * short enough that a button does not sit spinning long enough to look broken.
+ */
+export const WRITE_TIMEOUT_MS = 8000;
+
+/**
+ * The result a bounded write reports when the server never answered.
+ *
+ * `pending: true` is the part callers must not flatten into a plain failure.
+ * The write has not been rejected - it is sitting in Firestore's queue.
+ */
+export const PENDING_WRITE_RESULT = Object.freeze({
+  success: false,
+  pending: true,
+  code: 'unavailable',
+  error: 'No connection — the change has not reached the server yet.',
+});
+
+/**
+ * Put a ceiling on a write that would otherwise wait forever.
+ *
+ * A Firestore write does not reject when the phone is offline. `setDoc`,
+ * `updateDoc`, `addDoc` and `deleteDoc` resolve when the *server* acknowledges,
+ * so with no route there the promise simply stays pending: the caller's `await`
+ * never returns, and the button spins until the connection comes back. Nothing
+ * in the SDK times it out. The one place that already knew this is the
+ * push-token cleanup in `authService.logout`, which races the same way.
+ *
+ * This does not cancel anything. Firestore keeps the write queued and sends it
+ * when the connection returns - which is usually what the user wanted - so the
+ * result says `pending`, not "failed". Two things follow from that, and both
+ * belong in whatever message the caller shows:
+ *
+ * - The change may well land later, so do not tell the user it did not happen.
+ * - This app has no disk cache (`getFirestore` with no persistence), so the
+ *   queue lives in memory only. Killing the app drops it.
+ *
+ * @param {Promise} promise The write in flight.
+ * @param {number} [timeoutMs]
+ * @returns {Promise<{success: boolean, pending?: boolean, code?: string, error?: string}>}
+ */
+export const withWriteTimeout = async (promise, timeoutMs = WRITE_TIMEOUT_MS) => {
+  let timer = null;
+
+  const timeout = new Promise((resolve) => {
+    timer = setTimeout(() => resolve(PENDING_WRITE_RESULT), timeoutMs);
+  });
+
+  try {
+    return await Promise.race([promise, timeout]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+};
+
 export default {
   isConnectivityError,
   LOAD_STATE,
@@ -148,4 +206,7 @@ export default {
   isFailedRead,
   bothReadsFailed,
   isUnconfirmedEmpty,
+  withWriteTimeout,
+  WRITE_TIMEOUT_MS,
+  PENDING_WRITE_RESULT,
 };

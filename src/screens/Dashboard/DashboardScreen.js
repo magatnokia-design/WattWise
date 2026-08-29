@@ -15,6 +15,7 @@ import { SIZES, FONTS } from '../../constants/theme';
 import NotificationPanel from '../Notifications/components/NotificationPanel';
 import { useNotifications } from '../Notifications/hooks/useNotifications';
 import AppDialog from '../../components/common/AppDialog';
+import { isConnectivityError } from '../../utils/connectivity';
 import { RateNotice } from '../../components/common/RateNotice';
 import { OfflineState } from '../../components/common/OfflineNotice';
 import { useDismissibleNotice } from '../../hooks/useDismissibleNotice';
@@ -306,17 +307,27 @@ export const DashboardScreen = ({ navigation }) => {
       return;
     }
 
+    // Two different faults, and blaming the wrong one sends the user to check
+    // the wrong thing. A connectivity failure means the command never left this
+    // phone; anything else means it reached the server and was refused there.
+    const offline = isConnectivityError(result);
+
     // The confirmation sheet closes on failure too - it has nothing left to
     // confirm, and leaving it open would put this dialog on top of another
     // Modal. Deferred past its fade for the same reason.
     setControlModal({ visible: false, outlet: null });
     setTimeout(() => {
-      setDialog({
+      setDialog(offline ? {
+        icon: '📡',
+        tone: 'warning',
+        title: 'No connection',
+        message: 'The command could not leave this phone, so the outlet has not changed. Check your wi-fi or mobile data and try again — the Hub is fine.',
+      } : {
         icon: '⚠️',
         tone: 'danger',
         title: 'The outlet did not switch',
         message: result.error
-          || 'The command could not reach the Hub. Check that it is powered and online, then try again.',
+          || 'The command reached WattWise but could not be carried out. Check that the Hub is powered and online, then try again.',
       });
     }, 300);
   };
