@@ -1,0 +1,475 @@
+<title>Abstract and Specifications</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:ital,wght@0,400;0,500;0,600;1,400&family=Source+Sans+3:ital,wght@0,400;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+
+<style>
+  :root{
+    --ground:#FBFBFC; --sheet:#FFFFFF; --ink:#1A1F26; --ink-mute:#5A6472;
+    --accent:#0F6E5C; --accent-soft:#E6F1EE; --flag:#A8620B; --flag-soft:#FBF1E3;
+    --rule:#E2E5EA; --rule-strong:#C9CFD8;
+    --serif:'Spectral',Georgia,'Times New Roman',serif;
+    --sans:'Source Sans 3',-apple-system,'Segoe UI',sans-serif;
+    --mono:'IBM Plex Mono',ui-monospace,'Cascadia Mono',monospace;
+  }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]){
+      --ground:#14171C; --sheet:#1B1F26; --ink:#E4E7EC; --ink-mute:#98A1AE;
+      --accent:#4FBFA3; --accent-soft:#17302B; --flag:#E0A356; --flag-soft:#2E2418;
+      --rule:#2A2F38; --rule-strong:#3C434E;
+    }
+  }
+  :root[data-theme="dark"]{
+    --ground:#14171C; --sheet:#1B1F26; --ink:#E4E7EC; --ink-mute:#98A1AE;
+    --accent:#4FBFA3; --accent-soft:#17302B; --flag:#E0A356; --flag-soft:#2E2418;
+    --rule:#2A2F38; --rule-strong:#3C434E;
+  }
+
+  body{background:var(--ground);color:var(--ink);font-family:var(--sans);
+    font-size:17px;line-height:1.65;margin:0;padding:0 5vw 6rem;
+    -webkit-font-smoothing:antialiased;}
+  .wrap{max-width:47rem;margin:0 auto;}
+
+  header.mast{padding:4rem 0 2rem;border-bottom:2px solid var(--ink);margin-bottom:2.5rem;}
+  .kicker{font-family:var(--mono);font-size:.72rem;letter-spacing:.14em;
+    text-transform:uppercase;color:var(--accent);margin:0 0 1rem;}
+  h1{font-family:var(--serif);font-weight:600;font-size:clamp(2.2rem,6vw,3.1rem);
+    line-height:1.08;margin:0 0 .8rem;text-wrap:balance;letter-spacing:-.015em;}
+  .standfirst{font-family:var(--serif);font-size:1.15rem;color:var(--ink-mute);
+    margin:0;max-width:34rem;line-height:1.55;}
+
+  .key{display:flex;flex-wrap:wrap;gap:1.5rem;margin:2rem 0 3rem;
+    padding:1.1rem 1.3rem;background:var(--accent-soft);border-radius:3px;}
+  .key div{flex:1 1 13rem;font-size:.9rem;line-height:1.45;}
+  .key b{display:block;font-size:.72rem;font-family:var(--mono);letter-spacing:.1em;
+    text-transform:uppercase;color:var(--accent);margin-bottom:.3rem;}
+  .key .ser{font-family:var(--serif);}
+
+  section.block{margin:0 0 4.5rem;}
+  .blocknum{display:flex;align-items:baseline;gap:.85rem;margin-bottom:.4rem;}
+  .blocknum span{font-family:var(--mono);font-size:.78rem;color:var(--accent);
+    letter-spacing:.1em;}
+  h2{font-family:var(--serif);font-weight:600;font-size:1.75rem;line-height:1.2;
+    margin:0 0 .5rem;letter-spacing:-.01em;text-wrap:balance;}
+  .where{font-family:var(--mono);font-size:.75rem;color:var(--ink-mute);
+    margin:0 0 1.6rem;letter-spacing:.02em;}
+
+  .note{font-size:.97rem;color:var(--ink-mute);margin:0 0 1.3rem;}
+  .note strong{color:var(--ink);font-weight:600;}
+  code{font-family:var(--mono);font-size:.86em;background:var(--accent-soft);
+    padding:.12em .4em;border-radius:2px;color:var(--accent);}
+
+  .flag{background:var(--flag-soft);border-radius:3px;padding:1rem 1.2rem;
+    margin:1.5rem 0;font-size:.93rem;line-height:1.55;}
+  .flag b{font-family:var(--mono);font-size:.7rem;letter-spacing:.12em;
+    text-transform:uppercase;color:var(--flag);display:block;margin-bottom:.4rem;}
+  .flag strong{color:var(--ink);font-weight:600;}
+
+  .sheet{background:var(--sheet);border:1px solid var(--rule-strong);
+    border-radius:2px;padding:1.9rem 2rem 1.6rem;margin:1.4rem 0 2rem;
+    font-family:var(--serif);font-size:1.02rem;line-height:1.75;}
+  .sheet .tag{font-family:var(--mono);font-size:.68rem;letter-spacing:.12em;
+    text-transform:uppercase;color:var(--accent);display:block;
+    margin:-.4rem 0 1.2rem;padding-bottom:.7rem;border-bottom:1px solid var(--rule);}
+  .sheet h4{font-family:var(--serif);font-weight:600;font-size:1.05rem;
+    margin:1.6rem 0 .4rem;}
+  .sheet h4:first-of-type{margin-top:0;}
+  .sheet p{margin:0 0 1rem;}
+  .sheet p:last-child{margin-bottom:0;}
+  .sheet em.fill{background:var(--flag-soft);color:var(--flag);font-style:normal;
+    font-family:var(--mono);font-size:.85em;padding:.1em .45em;border-radius:2px;}
+  .sheet table{font-family:var(--sans);}
+
+  .scroll{overflow-x:auto;margin:1.4rem 0 2rem;}
+  table{border-collapse:collapse;width:100%;font-size:.88rem;
+    font-variant-numeric:tabular-nums;}
+  caption{font-family:var(--serif);font-weight:600;font-size:1rem;text-align:left;
+    padding-bottom:.6rem;color:var(--ink);}
+  th,td{text-align:left;padding:.55rem .7rem;border:1px solid var(--rule);
+    vertical-align:top;}
+  thead th{font-family:var(--mono);font-size:.68rem;letter-spacing:.08em;
+    text-transform:uppercase;color:var(--ink-mute);
+    border-bottom:1px solid var(--rule-strong);}
+  tr.group th{background:var(--accent-soft);color:var(--accent);
+    font-family:var(--sans);font-size:.82rem;font-weight:700;letter-spacing:.04em;
+    text-transform:uppercase;text-align:center;}
+  td.spec{white-space:nowrap;}
+
+  h3.sub{font-family:var(--serif);font-size:1.3rem;margin:2.5rem 0 .5rem;font-weight:600;}
+
+  footer.close{border-top:2px solid var(--ink);padding-top:2rem;margin-top:1rem;}
+  footer.close h3{font-family:var(--serif);font-size:1.3rem;margin:0 0 1.4rem;font-weight:600;}
+  footer.close ol{margin:0;padding-left:1.2rem;font-size:.95rem;color:var(--ink-mute);}
+  footer.close li{margin-bottom:.6rem;}
+  footer.close strong{color:var(--ink);font-weight:600;}
+  a{color:var(--accent);}
+</style>
+
+<div class="wrap">
+
+<header class="mast">
+  <p class="kicker">WattWise &middot; abstract &amp; Chapter III &middot; paste-ready</p>
+  <h1>Abstract and Specifications</h1>
+  <p class="standfirst">Your abstract is missing its second half. Plus the four
+  Chapter III sections you asked for, with the spec tables built from the real
+  versions in the two repositories.</p>
+</header>
+
+<div class="key">
+  <div><b>Serif = paste this</b><span class="ser">Text set like this goes into the paper, as written.</span></div>
+  <div><b>Sans = my note</b>Text set like this is guidance for you. It does not go in the paper.</div>
+</div>
+
+<!-- ================= ABSTRACT ================= -->
+<section class="block">
+  <div class="blocknum"><span>PART 01</span></div>
+  <h2>The Abstract</h2>
+  <p class="where">Front matter &rarr; replaces the current draft</p>
+
+  <p class="note">What you have covers the problem, the aim and the method. An
+  abstract has six parts and you are missing three of them &mdash; and the
+  missing ones are the half a reader actually looks for.</p>
+
+  <div class="scroll">
+  <table>
+    <thead><tr><th>Part</th><th>In your draft</th><th>Verdict</th></tr></thead>
+    <tbody>
+      <tr><td>Problem</td><td>Yes</td><td>Keep &mdash; needs rewording</td></tr>
+      <tr><td>Objective</td><td>Yes</td><td>Keep</td></tr>
+      <tr><td>What the system is</td><td>Half a sentence, unfinished</td><td>Finish it</td></tr>
+      <tr><td>Method</td><td>Design + n only</td><td>Add the instrument</td></tr>
+      <tr><td><strong>Results</strong></td><td><strong>Absent</strong></td><td><strong>The main gap</strong></td></tr>
+      <tr><td><strong>Conclusion</strong></td><td><strong>Absent</strong></td><td><strong>Required</strong></td></tr>
+      <tr><td><strong>Keywords</strong></td><td><strong>Absent</strong></td><td>Usually required</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <p class="note"><strong>An abstract with no findings is a proposal, not an
+  abstract.</strong> A panel reads the abstract to learn what you found; yours
+  currently stops at what you set out to do.</p>
+
+  <p class="note">Two wording problems in the draft as well. &ldquo;lack of
+  electricity consumption&rdquo; says households lack consumption &mdash; you
+  mean they lack <em>visibility</em> into it. And the last line is a fragment
+  with no verb.</p>
+
+  <div class="flag">
+    <b>Two kinds of blank below &mdash; they are not the same</b>
+    The <strong>accuracy figures are real</strong> and already measured, so I have
+    written them in: 2.18% against the reference meter, 0.71% across nine bills.
+    Check them against your own Chapter IV before submitting.
+    The <strong>ISO 25010 figures are blank because you have not collected them
+    yet.</strong> Fill those only from real responses. Do not estimate them.
+  </div>
+
+  <div class="sheet">
+    <span class="tag">Paste &mdash; Abstract</span>
+    <p>Rising electricity costs, and the limited visibility households have into
+    what individual appliances consume, are persistent concerns for residential
+    users. A monthly electricity bill reports a single total and attributes it to
+    nothing, leaving the household unable to identify which appliance is
+    responsible for a rise in cost. This study designed and developed
+    <strong>WattWise: An IoT-Based Dual-Outlet Energy Monitoring and Appliance
+    Control System</strong>, which provides residential users with per-outlet
+    measurement, appliance identification, real-time cost analysis on the PELCO
+    III residential tariff, and automated safety cut-off.</p>
+
+    <p>The system comprises an ESP32-WROOM-32 microcontroller with two PZEM-004T
+    energy sensors and a two-channel relay module, a Firebase cloud backend
+    providing authentication, document storage and scheduled processing, and two
+    client applications: an Android mobile application and a web dashboard.</p>
+
+    <p>A mixed-methods developmental design was employed. Measurement accuracy was
+    assessed quantitatively against a reference clamp meter across
+    <em class="fill">N</em> load points, and computed cost was verified against
+    nine actual PELCO III billing statements. System quality was evaluated by
+    thirty intended user respondents, selected by purposive sampling from
+    households within <em class="fill">LOCALE</em>, together with a licensed
+    electrician, an electronics technician and an information technology expert,
+    using a questionnaire derived from the ISO/IEC 25010:2011 product quality
+    model across seven quality characteristics.</p>
+
+    <p>Metered energy agreed with the reference instrument to within 2.18 per
+    cent, and computed cost agreed with the issued statements to within 0.71 per
+    cent. The intended users rated the system <em class="fill">WM</em>
+    (<em class="fill">interpretation</em>) overall, rating
+    <em class="fill">characteristic</em> highest and
+    <em class="fill">characteristic</em> lowest. The technical evaluators rated
+    the system <em class="fill">WM</em> (<em class="fill">interpretation</em>).</p>
+
+    <p>The findings indicate that per-outlet measurement with direct cost
+    attribution is achievable at low cost using commercially available
+    components, and that <em class="fill">one sentence on what the users&rsquo;
+    ratings mean for the objective</em>. The system is recommended for
+    <em class="fill">deployment context</em>, subject to the limitations stated
+    in Chapter I.</p>
+
+    <p style="margin-top:1.3rem"><strong>Keywords:</strong> Internet of Things,
+    energy monitoring, appliance identification, smart outlet, ESP32, PELCO III,
+    ISO/IEC 25010</p>
+  </div>
+
+  <p class="note"><strong>Length check.</strong> That runs about 290 words. If your
+  department caps abstracts at 250, cut the second paragraph down to one sentence
+  naming the three tiers &mdash; the component list belongs in Chapter III anyway.</p>
+</section>
+
+<!-- ================= SYSTEM DESIGN SPEC ================= -->
+<section class="block">
+  <div class="blocknum"><span>PART 02</span></div>
+  <h2>System Design Specification</h2>
+  <p class="where">Chapter III &rarr; after Requirements Modelling</p>
+
+  <div class="sheet">
+    <span class="tag">Paste &mdash; Chapter III &rsaquo; System Design Specification</span>
+    <p>The WattWise system is organised into three tiers: a device tier that
+    measures and switches, a cloud tier that stores and computes, and a client
+    tier through which the user observes and controls. Each tier communicates
+    only with the tier adjacent to it, so that no client ever addresses the
+    hardware directly and the hardware holds no user credentials.</p>
+
+    <h4>Device tier</h4>
+    <p>An ESP32-WROOM-32 microcontroller reads two PZEM-004T energy sensors over
+    separate serial channels and drives a two-channel relay module, one channel
+    per outlet. Measurements of voltage, current, power and cumulative energy are
+    posted over HTTPS to the cloud tier at a fixed interval. The controller holds
+    a device identifier and a device token, and no user account credentials, so
+    that a controller recovered from a household discloses nothing about the
+    account it served. Network credentials are entered once through a setup
+    portal and retained in non-volatile storage.</p>
+
+    <h4>Cloud tier</h4>
+    <p>Firebase provides authentication, a Cloud Firestore document store, and
+    Cloud Functions deployed to the <em>asia-southeast1</em> region. The functions
+    fall into three groups: endpoints addressed by the controller, callable
+    functions addressed by the clients, and scheduled jobs that run without a
+    caller &mdash; the nightly consumption rollup, the monthly billing statement,
+    and the sweep that times out undelivered commands. Access is governed by
+    security rules evaluated on the server, under which a document may be read or
+    written only by the account that owns it.</p>
+
+    <h4>Client tier</h4>
+    <p>Two clients present the same account. The Android application is the
+    primary interface and is the only one able to pair a controller by scanning
+    its code; the web dashboard offers the same monitoring, control, analysis and
+    export functions on a larger display. Both read from and write to Firestore
+    through the same security rules, and both compute cost using the same tariff
+    logic, so that a figure shown on one is the figure shown on the other.</p>
+
+    <h4>Command flow</h4>
+    <p>Commands are not pushed to the controller. When a user switches an outlet,
+    the client invokes a callable function which writes a pending command to the
+    account&rsquo;s command collection; the controller polls for that command,
+    executes it, and acknowledges the result, whereupon the outlet&rsquo;s state
+    is updated. A command that is not acknowledged within a fixed interval is
+    marked as timed out, the outlet is returned to the position it held before
+    the command was issued, and the user is notified that the instruction did not
+    reach the device. This design was adopted because a controller behind a
+    domestic router cannot reliably receive an unsolicited inbound connection, and
+    because it makes the failure of a command observable rather than silent.</p>
+  </div>
+</section>
+
+<!-- ================= DEVELOPMENT SPEC ================= -->
+<section class="block">
+  <div class="blocknum"><span>PART 03</span></div>
+  <h2>Development Specification</h2>
+  <p class="where">Chapter III &rarr; after System Design Specification, before Tables 4 and 5</p>
+
+  <div class="sheet">
+    <span class="tag">Paste &mdash; Chapter III &rsaquo; Development Specification</span>
+    <p>The system was developed across three codebases, each with its own toolchain.</p>
+
+    <p>The Android application was built with React Native under the Expo
+    framework, in JavaScript, and is distributed as an installable package rather
+    than through an application store. The web dashboard was built with React and
+    the Vite build tool, also in JavaScript, and is served as a static site. The
+    backend was written in JavaScript for the Node.js runtime and deployed as
+    Firebase Cloud Functions. The controller firmware was written in C++ using the
+    Arduino IDE, with libraries for the energy sensors, wireless networking and
+    JSON encoding.</p>
+
+    <p>Version control was maintained with Git, with the application and web
+    codebases held in separate repositories sharing one Firebase project.
+    Continuous integration was used to produce the Android package, so that every
+    release is built from a recorded commit in a clean environment rather than
+    from a developer&rsquo;s machine. Backend logic is covered by an automated
+    test suite executed on each change.</p>
+
+    <p>The software and hardware required to operate and to develop the system are
+    stated in Table 4 and Table 5 respectively.</p>
+  </div>
+</section>
+
+<!-- ================= TABLES ================= -->
+<section class="block">
+  <div class="blocknum"><span>PART 04</span></div>
+  <h2>Tables 4 and 5</h2>
+  <p class="where">Chapter III &rarr; under Development Specification</p>
+
+  <p class="note">Built in the same Minimum / Recommended format as the Appendix B
+  you sent. Two differences, both deliberate: your reference splits by
+  <em>Students, Teachers, Parents</em> &mdash; WattWise has one kind of end user,
+  so it splits by <strong>Household User</strong> and <strong>Developer</strong>.
+  And it gains a third block your reference has no equivalent for: <strong>the
+  WattWise Hub itself</strong>, which is part of the system rather than something
+  a user supplies.</p>
+
+  <div class="flag">
+    <b>Every version below is read from the repositories, except one</b>
+    Expo 54, React Native 0.81.5, React 19.1.0, Firebase 12.11, Vite 6, Node 24 on
+    the backend, Node 20 and Java 17 in the build pipeline &mdash; all real, taken
+    from <code>package.json</code> today. <strong>The Android 7.0 minimum is the
+    documented floor for React Native 0.81, not a value I read from your
+    build.</strong> If a panel presses on it, confirm it from the built package
+    rather than citing me.
+  </div>
+
+  <div class="sheet">
+    <span class="tag">Paste &mdash; Chapter III &rsaquo; Table 4</span>
+    <div class="scroll">
+    <table>
+      <caption>Table 4: Software Specification</caption>
+      <thead><tr><th style="width:34%">Minimum</th><th>Recommended</th></tr></thead>
+      <tbody>
+        <tr class="group"><th colspan="2">Household User</th></tr>
+        <tr><td>OS: Android 7.0 (Nougat)</td><td>OS: Android 10 or later</td></tr>
+        <tr><td>WattWise mobile application (installable package)</td><td>WattWise mobile application, latest release</td></tr>
+        <tr><td>Any modern web browser, for the dashboard</td><td>Google Chrome, Microsoft Edge or Safari, current version</td></tr>
+        <tr><td>An active email address, for account verification</td><td>An active email address, for account verification</td></tr>
+
+        <tr class="group"><th colspan="2">Developer</th></tr>
+        <tr><td>Node.js 20</td><td>Node.js 24 (the backend runtime)</td></tr>
+        <tr><td>Expo SDK 54 / React Native 0.81</td><td>Expo SDK 54 / React Native 0.81</td></tr>
+        <tr><td>React 19 with Vite 6, for the web dashboard</td><td>React 19 with Vite 6, for the web dashboard</td></tr>
+        <tr><td>Firebase CLI, for backend deployment</td><td>Firebase CLI, current version</td></tr>
+        <tr><td>Arduino IDE 2.3.2, for the controller firmware</td><td>Arduino IDE 2.3.2 or later</td></tr>
+        <tr><td>Java Development Kit 17, for the Android build</td><td>Java Development Kit 17</td></tr>
+        <tr><td>Git, with a GitHub account</td><td>Git, with a GitHub account</td></tr>
+        <tr><td>Visual Studio Code or an equivalent editor</td><td>Visual Studio Code</td></tr>
+
+        <tr class="group"><th colspan="2">Cloud Services</th></tr>
+        <tr><td>Firebase project (Blaze plan, for outbound requests)</td><td>Firebase project (Blaze plan) with budget alerts configured</td></tr>
+        <tr><td>Cloud Firestore, Authentication, Cloud Functions</td><td>As minimum, plus scheduled functions and email delivery</td></tr>
+        <tr><td>Static web hosting</td><td>Static web hosting with a custom domain</td></tr>
+      </tbody>
+    </table>
+    </div>
+  </div>
+
+  <div class="sheet">
+    <span class="tag">Paste &mdash; Chapter III &rsaquo; Table 5</span>
+    <div class="scroll">
+    <table>
+      <caption>Table 5: Hardware Specification</caption>
+      <thead><tr><th style="width:34%">Minimum</th><th>Recommended</th></tr></thead>
+      <tbody>
+        <tr class="group"><th colspan="2">Household User</th></tr>
+        <tr><td>Device: Android smartphone</td><td>Device: Android smartphone, mid-range or higher</td></tr>
+        <tr><td>Processor: Quad-core 1.4 GHz</td><td>Processor: Octa-core 2.0 GHz or higher</td></tr>
+        <tr><td>RAM: 2 GB</td><td>RAM: 4 GB or higher</td></tr>
+        <tr><td>Storage: 200 MB free (the package is approximately 60 MB)</td><td>Storage: 1 GB free or higher</td></tr>
+        <tr><td>Internet: mobile data or Wi-Fi, 2 Mbps</td><td>Internet: Wi-Fi or 4G LTE, 5 Mbps or higher</td></tr>
+        <tr><td>A 2.4 GHz wireless network at the installation site</td><td>A 2.4 GHz wireless network with stable signal at the outlet</td></tr>
+
+        <tr class="group"><th colspan="2">WattWise Hub (supplied by the system)</th></tr>
+        <tr><td>Controller: ESP32-WROOM-32</td><td>Controller: ESP32-WROOM-32</td></tr>
+        <tr><td>Metering: two PZEM-004T-100A (V4.0) energy sensors</td><td>Metering: two PZEM-004T-100A (V4.0) energy sensors</td></tr>
+        <tr><td>Switching: two-channel relay module with optocoupler isolation</td><td>Switching: two-channel relay module with optocoupler isolation</td></tr>
+        <tr><td>Supply: regulated 5 V, 3 A</td><td>Supply: regulated 5 V, 3 A</td></tr>
+        <tr><td>Outlets: two, 220 V AC, low-power loads only</td><td>Outlets: two, 220 V AC, low-power loads only</td></tr>
+        <tr><td>Enclosure: non-conductive housing</td><td>Enclosure: non-conductive IP65 housing</td></tr>
+
+        <tr class="group"><th colspan="2">Developer</th></tr>
+        <tr><td>Processor: Intel Core i5 (7th generation) or equivalent</td><td>Processor: Intel Core i7 (10th generation) / AMD Ryzen 7 or higher</td></tr>
+        <tr><td>RAM: 8 GB</td><td>RAM: 16 GB or higher</td></tr>
+        <tr><td>Storage: 256 GB solid-state drive</td><td>Storage: 512 GB solid-state drive or higher</td></tr>
+        <tr><td>OS: Windows 10</td><td>OS: Windows 11</td></tr>
+        <tr><td>Network: broadband, 10 Mbps</td><td>Network: broadband, 20 Mbps or higher</td></tr>
+        <tr><td>A USB cable for flashing the controller</td><td>A data-capable USB cable, 3 A rated</td></tr>
+        <tr><td>A reference clamp meter, for accuracy validation</td><td>A calibrated reference clamp meter</td></tr>
+      </tbody>
+    </table>
+    </div>
+  </div>
+
+  <div class="flag">
+    <b>Check this against Chapter I before you paste</b>
+    Table 5 says the enclosure is recommended as <strong>IP65</strong> while the
+    minimum is simply non-conductive. Your Chapter III currently states the
+    prototype was <strong>operated in an open configuration</strong> and that
+    enclosure fitting is the remaining step. Those two are consistent only if the
+    paper is explicit that the unit evaluated was the open one. Say so, or a
+    panel will find the contradiction for you.
+  </div>
+</section>
+
+<!-- ================= IMPLEMENTATION PLAN ================= -->
+<section class="block">
+  <div class="blocknum"><span>PART 05</span></div>
+  <h2>Implementation Plan</h2>
+  <p class="where">Chapter III &rarr; the last section, after Test Evaluation Plan</p>
+
+  <div class="sheet">
+    <span class="tag">Paste &mdash; Chapter III &rsaquo; Implementation Plan</span>
+    <p>Implementation proceeds in four stages, ordered so that each depends only
+    on what precedes it.</p>
+
+    <h4>Backend deployment</h4>
+    <p>The Cloud Functions, the Firestore security rules and the database indexes
+    are deployed first, to the <em>asia-southeast1</em> region. The backend is
+    deployed before either client because both clients and the controller depend
+    on it, and because a client released against an undeployed function fails in
+    a way the user cannot act on. Scheduled jobs are configured to the Manila
+    timezone so that daily and monthly boundaries fall where the user&rsquo;s
+    billing period does.</p>
+
+    <h4>Hardware preparation</h4>
+    <p>The controller is assembled, the firmware is flashed, and a device
+    identifier and token are issued and recorded against the account that will own
+    it. The unit is bench tested against a reference meter before it is placed in
+    service. Mains connections are made by the researchers.</p>
+
+    <h4>Client release</h4>
+    <p>The Android package is produced by the continuous integration pipeline from
+    a recorded commit and published as a versioned release, from which users
+    install it directly; distribution through an application store is outside the
+    scope of this study. The web dashboard is deployed to static hosting under the
+    project domain, and its download link is updated to the version just released
+    so that the two remain in step.</p>
+
+    <h4>User onboarding</h4>
+    <p>The user installs the application, registers an account and verifies the
+    address, connects the Hub to the household wireless network through the setup
+    portal, and pairs it by scanning the code on the unit. Rate figures are entered
+    once from the household&rsquo;s own billing statement so that computed cost
+    reflects the tariff actually charged. A printed setup booklet accompanies the
+    unit, and the interface states the next required step at each stage so that
+    onboarding does not depend on the booklet being to hand.</p>
+
+    <h4>Post-deployment</h4>
+    <p>Faults reported by users are addressed by correction and re-release rather
+    than by on-site intervention, since the clients update independently of the
+    hardware. Backend usage is monitored against a configured budget threshold.</p>
+  </div>
+</section>
+
+<footer class="close">
+  <h3>Before any of this goes in</h3>
+  <ol>
+    <li><strong>Do not fill the ISO 25010 blanks until you have responses.</strong>
+    The accuracy figures are real and written in; the evaluation figures are not
+    yours yet.</li>
+    <li><strong>Confirm the accuracy numbers against your own Chapter IV.</strong>
+    I have 2.18% and 0.71% recorded, but your paper is the authority.</li>
+    <li><strong>Settle the enclosure wording.</strong> Table 5 recommends IP65
+    while Chapter III says the prototype was open. Both can be true; the paper has
+    to say which was evaluated.</li>
+    <li><strong>Renumber.</strong> These are Tables 4 and 5 per the template, which
+    means your Chapter IV results tables start at Table 6 &mdash; not Table 3,
+    where they sit now.</li>
+  </ol>
+</footer>
+
+</div>
