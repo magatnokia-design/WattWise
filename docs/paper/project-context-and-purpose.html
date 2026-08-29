@@ -1,0 +1,323 @@
+<title>The Rented Room</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Spectral:ital,wght@0,400;0,500;0,600;1,400&family=Source+Sans+3:ital,wght@0,400;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+
+<style>
+  :root{
+    --ground:#FBFBFC; --sheet:#FFFFFF; --ink:#1A1F26; --ink-mute:#5A6472;
+    --accent:#0F6E5C; --accent-soft:#E6F1EE;
+    --flag:#A8620B; --flag-soft:#FBF1E3;
+    --rule:#E2E5EA; --rule-strong:#C9CFD8;
+    --serif:'Spectral',Georgia,'Times New Roman',serif;
+    --sans:'Source Sans 3',-apple-system,'Segoe UI',sans-serif;
+    --mono:'IBM Plex Mono',ui-monospace,'Cascadia Mono',monospace;
+  }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]){
+      --ground:#14171C; --sheet:#1B1F26; --ink:#E4E7EC; --ink-mute:#98A1AE;
+      --accent:#4FBFA3; --accent-soft:#17302B;
+      --flag:#E0A356; --flag-soft:#2E2418;
+      --rule:#2A2F38; --rule-strong:#3C434E;
+    }
+  }
+  :root[data-theme="dark"]{
+    --ground:#14171C; --sheet:#1B1F26; --ink:#E4E7EC; --ink-mute:#98A1AE;
+    --accent:#4FBFA3; --accent-soft:#17302B;
+    --flag:#E0A356; --flag-soft:#2E2418;
+    --rule:#2A2F38; --rule-strong:#3C434E;
+  }
+
+  *{box-sizing:border-box}
+
+  body{
+    background:var(--ground); color:var(--ink); font-family:var(--sans);
+    font-size:17px; line-height:1.65; margin:0; padding:0 5vw 6rem;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:47rem; margin:0 auto}
+
+  header.mast{padding:4rem 0 2rem; border-bottom:2px solid var(--ink); margin-bottom:2.5rem}
+  .kicker{
+    font-family:var(--mono); font-size:.72rem; letter-spacing:.14em;
+    text-transform:uppercase; color:var(--accent); margin:0 0 1rem;
+  }
+  h1{
+    font-family:var(--serif); font-weight:600; font-size:clamp(2.2rem,6vw,3.1rem);
+    line-height:1.08; margin:0 0 .8rem; text-wrap:balance; letter-spacing:-.015em;
+  }
+  .standfirst{
+    font-family:var(--serif); font-size:1.15rem; color:var(--ink-mute);
+    margin:0; max-width:34rem; line-height:1.55;
+  }
+
+  .legend{
+    display:flex; flex-wrap:wrap; gap:1.5rem; margin:2rem 0 3.5rem;
+    padding:1.1rem 1.3rem; background:var(--accent-soft); border-radius:3px;
+  }
+  .legend div{flex:1 1 15rem; font-size:.9rem; line-height:1.45; color:var(--ink)}
+  .legend b{
+    display:block; font-size:.72rem; font-family:var(--mono); letter-spacing:.1em;
+    text-transform:uppercase; color:var(--accent); margin-bottom:.3rem;
+  }
+  .legend .ser{font-family:var(--serif)}
+
+  section.block{margin:0 0 4.5rem}
+  h2{
+    font-family:var(--serif); font-weight:600; font-size:1.75rem; line-height:1.2;
+    margin:0 0 .35rem; letter-spacing:-.01em; text-wrap:balance;
+  }
+  .where{
+    font-family:var(--mono); font-size:.75rem; color:var(--ink-mute);
+    margin:0 0 1.6rem; letter-spacing:.02em;
+  }
+
+  .note{font-size:.97rem; color:var(--ink-mute); margin:0 0 1.4rem; max-width:38rem}
+  .note strong{color:var(--ink); font-weight:600}
+
+  .paste{
+    background:var(--sheet); border:1px solid var(--rule);
+    border-left:3px solid var(--accent); border-radius:2px;
+    padding:1.6rem 1.8rem; margin:0 0 1.5rem;
+  }
+  .paste .tag{
+    font-family:var(--mono); font-size:.68rem; letter-spacing:.12em;
+    text-transform:uppercase; color:var(--accent); display:block; margin-bottom:1rem;
+  }
+  .paste p{
+    font-family:var(--serif); font-size:1.02rem; line-height:1.72;
+    margin:0 0 1.15rem; color:var(--ink);
+  }
+  .paste p:last-child{margin-bottom:0}
+
+  .fill{
+    background:var(--flag-soft); color:var(--ink); border-radius:2px;
+    padding:.05em .35em; font-weight:600; font-family:var(--sans); font-size:.92em;
+    white-space:nowrap;
+  }
+
+  .flagbox{
+    background:var(--flag-soft); border-left:3px solid var(--flag);
+    border-radius:2px; padding:1.3rem 1.5rem; margin:0 0 2rem;
+  }
+  .flagbox h3{
+    font-family:var(--sans); font-size:.95rem; font-weight:700; margin:0 0 .6rem;
+    color:var(--flag); letter-spacing:.01em;
+  }
+  .flagbox p{margin:0 0 .8rem; font-size:.95rem; color:var(--ink)}
+  .flagbox p:last-child{margin-bottom:0}
+
+  ul.blanks{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:.9rem}
+  ul.blanks li{
+    display:grid; grid-template-columns:auto 1fr; gap:.85rem; align-items:baseline;
+    font-size:.95rem; color:var(--ink);
+  }
+  ul.blanks code{
+    font-family:var(--mono); font-size:.82rem; background:var(--flag-soft);
+    color:var(--flag); padding:.15em .45em; border-radius:2px; white-space:nowrap;
+  }
+
+  footer{
+    border-top:1px solid var(--rule); padding-top:1.5rem; margin-top:1rem;
+    font-size:.85rem; color:var(--ink-mute);
+  }
+  footer p{margin:0 0 .5rem}
+  footer p:last-child{margin-bottom:0}
+
+  @media (max-width:34rem){
+    body{font-size:16px}
+    .paste{padding:1.3rem 1.2rem}
+    ul.blanks li{grid-template-columns:1fr; gap:.3rem}
+  }
+</style>
+
+<div class="wrap">
+
+  <header class="mast">
+    <p class="kicker">WattWise &middot; Chapter I &middot; paste-ready</p>
+    <h1>The Rented Room</h1>
+    <p class="standfirst">The two sections of Chapter I that still read
+      &ldquo;Introduce your locale&rdquo; and &ldquo;Clearly present your proposed
+      solution&rdquo;. Written around the constraint that actually shaped the
+      system: a tenant cannot touch the panel.</p>
+  </header>
+
+  <div class="legend">
+    <div class="ser"><b>Serif = paste this</b>Text set like this goes into the manuscript, as written.</div>
+    <div><b>Sans = my note</b>Text set like this is for you. It does not go in the paper.</div>
+  </div>
+
+  <section class="block">
+    <h2>Project Context</h2>
+    <p class="where">Chapter I &rsaquo; replaces the line &ldquo;Introduce your locale and explain why you chose it&rdquo;</p>
+
+    <p class="note">The template asks two things here: <strong>where</strong>, and
+      <strong>why there</strong>. The second is the one panels press on, because
+      &ldquo;it is where we live&rdquo; is a reason to pick a site but not a reason
+      the study needs that site. The answer below is that the tenancy itself is the
+      constraint &mdash; an occupant who cannot modify the distribution panel can only
+      be served by a device that sits between the socket and the appliance. That is
+      why WattWise is a plug-in unit controlling two outlets, and saying so turns
+      your locale from a convenience into a justification.</p>
+
+    <div class="paste">
+      <span class="tag">Paste &mdash; Chapter I &rsaquo; Project Context</span>
+      <p>WattWise was developed for households occupying rented apartment and
+        boarding rooms in <span class="fill">[BARANGAY]</span>, Sto. Tomas,
+        Pampanga, within the franchise area of the Pampanga Electric Cooperative III
+        (PELCO III). <span class="fill">[NUMBER]</span> such units were identified in
+        the immediate locale, of which thirty-two met the criteria used in this
+        study: occupants who use low-power plug-in appliances and who pay, or
+        contribute to, the household&rsquo;s monthly electricity bill.</p>
+
+      <p>This locale was selected because it exhibits the problem the study
+        addresses in its sharpest form. A rented room is metered as a single point.
+        Where the landlord sub-meters, the occupant receives one figure and an amount
+        due; where the unit is billed directly, the statement still reports only a
+        total for the whole room. In neither case can the occupant attribute that
+        total to any particular appliance. The tenant is therefore asked to reduce a
+        cost whose composition is not visible to them, and the only instrument
+        available &mdash; the monthly bill &mdash; arrives after every decision that
+        produced it has already been made.</p>
+
+      <p>The tenancy also constrains what any solution may do. An occupant cannot
+        modify the distribution panel, install a whole-house meter, or alter fixed
+        wiring, since the electrical installation belongs to the landlord and any
+        intervention would require consent and, in most cases, a licensed
+        electrician. A measuring device intended for this locale must therefore sit
+        between the existing outlet and the appliance, be installed and removed
+        without tools, and leave the premises unaltered. This constraint shaped the
+        system as much as any user requirement did, and is the reason WattWise is a
+        plug-in unit controlling two outlets rather than a panel-mounted
+        installation.</p>
+
+      <p>The appliance mix in these rooms suits that arrangement. Occupants
+        typically operate mobile telephone and laptop chargers, an electric fan,
+        light-emitting diode lamps, a television or monitor, and a games console
+        &mdash; loads well within the capacity of an outlet-level device. Heating and
+        motor-driven appliances, which would exceed it, are generally not present or
+        not permitted.</p>
+
+      <p>The tariff is a further reason for choosing this site. As of April 2026 the
+        effective all-in residential rate in the PELCO III area stood at
+        &#8369;10.2745 per kilowatt-hour, and the cooperative&rsquo;s statement
+        itemises generation, transmission, distribution, and government charges
+        separately rather than applying a flat rate. Any cost figure meaningful to a
+        household here must reproduce that structure. A system built and validated
+        against PELCO III statements is therefore directly applicable to the locale,
+        and its accuracy is checkable against a document the household already
+        receives each month.</p>
+    </div>
+  </section>
+
+  <section class="block">
+    <h2>Purpose and Description</h2>
+    <p class="where">Chapter I &rsaquo; between Project Context and Statement of Objectives</p>
+
+    <p class="note">This section has to do something the Introduction does not:
+      match each part of the system to a specific difficulty already named. The
+      paragraph structure below does that deliberately &mdash; one clause per problem,
+      each answering something stated in the Project Context. It also states the
+      boundary in the last paragraph rather than leaving it to Scope, because a
+      purpose that claims less than it delivers is easier to defend than one a panel
+      has to narrow for you.</p>
+
+    <div class="paste">
+      <span class="tag">Paste &mdash; Chapter I &rsaquo; Purpose and Description</span>
+      <p>This study proposes WattWise, an IoT-based dual-outlet energy monitoring
+        system with appliance detection, automated safety control, and real-time cost
+        analysis, designed to give the occupant of a rented room the per-appliance
+        visibility the monthly bill withholds.</p>
+
+      <p>The system comprises three parts. A plug-in controller &mdash; the WattWise
+        Hub &mdash; houses an ESP32-WROOM-32 microcontroller, two PZEM-004T energy
+        sensors and a two-channel relay module, and measures and switches two outlets
+        independently. A Firebase cloud backend stores each reading, computes cost
+        against the PELCO III tariff, and runs the scheduled work by which a day of
+        consumption is closed into a permanent record. An Android application and a
+        web dashboard present the same account, so the household may read the same
+        figures on a phone or on a larger screen.</p>
+
+      <p>Each element addresses a specific difficulty identified in the locale.
+        Against the absence of per-appliance visibility, the system measures each
+        outlet separately and reports voltage, current, power and accumulated energy
+        for each, so that consumption is attributed to a socket rather than to a
+        room. Against the delay inherent in monthly billing, readings are displayed as
+        they are taken and priced immediately, so that the cost of leaving an
+        appliance running is known while the decision to leave it running can still be
+        reversed. Against the opacity of the statement itself, cost is computed using
+        the PELCO III charge structure rather than a flat rate, and the resulting
+        monthly figure may be compared line by line against the statement the
+        household receives. Against consumption that is discovered only at the end of
+        the month, a monthly budget may be set and the user notified as thresholds are
+        approached. Against the inability to switch off an appliance one is not
+        present to reach, either outlet may be switched remotely, or on a
+        schedule.</p>
+
+      <p>Safety is enforced on the controller itself rather than in the cloud.
+        Measured power is compared against a compiled limit of 500 W per outlet and
+        1,000 W combined, and the affected relay is de-energised without reference to
+        any cloud instruction, so that protection remains in force when the network
+        does not. This matters in a rented room, where the occupant does not control
+        the circuit protection upstream of the socket.</p>
+
+      <p>Appliance identification supports this purpose without being relied upon by
+        it. The system matches a measurement run against a catalogue of eight stored
+        profiles and presents the result as a suggestion for the user to confirm;
+        where the leading candidates are too close to separate, it reports that the
+        load cannot be named rather than assigning one. Energy, cost and the safety
+        cut-off are each derived from direct measurement and do not read the inferred
+        name, so the household&rsquo;s bill and its protection do not depend on the
+        identification being correct.</p>
+
+      <p>WattWise does not replace the utility meter and does not measure the whole
+        household. It measures what is plugged into it &mdash; two outlets, serving
+        the low-power appliances the locale actually uses &mdash; and reports that
+        consumption in pesos, as it happens, to the person who pays for it.</p>
+    </div>
+  </section>
+
+  <section class="block">
+    <h2>Before you paste</h2>
+    <p class="where">two blanks, and one number to settle</p>
+
+    <div class="flagbox">
+      <h3>Fill these in &mdash; only you have them</h3>
+      <ul class="blanks">
+        <li><code>[BARANGAY]</code><span>Where the deployment room actually is. If
+          naming it identifies a participant, &ldquo;a barangay in Sto. Tomas,
+          Pampanga&rdquo; is acceptable and consistent with your anonymity
+          undertaking.</span></li>
+        <li><code>[NUMBER]</code><span>How many units you surveyed to arrive at the
+          thirty-two. If you did not count a wider set, delete that clause and let the
+          sentence begin &ldquo;Thirty-two such units were identified&hellip;&rdquo;
+          &mdash; a number with no derivation is what a panel presses on.</span></li>
+      </ul>
+    </div>
+
+    <div class="flagbox">
+      <h3>Two tariff figures are in circulation</h3>
+      <p>Chapter I cites <strong>&#8369;10.2745 per kWh</strong> as the April 2026
+        PELCO III rate. The running system is configured at
+        <strong>&#8369;11.03 per kWh</strong>, which is what appears on the dashboard
+        and will therefore appear in any Chapter IV screenshot.</p>
+      <p>Both can be correct &mdash; one is a published rate for a stated month, the
+        other is what was entered from a later statement. But a panel comparing your
+        Chapter I to your results will ask. Name the billing period beside the cited
+        figure, and note that rates are entered per billing period from the
+        household&rsquo;s own statement, which is already how the system works.</p>
+    </div>
+  </section>
+
+  <footer>
+    <p>Prepared for CAP 413 Capstone Project 2, Pampanga State University &ndash;
+      Sto. Tomas Campus. Companion to the abstract and Chapter III specification
+      sections.</p>
+    <p>The technical claims here &mdash; the 500 W and 1,000 W firmware limits, the
+      eight-profile catalogue, the suggestion-first identification, and the
+      device-side enforcement &mdash; were checked against the firmware and backend
+      source on 28 August 2026 and match it.</p>
+  </footer>
+
+</div>
