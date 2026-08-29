@@ -1,0 +1,440 @@
+<title>Hub Reset Rehearsal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Source+Sans+3:wght@400;600;700&display=swap">
+
+<style>
+  :root {
+    --ground:      #F6F8F7;
+    --surface:     #FFFFFF;
+    --surface-2:   #EDF2EF;
+    --ink:         #0E1A15;
+    --ink-2:       #3F4E48;
+    --muted:       #6B7A73;
+    --rule:        #DBE3DE;
+    --rule-strong: #B9C6C0;
+    --accent:      #0B6E4F;
+    --accent-soft: #E1F1EA;
+    --amber:       #9A5C08;
+    --amber-soft:  #FBF0DD;
+    --amber-rule:  #E8CFA3;
+    --stop:        #A32B22;
+    --stop-soft:   #FBE9E7;
+    --stop-rule:   #EBC4BF;
+
+    --step: 1.9rem;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:      #0E1512;
+      --surface:     #161F1A;
+      --surface-2:   #1D2823;
+      --ink:         #E7EEEA;
+      --ink-2:       #B4C2BB;
+      --muted:       #7F8F87;
+      --rule:        #263129;
+      --rule-strong: #36453C;
+      --accent:      #46C795;
+      --accent-soft: #12312440;
+      --amber:       #E3A44A;
+      --amber-soft:  #2C2210;
+      --amber-rule:  #4C3A18;
+      --stop:        #ED8A80;
+      --stop-soft:   #2E1613;
+      --stop-rule:   #4E2621;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ground:      #0E1512;
+    --surface:     #161F1A;
+    --surface-2:   #1D2823;
+    --ink:         #E7EEEA;
+    --ink-2:       #B4C2BB;
+    --muted:       #7F8F87;
+    --rule:        #263129;
+    --rule-strong: #36453C;
+    --accent:      #46C795;
+    --accent-soft: #12312440;
+    --amber:       #E3A44A;
+    --amber-soft:  #2C2210;
+    --amber-rule:  #4C3A18;
+    --stop:        #ED8A80;
+    --stop-soft:   #2E1613;
+    --stop-rule:   #4E2621;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: 'Source Sans 3', -apple-system, BlinkMacSystemFont, sans-serif;
+    font-size: 17px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap { max-width: 46rem; margin: 0 auto; padding: 2.6rem 1.25rem 5rem; }
+
+  /* ---------- masthead ---------- */
+  .mast { border-bottom: 3px solid var(--accent); padding-bottom: 1.4rem; }
+
+  .eyebrow {
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: .72rem; letter-spacing: .16em; text-transform: uppercase;
+    color: var(--accent); margin: 0 0 .7rem;
+  }
+
+  h1 {
+    font-family: 'Archivo', Helvetica, Arial, sans-serif;
+    font-weight: 700; font-size: clamp(2rem, 6.5vw, 2.9rem);
+    line-height: 1.04; letter-spacing: -.02em; margin: 0 0 .6rem;
+    text-wrap: balance;
+  }
+
+  .standfirst { font-size: 1.05rem; color: var(--ink-2); margin: 0; max-width: 34rem; }
+
+  /* ---------- progress ---------- */
+  .progress {
+    display: flex; align-items: center; gap: .8rem;
+    margin-top: 1.3rem; font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: .74rem; color: var(--muted); letter-spacing: .04em;
+  }
+  .bar { flex: 1; height: 5px; background: var(--surface-2); border-radius: 3px; overflow: hidden; }
+  .bar i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .25s ease; }
+  @media (prefers-reduced-motion: reduce) { .bar i { transition: none; } }
+
+  /* ---------- generic blocks ---------- */
+  h2 {
+    font-family: 'Archivo', Helvetica, Arial, sans-serif;
+    font-weight: 600; font-size: 1.32rem; letter-spacing: -.01em;
+    margin: 3rem 0 .9rem; text-wrap: balance;
+  }
+
+  p { margin: 0 0 .9rem; }
+  p:last-child { margin-bottom: 0; }
+
+  code, .mono { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: .84em; }
+  code { background: var(--surface-2); padding: .1em .38em; border-radius: 3px; }
+
+  /* ---------- kit strip ---------- */
+  .kit { display: grid; gap: 1px; background: var(--rule); border: 1px solid var(--rule);
+         border-radius: 8px; overflow: hidden; margin-top: 1.5rem; }
+  @media (min-width: 34rem) { .kit { grid-template-columns: 1fr 1fr; } }
+  .kit div { background: var(--surface); padding: .85rem 1rem; }
+  .kit b { display: block; font-family: 'JetBrains Mono', ui-monospace, monospace;
+           font-size: .68rem; letter-spacing: .12em; text-transform: uppercase;
+           color: var(--accent); margin-bottom: .25rem; }
+  .kit span { font-size: .95rem; color: var(--ink-2); }
+  .kit .val { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: .92rem;
+              color: var(--ink); font-weight: 500; }
+
+  /* ---------- callouts ---------- */
+  .warn, .stopbox {
+    border-radius: 8px; padding: 1rem 1.15rem; margin: 1.5rem 0; font-size: .96rem;
+  }
+  .warn { background: var(--amber-soft); border: 1px solid var(--amber-rule); }
+  .stopbox { background: var(--stop-soft); border: 1px solid var(--stop-rule); }
+  .warn b, .stopbox b {
+    display: block; font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: .68rem; letter-spacing: .12em; text-transform: uppercase; margin-bottom: .4rem;
+  }
+  .warn b { color: var(--amber); }
+  .stopbox b { color: var(--stop); }
+  .warn p, .stopbox p { color: var(--ink-2); }
+  .warn strong, .stopbox strong { color: var(--ink); font-weight: 700; }
+
+  /* ---------- steps ---------- */
+  ol.steps { list-style: none; margin: 1.5rem 0 0; padding: 0; display: grid; gap: .9rem; }
+
+  li.step {
+    background: var(--surface); border: 1px solid var(--rule-strong);
+    border-radius: 9px; padding: 1rem 1.15rem 1.05rem;
+    display: grid; grid-template-columns: var(--step) 1fr; gap: .55rem .9rem;
+    align-items: start;
+  }
+
+  li.step.done { border-color: var(--rule); background: var(--surface-2); }
+  li.step.done .title { color: var(--muted); text-decoration: line-through;
+                        text-decoration-thickness: 1px; }
+
+  .tick {
+    grid-row: 1 / span 3;
+    width: var(--step); height: var(--step); border-radius: 6px;
+    border: 2px solid var(--rule-strong); background: var(--surface);
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: .82rem; font-weight: 700; color: var(--muted);
+    cursor: pointer; padding: 0; line-height: 1;
+  }
+  .tick:hover { border-color: var(--accent); color: var(--accent); }
+  .tick:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  li.step.done .tick { background: var(--accent); border-color: var(--accent); color: var(--surface); }
+
+  .title { font-family: 'Archivo', Helvetica, Arial, sans-serif;
+           font-weight: 600; font-size: 1.04rem; line-height: 1.35; margin: .1rem 0 0; }
+  .detail { font-size: .95rem; color: var(--ink-2); margin: 0; }
+  .detail + .detail { margin-top: .5rem; }
+
+  .expect {
+    margin: .1rem 0 0; padding: .6rem .75rem;
+    background: var(--surface-2); border-left: 3px solid var(--accent);
+    border-radius: 0 5px 5px 0;
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: .8rem; line-height: 1.55; color: var(--ink-2);
+    overflow-x: auto; white-space: pre-wrap; word-break: break-word;
+  }
+  .expect em { font-style: normal; color: var(--accent); font-weight: 700; }
+
+  .miss { font-size: .9rem; color: var(--amber); margin: .55rem 0 0; }
+  .miss strong { color: var(--ink); }
+
+  /* ---------- table ---------- */
+  .scroll { overflow-x: auto; margin-top: 1rem; border: 1px solid var(--rule-strong);
+            border-radius: 8px; }
+  table { border-collapse: collapse; width: 100%; font-size: .92rem; min-width: 32rem; }
+  thead th {
+    text-align: left; font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: .66rem; letter-spacing: .1em; text-transform: uppercase;
+    color: var(--muted); padding: .6rem .85rem; background: var(--surface-2);
+    border-bottom: 1px solid var(--rule-strong); white-space: nowrap;
+  }
+  tbody td { padding: .6rem .85rem; border-bottom: 1px solid var(--rule);
+             vertical-align: top; color: var(--ink-2); background: var(--surface); }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody td:first-child { color: var(--ink); font-weight: 600; }
+
+  footer { margin-top: 3rem; padding-top: 1.2rem; border-top: 1px solid var(--rule);
+           font-family: 'JetBrains Mono', ui-monospace, monospace;
+           font-size: .72rem; line-height: 1.75; color: var(--muted); }
+
+  a { color: var(--accent); }
+</style>
+
+<div class="wrap">
+
+  <header class="mast">
+    <p class="eyebrow">WattWise Hub &middot; field card</p>
+    <h1>Hub Reset Rehearsal</h1>
+    <p class="standfirst">Wipe the Hub's Wi-Fi and put it back on a network, start to finish.
+    This is the dress rehearsal for demoing on the venue's Wi-Fi instead of your room's.</p>
+
+    <div class="progress">
+      <span id="count">0 of 8</span>
+      <span class="bar"><i id="fill"></i></span>
+      <button type="button" id="reset" style="background:none;border:0;color:inherit;font:inherit;cursor:pointer;text-decoration:underline;padding:0">reset</button>
+    </div>
+  </header>
+
+  <h2>Have these in hand first</h2>
+
+  <div class="kit">
+    <div><b>Hub setup password</b><span class="val">S4Mhy4v456YzP6</span></div>
+    <div><b>Network to join</b><span class="val">KIANO-4G</span> <span>&mdash; and its password</span></div>
+    <div><b>Setup page</b><span class="val">http://192.168.4.1</span></div>
+    <div><b>Serial, if you use it</b><span class="val">115200 baud</span></div>
+  </div>
+
+  <div class="warn">
+    <b>Two constraints that actually bite</b>
+    <p><strong>The setup portal closes after 10 minutes</strong> and the Hub restarts. That is
+    plenty &mdash; unless you spend it hunting for the Wi-Fi password. Have it before you press
+    anything.</p>
+    <p><strong>The ESP32 is 2.4 GHz only.</strong> If the venue offers a 5 GHz network, or a
+    single name that hides both, the Hub may not see it at all. Worth asking the venue before
+    the day.</p>
+  </div>
+
+  <h2>The run</h2>
+
+  <ol class="steps" id="steps">
+
+    <li class="step" data-id="s1">
+      <button type="button" class="tick" aria-label="Mark step 1 done">1</button>
+      <p class="title">Note what &ldquo;working&rdquo; looks like now</p>
+      <p class="detail">Open the app or wattwise.site and confirm readings are arriving. You need
+      a before state, or you cannot tell that the after state is real.</p>
+      <div class="expect">Readings update every <em>1.5&ndash;5 s</em> while the Hub is online.
+Analytics shows a live figure rather than "No signal".</div>
+    </li>
+
+    <li class="step" data-id="s2">
+      <button type="button" class="tick" aria-label="Mark step 2 done">2</button>
+      <p class="title">Connect serial &mdash; optional, but it turns guesswork into reading</p>
+      <p class="detail">USB to the laptop, any serial monitor at 115200. Type <code>status</code>
+      and press Enter.</p>
+      <div class="expect">[STATUS] FW=relay-cloud-dualpzem-1.5.1  WiFi=connected  Relay1=OFF  Relay2=OFF  TelemetryMode=PZEM</div>
+      <p class="miss"><strong>Without serial this still works</strong> &mdash; you just judge each
+      step by the Wi-Fi list and the app instead of by the messages.</p>
+    </li>
+
+    <li class="step" data-id="s3">
+      <button type="button" class="tick" aria-label="Mark step 3 done">3</button>
+      <p class="title">Hold the BOOT button for 5 seconds</p>
+      <p class="detail">Powered on, hold it down and keep holding. Five seconds, not a tap &mdash;
+      BOOT is also the flash pin, so a short press is deliberately harmless.</p>
+      <div class="expect">[PROV] BOOT held - keep holding to clear Wi-Fi settings.   <em>&larr; at 1 s</em>
+[PROV] Factory reset: clearing Wi-Fi and restarting.     <em>&larr; at 5 s</em></div>
+      <p class="miss"><strong>Nothing after 8&ndash;10 seconds?</strong> The Hub may be running
+      firmware older than the reset button. Re-flash from the repo and start again.</p>
+    </li>
+
+    <li class="step" data-id="s4">
+      <button type="button" class="tick" aria-label="Mark step 4 done">4</button>
+      <p class="title">Join the Hub's own network</p>
+      <p class="detail">On your phone or laptop, look for a network named
+      <code>WattWise&#8209;Hub&#8209;XXXX</code>. The last four characters come from the Hub's MAC
+      address, so you will not know them until it appears. Join it with the setup password above.</p>
+      <p class="miss">Give it about 10 seconds after the restart before you expect to see it.</p>
+    </li>
+
+    <li class="step" data-id="s5">
+      <button type="button" class="tick" aria-label="Mark step 5 done">5</button>
+      <p class="title">Open the setup page</p>
+      <p class="detail">Most phones pop it up on their own. If not, go to
+      <code>http://192.168.4.1</code> &mdash; any address you type gets redirected there anyway.</p>
+      <div class="expect">A list of nearby networks, with a <em>Rescan</em> button if the one you
+want is missing.</div>
+    </li>
+
+    <li class="step" data-id="s6">
+      <button type="button" class="tick" aria-label="Mark step 6 done">6</button>
+      <p class="title">Pick the network, enter its password, save</p>
+      <p class="detail">The Hub saves and restarts itself. Your phone drops off the Hub's network
+      at that moment &mdash; that is the restart, not a failure.</p>
+      <div class="expect">[WiFi] Connecting to KIANO-4G .........
+[WiFi] Connected. IP: 192.168.x.x</div>
+      <p class="miss"><strong>Typed the password wrong?</strong> The Hub notices it has never
+      connected with these details, wipes them, and reopens the portal by itself. Just go back to
+      step 4. Credentials that <em>have</em> worked before are kept instead, so a router being off
+      never forces you through setup again.</p>
+    </li>
+
+    <li class="step" data-id="s7">
+      <button type="button" class="tick" aria-label="Mark step 7 done">7</button>
+      <p class="title">Confirm it is reporting &mdash; in the app, not the portal</p>
+      <p class="detail">The portal saying &ldquo;saved&rdquo; only means it stored the password.
+      The real signal is fresh readings arriving. Open the app and watch the outlet cards.</p>
+      <div class="expect">Live watts updating, and Settings showing the Hub as online.</div>
+      <p class="miss"><strong>Joined the network but nothing arrives?</strong> Check Settings
+      &rarr; Hub status. If it says the device is not linked, re-pair by scanning the QR code.</p>
+    </li>
+
+    <li class="step" data-id="s8">
+      <button type="button" class="tick" aria-label="Mark step 8 done">8</button>
+      <p class="title">Pull the power, put it back</p>
+      <p class="detail">The step nobody runs, and the one that matches what happens if the venue's
+      power flickers. Unplug the Hub, wait a few seconds, plug it back in.</p>
+      <div class="expect">It rejoins <em>without</em> the setup portal, and both relays come back
+<em>OFF</em> rather than in a remembered state.</div>
+      <p class="miss">If it opens the portal again instead, the credentials were never marked as
+      verified &mdash; meaning step 6 did not actually complete. Run it again.</p>
+    </li>
+
+  </ol>
+
+  <h2>If it goes sideways</h2>
+
+  <div class="scroll">
+    <table>
+      <thead><tr><th>What you see</th><th>What it means, and what to do</th></tr></thead>
+      <tbody>
+        <tr><td>Holding BOOT does nothing</td><td>Firmware predates the reset button. Re-flash from the repo, then start again.</td></tr>
+        <tr><td>No <span class="mono">WattWise-Hub-&hellip;</span> network</td><td>Wait 10 s after the restart. Check you are looking at the 2.4 GHz list &mdash; some phones hide it.</td></tr>
+        <tr><td>Setup page will not load</td><td>Confirm you are joined to the Hub's network, not your usual one. Type <span class="mono">http://192.168.4.1</span> directly.</td></tr>
+        <tr><td>Network list is empty</td><td>Tap Rescan. The Hub stops its own connection attempts before scanning, so the list fills on the second try.</td></tr>
+        <tr><td>Portal closed on its own</td><td>The 10 minutes elapsed and it restarted. Hold BOOT for 5 s and go again.</td></tr>
+        <tr><td>Connected, but no readings</td><td>Wi-Fi is fine; pairing is not. Settings &rarr; Hub status, then re-scan the QR code.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h2>Serial commands, while you are in there</h2>
+
+  <div class="expect" style="margin-top:1rem">help | status | telemetry | relay1 on|off | relay2 on|off | sim on|off</div>
+
+  <div class="stopbox">
+    <b>One of those is not for the defence</b>
+    <p><strong><span class="mono">sim on</span> makes the Hub publish invented readings</strong>
+    instead of what the sensors measure. It exists for testing the cloud path without a live load.
+    Running it during an evaluation would put fabricated numbers in front of a panel. Leave it off,
+    and check <span class="mono">status</span> reads <span class="mono">TelemetryMode=PZEM</span>
+    before any demo.</p>
+  </div>
+
+  <h2>Why this is worth 15 minutes</h2>
+
+  <p>Everything else in WattWise has been exercised on real hardware &mdash; the cutoff has
+  tripped, timers have fired, pairing has been done more than once. This has not. The Hub has only
+  ever been on one network.</p>
+
+  <p>The mock defence is on someone else's Wi-Fi. If the reset-and-reconnect path has a problem,
+  the choice is finding out here, at a desk, with the repo open &mdash; or finding out in the room
+  with a panel waiting. That is the whole argument.</p>
+
+  <footer>
+    Written from the firmware, not from memory: hold duration, portal timeout, AP naming and the
+    verified-credentials behaviour are read from wifiProvisioning.h and the sketch as of
+    29 August 2026 &middot; firmware relay-cloud-dualpzem-1.5.1.<br>
+    This page carries the Hub's setup password. It is private unless you share it &mdash; keep it
+    that way, or strip that field before you pass it on.<br>
+    Ticks are saved in this browser only. They are not shared with anyone and never leave the device.
+  </footer>
+
+</div>
+
+<script>
+  (function () {
+    var KEY = 'wattwise-hub-reset-rehearsal';
+    var steps = Array.prototype.slice.call(document.querySelectorAll('li.step'));
+    var count = document.getElementById('count');
+    var fill = document.getElementById('fill');
+    var reset = document.getElementById('reset');
+
+    function load() {
+      try {
+        var raw = localStorage.getItem(KEY);
+        return raw ? JSON.parse(raw) : {};
+      } catch (e) { return {}; }
+    }
+
+    function save(state) {
+      try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { /* private mode */ }
+    }
+
+    var state = load();
+
+    function paint() {
+      var done = 0;
+      steps.forEach(function (li) {
+        var on = !!state[li.dataset.id];
+        li.classList.toggle('done', on);
+        var tick = li.querySelector('.tick');
+        tick.setAttribute('aria-pressed', on ? 'true' : 'false');
+        tick.textContent = on ? '✓' : li.dataset.id.slice(1);
+        if (on) done++;
+      });
+      count.textContent = done + ' of ' + steps.length;
+      fill.style.width = (done / steps.length * 100) + '%';
+    }
+
+    steps.forEach(function (li) {
+      li.querySelector('.tick').addEventListener('click', function () {
+        state[li.dataset.id] = !state[li.dataset.id];
+        save(state);
+        paint();
+      });
+    });
+
+    reset.addEventListener('click', function () {
+      state = {};
+      save(state);
+      paint();
+    });
+
+    paint();
+  })();
+</script>
