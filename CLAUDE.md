@@ -273,6 +273,29 @@ the code over that doc for data flow). Current top-level structure under `users/
   never the value; it is presenting a value from one moment as though it belonged
   to another, with nothing on screen naming which moment it came from.
 
+- **`Alert.alert` is gone from `src/` and does not come back.** It rendered a dark
+  grey slab with cyan text on the test handset - a palette this app contains
+  nowhere else - and it cannot carry an icon or mark a destructive action as
+  destructive on Android. Two replacements, and the choice is not taste:
+  - Raised from a **screen** -> `components/common/AppDialog.js`. One title, one
+    message, at most two actions. Anything needing more than that is a screen.
+  - Raised from inside a **`Modal`** -> an inline error in the form itself. This
+    app has never nested one Modal inside another, and a dialog over a form covers
+    the field it is talking about. `AddTimerModal`, `SetBudgetModal` and
+    `AddPreviousBillModal` all work this way; the last confirms its delete by
+    replacing its own footer rather than opening a second layer.
+
+  **A dialog that fires while another Modal is dismissing can render behind it.**
+  The pairing confirmation (`SettingsScreen.handleDeviceScanned`) and the outlet
+  toggle failure (`DashboardScreen.handleConfirmToggle`) are both deferred a few
+  hundred milliseconds for exactly this reason. `Alert.alert` never needed that -
+  it was a native dialog outside React's view hierarchy - so anything replacing it
+  inherits a timing problem the original did not have.
+
+  And check first whether the modal already reports the failure. Two of the old
+  alerts were duplicates: `SupplyRateModal` and `ESP32DeviceModal` print the same
+  error inline, and the alert was a second copy sitting on top of the form.
+
 ## ESP32 toolchain (arduino-cli)
 
 The Hub is built with **arduino-cli**, not the Arduino IDE. Core and libraries live under
