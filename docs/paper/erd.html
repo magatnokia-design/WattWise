@@ -1,0 +1,685 @@
+<title>WattWise Entity Relationship Diagram</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Serif:wght@400;600&display=swap">
+
+<style>
+  :root {
+    --paper:       #FBFCFA;
+    --surface:     #FFFFFF;
+    --surface-2:   #F2F6F4;
+    --ink:         #0F1A16;
+    --ink-2:       #3B4A45;
+    --muted:       #6D7E78;
+    --rule:        #DBE3DF;
+    --rule-strong: #BDCBC5;
+    --accent:      #0E9F73;
+    --accent-soft: #E5F6EF;
+    --fix:         #A8342A;
+    --fix-soft:    #FBEBE9;
+
+    /* Storage kind — the correction this diagram exists to make. */
+    --root-head:   #0E7A5A;
+    --root-fill:   #E4F5EE;
+    --root-ink:    #0A3C2C;
+    --sub-head:    #3C8F5C;
+    --sub-fill:    #EEF7F1;
+    --sub-ink:     #163520;
+    --top-head:    #2C5CA8;
+    --top-fill:    #EDF3FC;
+    --top-ink:     #14315E;
+    --emb-head:    #B08908;
+    --emb-fill:    #FDF6E3;
+    --emb-ink:     #4A3A05;
+    --box-line:    #9AAAA4;
+
+    --s-1: 0.8125rem;
+    --s0:  1.0625rem;
+    --s2:  1.5rem;
+    --s4:  2.6rem;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper:       #0C1411;
+      --surface:     #121D19;
+      --surface-2:   #172420;
+      --ink:         #E5EDE9;
+      --ink-2:       #B7C6C0;
+      --muted:       #85968F;
+      --rule:        #233229;
+      --rule-strong: #32443B;
+      --accent:      #45D5A3;
+      --accent-soft: #0F2C23;
+      --fix:         #F19387;
+      --fix-soft:    #2C1B18;
+
+      --root-head:   #2FBE8C;
+      --root-fill:   #10312585;
+      --root-ink:    #CFF0E3;
+      --sub-head:    #5FBF83;
+      --sub-fill:    #15291E;
+      --sub-ink:     #CDEBD7;
+      --top-head:    #6C9EE0;
+      --top-fill:    #121F2E;
+      --top-ink:     #C6DCF7;
+      --emb-head:    #D9AE33;
+      --emb-fill:    #2A2412;
+      --emb-ink:     #F6E7B4;
+      --box-line:    #4C5F58;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --paper:       #0C1411;
+    --surface:     #121D19;
+    --surface-2:   #172420;
+    --ink:         #E5EDE9;
+    --ink-2:       #B7C6C0;
+    --muted:       #85968F;
+    --rule:        #233229;
+    --rule-strong: #32443B;
+    --accent:      #45D5A3;
+    --accent-soft: #0F2C23;
+    --fix:         #F19387;
+    --fix-soft:    #2C1B18;
+
+    --root-head:   #2FBE8C;
+    --root-fill:   #103125;
+    --root-ink:    #CFF0E3;
+    --sub-head:    #5FBF83;
+    --sub-fill:    #15291E;
+    --sub-ink:     #CDEBD7;
+    --top-head:    #6C9EE0;
+    --top-fill:    #121F2E;
+    --top-ink:     #C6DCF7;
+    --emb-head:    #D9AE33;
+    --emb-fill:    #2A2412;
+    --emb-ink:     #F6E7B4;
+    --box-line:    #4C5F58;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "IBM Plex Serif", Georgia, serif;
+    font-size: var(--s0);
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: 62rem;
+    margin: 0 auto;
+    padding: clamp(2rem, 5vw, 4rem) clamp(1rem, 4vw, 2rem) 5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 3.25rem;
+  }
+
+  h1, h2, h3, .eyebrow, th, .pill, figcaption b { font-family: "IBM Plex Sans", system-ui, sans-serif; }
+
+  .eyebrow {
+    font-size: var(--s-1); font-weight: 600; letter-spacing: 0.13em;
+    text-transform: uppercase; color: var(--muted); margin: 0;
+  }
+
+  h1 {
+    font-family: "IBM Plex Sans", sans-serif;
+    font-size: clamp(1.85rem, 5.5vw, var(--s4));
+    font-weight: 700; line-height: 1.08; letter-spacing: -0.02em;
+    text-wrap: balance; margin: 0.5rem 0 0;
+  }
+
+  h2 { font-size: var(--s2); font-weight: 600; line-height: 1.2; letter-spacing: -0.01em; text-wrap: balance; margin: 0; }
+  h3 { font-size: var(--s0); font-weight: 600; margin: 0; }
+  p { margin: 0; }
+  section { display: flex; flex-direction: column; gap: 1.05rem; }
+  .body-copy { color: var(--ink-2); }
+  .body-copy strong { color: var(--ink); font-weight: 600; }
+  .note { font-size: var(--s-1); color: var(--muted); line-height: 1.6; }
+
+  .head-meta {
+    display: flex; flex-wrap: wrap; gap: 0.4rem 1.5rem;
+    margin-top: 1.1rem; padding-top: 1.1rem; border-top: 1px solid var(--rule);
+    font-family: "IBM Plex Mono", monospace; font-size: var(--s-1); color: var(--muted);
+  }
+  .head-meta b { color: var(--ink-2); font-weight: 500; }
+
+  figure {
+    margin: 0; background: var(--surface); border: 1px solid var(--rule);
+    border-radius: 3px; padding: clamp(0.75rem, 2.5vw, 1.4rem);
+    display: flex; flex-direction: column; gap: 0.9rem; overflow-x: auto;
+  }
+  figure svg { display: block; width: 100%; height: auto; min-width: 44rem; }
+  figcaption {
+    font-size: var(--s-1); color: var(--muted); line-height: 1.6;
+    border-top: 1px solid var(--rule); padding-top: 0.8rem;
+  }
+  figcaption b { color: var(--ink-2); font-weight: 600; }
+
+  .e-root  { fill: var(--root-fill); stroke: var(--root-head); stroke-width: 1.6; }
+  .e-sub   { fill: var(--sub-fill);  stroke: var(--sub-head);  stroke-width: 1.4; }
+  .e-top   { fill: var(--top-fill);  stroke: var(--top-head);  stroke-width: 1.4; }
+  .e-emb   { fill: var(--emb-fill);  stroke: var(--emb-head);  stroke-width: 1.4; }
+  .h-root  { fill: var(--root-head); }
+  .h-sub   { fill: var(--sub-head); }
+  .h-top   { fill: var(--top-head); }
+  .h-emb   { fill: var(--emb-head); }
+
+  .rel  { stroke: var(--box-line); stroke-width: 1.4; fill: none; }
+  .rel-x{ stroke: var(--accent); stroke-width: 1.3; fill: none; stroke-dasharray: 5 3; }
+  .sep  { stroke: var(--box-line); stroke-width: 1; }
+
+  .th   { font-family: "IBM Plex Sans", sans-serif; font-size: 12.5px; font-weight: 700; fill: #fff; letter-spacing: 0.04em; }
+  .fk   { font-family: "IBM Plex Mono", monospace; font-size: 9px; font-weight: 600; }
+  .fn   { font-family: "IBM Plex Mono", monospace; font-size: 10.5px; }
+  .ft   { font-family: "IBM Plex Mono", monospace; font-size: 9.5px; opacity: 0.72; }
+  .lbl  { font-family: "IBM Plex Sans", sans-serif; font-size: 10px; fill: var(--muted); }
+  .lbl-x{ font-family: "IBM Plex Sans", sans-serif; font-size: 10px; fill: var(--accent); }
+
+  .scroller { overflow-x: auto; border: 1px solid var(--rule); border-radius: 3px; background: var(--surface); }
+  table { width: 100%; border-collapse: collapse; font-size: var(--s-1); }
+  th {
+    text-align: left; font-size: 0.6875rem; font-weight: 600; letter-spacing: 0.09em;
+    text-transform: uppercase; color: var(--muted); background: var(--surface-2);
+    padding: 0.65rem 0.85rem; border-bottom: 1px solid var(--rule); white-space: nowrap;
+  }
+  td { padding: 0.65rem 0.85rem; border-bottom: 1px solid var(--rule); vertical-align: top; color: var(--ink-2); }
+  tbody tr:last-child td { border-bottom: 0; }
+  td.mono { font-family: "IBM Plex Mono", monospace; font-size: 0.8125rem; color: var(--ink); white-space: nowrap; }
+  td.was { font-family: "IBM Plex Mono", monospace; font-size: 0.8125rem; color: var(--fix); }
+  td.now { font-family: "IBM Plex Mono", monospace; font-size: 0.8125rem; color: var(--accent); }
+
+  .pill {
+    display: inline-block; font-size: 0.625rem; font-weight: 700; letter-spacing: 0.09em;
+    text-transform: uppercase; padding: 0.18rem 0.45rem; border-radius: 2px; white-space: nowrap;
+  }
+  .pill.hi { background: var(--fix-soft); color: var(--fix); }
+  .pill.lo { background: var(--accent-soft); color: var(--accent); }
+
+  pre {
+    margin: 0; background: var(--surface); border: 1px solid var(--rule-strong); border-radius: 3px;
+    padding: 1.1rem; overflow-x: auto; font-family: "IBM Plex Mono", monospace;
+    font-size: 0.8125rem; line-height: 1.6; color: var(--ink-2); white-space: pre;
+  }
+  code {
+    font-family: "IBM Plex Mono", monospace; font-size: 0.875em; background: var(--surface-2);
+    padding: 0.1em 0.35em; border-radius: 2px; color: var(--ink);
+  }
+
+  .legend { display: flex; flex-wrap: wrap; gap: 0.5rem 1.5rem; font-size: var(--s-1); color: var(--ink-2); align-items: center; }
+  .legend span { display: inline-flex; align-items: center; gap: 0.45rem; }
+  .sw { width: 1.1rem; height: 0.8rem; border-radius: 2px; display: inline-block; }
+  .sw.r { background: var(--root-fill); border: 1.6px solid var(--root-head); }
+  .sw.s { background: var(--sub-fill);  border: 1.4px solid var(--sub-head); }
+  .sw.t { background: var(--top-fill);  border: 1.4px solid var(--top-head); }
+  .sw.b { background: var(--emb-fill);  border: 1.4px solid var(--emb-head); }
+
+  ul.pts { margin: 0; padding-left: 1.15rem; display: flex; flex-direction: column; gap: 0.55rem; color: var(--ink-2); font-size: var(--s-1); }
+  ul.pts strong { color: var(--ink); font-weight: 600; }
+
+  hr { border: 0; border-top: 1px solid var(--rule); margin: 0; }
+  footer { font-size: var(--s-1); color: var(--muted); border-top: 1px solid var(--rule); padding-top: 1.2rem; line-height: 1.6; }
+</style>
+
+<div class="wrap">
+
+  <header>
+    <p class="eyebrow">WattWise · Corrected schema</p>
+    <h1>WattWise Entity Relationship Diagram</h1>
+    <div class="head-meta">
+      <span>Entities <b>15</b></span>
+      <span>Store <b>Cloud Firestore</b></span>
+      <span>Corrections <b>4 structural · 1 systemic · 10 fields</b></span>
+      <span>Verified <b>29 Aug 2026</b></span>
+    </div>
+  </header>
+
+  <section>
+    <p class="body-copy">Rebuilt from the running schema. Four relationships in the previous draft pointed at the wrong parent, every key was typed <code>int</code> when Firestore document IDs are strings, and one collection was missing entirely. Field names below are the literal ones in Firestore, so any claim here can be checked by opening the console.</p>
+    <div class="legend">
+      <span><i class="sw r"></i> Root document</span>
+      <span><i class="sw s"></i> Subcollection under the user</span>
+      <span><i class="sw t"></i> Top-level collection</span>
+      <span><i class="sw b"></i> Embedded array</span>
+    </div>
+  </section>
+
+  <figure>
+    <svg viewBox="0 0 1180 1790" role="img" aria-label="Entity relationship diagram for WattWise: the USER root document with eleven subcollections branching from a central spine, plus the top-level DEVICE and MAIL collections and the embedded APPLIANCE_PROFILE array.">
+      <defs>
+        <marker id="crow" viewBox="0 0 12 12" refX="1" refY="6" markerWidth="11" markerHeight="11" orient="auto">
+          <path d="M 11 0 L 1 6 L 11 12" fill="none" stroke="context-stroke" stroke-width="1.4"></path>
+        </marker>
+        <marker id="one" viewBox="0 0 12 12" refX="6" refY="6" markerWidth="11" markerHeight="11" orient="auto">
+          <path d="M 6 1 L 6 11" fill="none" stroke="context-stroke" stroke-width="1.6"></path>
+        </marker>
+      </defs>
+
+      <!-- ============================ DEVICE (top-level) ============================ -->
+      <rect class="e-top" x="60" y="40" width="300" height="140" rx="3"></rect>
+      <path class="h-top" d="M 60 43 a 3 3 0 0 1 3 -3 h 294 a 3 3 0 0 1 3 3 v 25 h -300 z"></path>
+      <text class="th" x="72" y="61">DEVICE</text>
+      <text class="fn" x="72" y="86" fill="var(--top-ink)">deviceId</text><text class="fk" x="248" y="86" fill="var(--top-head)">PK · string</text>
+      <text class="fn" x="72" y="103" fill="var(--top-ink)">userId</text><text class="fk" x="248" y="103" fill="var(--top-head)">FK · string</text>
+      <text class="fn" x="72" y="120" fill="var(--top-ink)">pendingCommandIds</text><text class="ft" x="290" y="120" fill="var(--top-ink)" text-anchor="end">array</text>
+      <text class="fn" x="72" y="137" fill="var(--top-ink)">health</text><text class="ft" x="290" y="137" fill="var(--top-ink)" text-anchor="end">map</text>
+      <text class="fn" x="72" y="154" fill="var(--top-ink)">lastCommandTimeoutAtMs</text>
+      <text class="fn" x="72" y="171" fill="var(--top-ink)">updatedAt</text><text class="ft" x="290" y="171" fill="var(--top-ink)" text-anchor="end">timestamp</text>
+
+      <!-- ============================ USER (root) ============================ -->
+      <rect class="e-root" x="425" y="40" width="330" height="180" rx="3"></rect>
+      <path class="h-root" d="M 425 43 a 3 3 0 0 1 3 -3 h 324 a 3 3 0 0 1 3 3 v 25 h -330 z"></path>
+      <text class="th" x="437" y="61">USER</text>
+      <text class="fn" x="437" y="86" fill="var(--root-ink)">userId</text><text class="fk" x="620" y="86" fill="var(--root-head)">PK · string (Auth UID)</text>
+      <text class="fn" x="437" y="103" fill="var(--root-ink)">name</text><text class="ft" x="743" y="103" fill="var(--root-ink)" text-anchor="end">string</text>
+      <text class="fn" x="437" y="120" fill="var(--root-ink)">email</text><text class="ft" x="743" y="120" fill="var(--root-ink)" text-anchor="end">string</text>
+      <text class="fn" x="437" y="137" fill="var(--root-ink)">rateProfileId</text><text class="ft" x="743" y="137" fill="var(--root-ink)" text-anchor="end">string</text>
+      <text class="fn" x="437" y="154" fill="var(--root-ink)">supplyRates</text><text class="ft" x="743" y="154" fill="var(--root-ink)" text-anchor="end">map</text>
+      <text class="fn" x="437" y="171" fill="var(--root-ink)">applianceProfiles</text><text class="ft" x="743" y="171" fill="var(--root-ink)" text-anchor="end">array</text>
+      <text class="fn" x="437" y="188" fill="var(--root-ink)">device</text><text class="ft" x="743" y="188" fill="var(--root-ink)" text-anchor="end">map · id, token, rotation</text>
+      <text class="fn" x="437" y="205" fill="var(--root-ink)">pushTokens</text><text class="ft" x="743" y="205" fill="var(--root-ink)" text-anchor="end">array&lt;string&gt;</text>
+
+      <line class="rel" x1="360" y1="110" x2="423" y2="110" marker-start="url(#crow)" marker-end="url(#one)"></line>
+      <text class="lbl" x="391" y="102" text-anchor="middle">links</text>
+
+      <!-- ============================ APPLIANCE_PROFILE (embedded) ============================ -->
+      <rect class="e-emb" x="820" y="40" width="300" height="106" rx="3"></rect>
+      <path class="h-emb" d="M 820 43 a 3 3 0 0 1 3 -3 h 294 a 3 3 0 0 1 3 3 v 25 h -300 z"></path>
+      <text class="th" x="832" y="61">APPLIANCE_PROFILE</text>
+      <text class="fn" x="832" y="86" fill="var(--emb-ink)">applianceName</text><text class="fk" x="1108" y="86" fill="var(--emb-head)" text-anchor="end">key</text>
+      <text class="fn" x="832" y="103" fill="var(--emb-ink)">signatures</text><text class="ft" x="1108" y="103" fill="var(--emb-ink)" text-anchor="end">array · max 4</text>
+      <text class="fn" x="832" y="120" fill="var(--emb-ink)">sampleCount</text><text class="ft" x="1108" y="120" fill="var(--emb-ink)" text-anchor="end">number</text>
+      <text class="fn" x="832" y="137" fill="var(--emb-ink)">updatedAt</text><text class="ft" x="1108" y="137" fill="var(--emb-ink)" text-anchor="end">timestamp</text>
+
+      <line class="rel" x1="757" y1="95" x2="818" y2="95" marker-start="url(#one)" marker-end="url(#crow)"></line>
+      <text class="lbl" x="787" y="87" text-anchor="middle">embeds</text>
+
+      <!-- ============================ SPINE ============================ -->
+      <line class="rel" x1="590" y1="220" x2="590" y2="1660" stroke-width="1.8"></line>
+      <text class="lbl" x="598" y="243" fill="var(--accent)">every subcollection below lives under users/{userId}</text>
+
+      <!-- ======================= OUTLET (left) ======================= -->
+      <rect class="e-sub" x="60" y="270" width="300" height="259" rx="3"></rect>
+      <path class="h-sub" d="M 60 273 a 3 3 0 0 1 3 -3 h 294 a 3 3 0 0 1 3 3 v 25 h -300 z"></path>
+      <text class="th" x="72" y="291">OUTLET</text>
+      <text class="fn" x="72" y="316" fill="var(--sub-ink)">outletId</text><text class="fk" x="290" y="316" fill="var(--sub-head)" text-anchor="end">PK · "outlet1"|"outlet2"</text>
+      <text class="fn" x="72" y="333" fill="var(--sub-ink)">outletNumber</text><text class="ft" x="290" y="333" fill="var(--sub-ink)" text-anchor="end">number</text>
+      <text class="fn" x="72" y="350" fill="var(--sub-ink)">applianceName</text><text class="ft" x="290" y="350" fill="var(--sub-ink)" text-anchor="end">string</text>
+      <text class="fn" x="72" y="367" fill="var(--sub-ink)">status</text><text class="ft" x="290" y="367" fill="var(--sub-ink)" text-anchor="end">"on"|"off"</text>
+      <text class="fn" x="72" y="384" fill="var(--sub-ink)">pendingStatus</text><text class="ft" x="290" y="384" fill="var(--sub-ink)" text-anchor="end">string</text>
+      <text class="fn" x="72" y="401" fill="var(--sub-ink)">voltage</text><text class="ft" x="290" y="401" fill="var(--sub-ink)" text-anchor="end">number</text>
+      <text class="fn" x="72" y="418" fill="var(--sub-ink)">current</text><text class="ft" x="290" y="418" fill="var(--sub-ink)" text-anchor="end">number</text>
+      <text class="fn" x="72" y="435" fill="var(--sub-ink)">power</text><text class="ft" x="290" y="435" fill="var(--sub-ink)" text-anchor="end">number</text>
+      <text class="fn" x="72" y="452" fill="var(--sub-ink)">energy · totalEnergy</text><text class="ft" x="290" y="452" fill="var(--sub-ink)" text-anchor="end">number</text>
+      <text class="fn" x="72" y="469" fill="var(--sub-ink)">energyDateKey</text><text class="ft" x="290" y="469" fill="var(--sub-ink)" text-anchor="end">"YYYY-MM-DD"</text>
+      <text class="fn" x="72" y="486" fill="var(--sub-ink)">applianceIdentity · safety</text><text class="ft" x="290" y="486" fill="var(--sub-ink)" text-anchor="end">map</text>
+      <text class="fn" x="72" y="503" fill="var(--sub-ink)">relayFault</text><text class="ft" x="290" y="503" fill="var(--sub-ink)" text-anchor="end">map</text>
+      <text class="fn" x="72" y="520" fill="var(--sub-ink)">lastUpdated</text><text class="ft" x="290" y="520" fill="var(--sub-ink)" text-anchor="end">timestamp</text>
+      <line class="rel" x1="588" y1="340" x2="362" y2="340" marker-start="url(#one)" marker-end="url(#crow)"></line>
+      <text class="lbl" x="475" y="332" text-anchor="middle">has exactly 2</text>
+
+      <!-- ======================= DEVICE_COMMAND (left) ======================= -->
+      <rect class="e-sub" x="60" y="545" width="300" height="208" rx="3"></rect>
+      <path class="h-sub" d="M 60 548 a 3 3 0 0 1 3 -3 h 294 a 3 3 0 0 1 3 3 v 25 h -300 z"></path>
+      <text class="th" x="72" y="566">DEVICE_COMMAND</text>
+      <text class="fn" x="72" y="591" fill="var(--sub-ink)">commandId</text><text class="fk" x="290" y="591" fill="var(--sub-head)" text-anchor="end">PK · string</text>
+      <text class="fn" x="72" y="608" fill="var(--sub-ink)">deviceId</text><text class="fk" x="290" y="608" fill="var(--sub-head)" text-anchor="end">FK · string</text>
+      <text class="fn" x="72" y="625" fill="var(--sub-ink)">outletId</text><text class="fk" x="290" y="625" fill="var(--sub-head)" text-anchor="end">FK · string</text>
+      <text class="fn" x="72" y="642" fill="var(--sub-ink)">action</text><text class="ft" x="290" y="642" fill="var(--sub-ink)" text-anchor="end">"on"|"off"</text>
+      <text class="fn" x="72" y="659" fill="var(--sub-ink)">reason · source</text><text class="ft" x="290" y="659" fill="var(--sub-ink)" text-anchor="end">string</text>
+      <text class="fn" x="72" y="676" fill="var(--sub-ink)">delivery</text><text class="ft" x="290" y="676" fill="var(--sub-ink)" text-anchor="end">map</text>
+      <text class="fn" x="72" y="693" fill="var(--sub-ink)">acknowledgment</text><text class="ft" x="290" y="693" fill="var(--sub-ink)" text-anchor="end">map</text>
+      <text class="fn" x="72" y="710" fill="var(--sub-ink)">metadata</text><text class="ft" x="290" y="710" fill="var(--sub-ink)" text-anchor="end">map</text>
+      <text class="fn" x="72" y="727" fill="var(--sub-ink)">issuedAtMs</text><text class="ft" x="290" y="727" fill="var(--sub-ink)" text-anchor="end">number</text>
+      <text class="fn" x="72" y="744" fill="var(--sub-ink)">issuedAt</text><text class="ft" x="290" y="744" fill="var(--sub-ink)" text-anchor="end">timestamp</text>
+      <line class="rel" x1="588" y1="615" x2="362" y2="615" marker-start="url(#one)" marker-end="url(#crow)"></line>
+      <text class="lbl" x="475" y="607" text-anchor="middle">issues</text>
+
+      <!-- ======================= SCHEDULE (left) ======================= -->
+      <rect class="e-sub" x="60" y="800" width="300" height="174" rx="3"></rect>
+      <path class="h-sub" d="M 60 803 a 3 3 0 0 1 3 -3 h 294 a 3 3 0 0 1 3 3 v 25 h -300 z"></path>
+      <text class="th" x="72" y="821">SCHEDULE</text>
+      <text class="fn" x="72" y="846" fill="var(--sub-ink)">scheduleId</text><text class="fk" x="290" y="846" fill="var(--sub-head)" text-anchor="end">PK · string</text>
+      <text class="fn" x="72" y="863" fill="var(--sub-ink)">outlet</text><text class="fk" x="290" y="863" fill="var(--sub-head)" text-anchor="end">FK · string "1"|"2"</text>
+      <text class="fn" x="72" y="880" fill="var(--sub-ink)">type</text><text class="ft" x="290" y="880" fill="var(--sub-ink)" text-anchor="end">"schedule"|"countdown"</text>
+      <text class="fn" x="72" y="897" fill="var(--sub-ink)">time · days</text><text class="ft" x="290" y="897" fill="var(--sub-ink)" text-anchor="end">string · array</text>
+      <text class="fn" x="72" y="914" fill="var(--sub-ink)">action</text><text class="ft" x="290" y="914" fill="var(--sub-ink)" text-anchor="end">"ON"|"OFF"</text>
+      <text class="fn" x="72" y="931" fill="var(--sub-ink)">active</text><text class="ft" x="290" y="931" fill="var(--sub-ink)" text-anchor="end">boolean</text>
+      <text class="fn" x="72" y="948" fill="var(--sub-ink)">countdownRemaining</text><text class="ft" x="290" y="948" fill="var(--sub-ink)" text-anchor="end">number</text>
+      <text class="fn" x="72" y="965" fill="var(--sub-ink)">lastTriggered</text><text class="ft" x="290" y="965" fill="var(--sub-ink)" text-anchor="end">timestamp</text>
+      <line class="rel" x1="588" y1="865" x2="362" y2="865" marker-start="url(#one)" marker-end="url(#crow)"></line>
+      <text class="lbl" x="475" y="857" text-anchor="middle">sets</text>
+
+      <!-- ======================= HISTORY_LOG (left) ======================= -->
+      <rect class="e-sub" x="60" y="1020" width="300" height="157" rx="3"></rect>
+      <path class="h-sub" d="M 60 1023 a 3 3 0 0 1 3 -3 h 294 a 3 3 0 0 1 3 3 v 25 h -300 z"></path>
+      <text class="th" x="72" y="1041">HISTORY_LOG</text>
+      <text class="fn" x="72" y="1066" fill="var(--sub-ink)">logId</text><text class="fk" x="290" y="1066" fill="var(--sub-head)" text-anchor="end">PK · string</text>
+      <text class="fn" x="72" y="1083" fill="var(--sub-ink)">outlet</text><text class="fk" x="290" y="1083" fill="var(--sub-head)" text-anchor="end">FK · number</text>
+      <text class="fn" x="72" y="1100" fill="var(--sub-ink)">outletName</text><text class="ft" x="290" y="1100" fill="var(--sub-ink)" text-anchor="end">string</text>
+      <text class="fn" x="72" y="1117" fill="var(--sub-ink)">action</text><text class="ft" x="290" y="1117" fill="var(--sub-ink)" text-anchor="end">"on"|"off"</text>
+      <text class="fn" x="72" y="1134" fill="var(--sub-ink)">source</text><text class="ft" x="290" y="1134" fill="var(--sub-ink)" text-anchor="end">manual|schedule|…</text>
+      <text class="fn" x="72" y="1151" fill="var(--sub-ink)">power · delivery</text><text class="ft" x="290" y="1151" fill="var(--sub-ink)" text-anchor="end">number · map</text>
+      <text class="fn" x="72" y="1168" fill="var(--sub-ink)">timestamp</text><text class="ft" x="290" y="1168" fill="var(--sub-ink)" text-anchor="end">timestamp</text>
+      <line class="rel" x1="588" y1="1085" x2="362" y2="1085" marker-start="url(#one)" marker-end="url(#crow)"></line>
+      <text class="lbl" x="475" y="1077" text-anchor="middle">records</text>
+
+      <!-- ======================= MAIL (left, top-level) ======================= -->
+      <rect class="e-top" x="60" y="1240" width="300" height="106" rx="3"></rect>
+      <path class="h-top" d="M 60 1243 a 3 3 0 0 1 3 -3 h 294 a 3 3 0 0 1 3 3 v 25 h -300 z"></path>
+      <text class="th" x="72" y="1261">MAIL</text>
+      <text class="fn" x="72" y="1286" fill="var(--top-ink)">mailId</text><text class="fk" x="290" y="1286" fill="var(--top-head)" text-anchor="end">PK · string</text>
+      <text class="fn" x="72" y="1303" fill="var(--top-ink)">to</text><text class="ft" x="290" y="1303" fill="var(--top-ink)" text-anchor="end">string</text>
+      <text class="fn" x="72" y="1320" fill="var(--top-ink)">message</text><text class="ft" x="290" y="1320" fill="var(--top-ink)" text-anchor="end">map</text>
+      <text class="fn" x="72" y="1337" fill="var(--top-ink)">delivery</text><text class="ft" x="290" y="1337" fill="var(--top-ink)" text-anchor="end">map · written back</text>
+      <text class="lbl" x="60" y="1368">Queue drained by the Trigger Email extension — no user FK by design.</text>
+
+      <!-- ======================= POWER_SAFETY (right) ======================= -->
+      <rect class="e-sub" x="820" y="270" width="300" height="157" rx="3"></rect>
+      <path class="h-sub" d="M 820 273 a 3 3 0 0 1 3 -3 h 294 a 3 3 0 0 1 3 3 v 25 h -300 z"></path>
+      <text class="th" x="832" y="291">POWER_SAFETY</text>
+      <text class="fn" x="832" y="316" fill="var(--sub-ink)">"settings"</text><text class="fk" x="1108" y="316" fill="var(--sub-head)" text-anchor="end">PK · fixed id</text>
+      <text class="fn" x="832" y="333" fill="var(--sub-ink)">thresholds</text><text class="ft" x="1108" y="333" fill="var(--sub-ink)" text-anchor="end">map</text>
+      <text class="fn" x="832" y="350" fill="var(--sub-ink)">  power.max · current.max</text><text class="ft" x="1108" y="350" fill="var(--sub-ink)" text-anchor="end">number</text>
+      <text class="fn" x="832" y="367" fill="var(--sub-ink)">  voltage.min · voltage.max</text><text class="ft" x="1108" y="367" fill="var(--sub-ink)" text-anchor="end">number</text>
+      <text class="fn" x="832" y="384" fill="var(--sub-ink)">currentStage</text><text class="ft" x="1108" y="384" fill="var(--sub-ink)" text-anchor="end">normal|warning|limit|cutoff</text>
+      <text class="fn" x="832" y="401" fill="var(--sub-ink)">protectionEnabled</text><text class="ft" x="1108" y="401" fill="var(--sub-ink)" text-anchor="end">boolean</text>
+      <text class="fn" x="832" y="418" fill="var(--sub-ink)">alerts · lastCutoff</text><text class="ft" x="1108" y="418" fill="var(--sub-ink)" text-anchor="end">array · timestamp</text>
+      <line class="rel" x1="592" y1="330" x2="818" y2="330" marker-start="url(#one)" marker-end="url(#one)"></line>
+      <text class="lbl" x="705" y="322" text-anchor="middle">has exactly 1</text>
+
+      <!-- ======================= HISTORY_DAILY (right) ======================= -->
+      <rect class="e-sub" x="820" y="465" width="300" height="242" rx="3"></rect>
+      <path class="h-sub" d="M 820 468 a 3 3 0 0 1 3 -3 h 294 a 3 3 0 0 1 3 3 v 25 h -300 z"></path>
+      <text class="th" x="832" y="486">HISTORY_DAILY</text>
+      <text class="fn" x="832" y="511" fill="var(--sub-ink)">date</text><text class="fk" x="1108" y="511" fill="var(--sub-head)" text-anchor="end">PK · "YYYY-MM-DD"</text>
+      <text class="fn" x="832" y="528" fill="var(--sub-ink)">outlet1Energy · outlet2Energy</text><text class="ft" x="1108" y="528" fill="var(--sub-ink)" text-anchor="end">number</text>
+      <text class="fn" x="832" y="545" fill="var(--sub-ink)">outlet1Cost · outlet2Cost</text><text class="ft" x="1108" y="545" fill="var(--sub-ink)" text-anchor="end">number</text>
+      <text class="fn" x="832" y="562" fill="var(--sub-ink)">outlet1Name · outlet2Name</text><text class="ft" x="1108" y="562" fill="var(--sub-ink)" text-anchor="end">string</text>
+      <text class="fn" x="832" y="579" fill="var(--sub-ink)">totalEnergy</text><text class="ft" x="1108" y="579" fill="var(--sub-ink)" text-anchor="end">number · kWh</text>
+      <text class="fn" x="832" y="596" fill="var(--sub-ink)">cost</text><text class="ft" x="1108" y="596" fill="var(--sub-ink)" text-anchor="end">number</text>
+      <text class="fn" x="832" y="613" fill="var(--sub-ink)">bill</text><text class="ft" x="1108" y="613" fill="var(--sub-ink)" text-anchor="end">map · PELCO III breakdown</text>
+      <text class="fn" x="832" y="630" fill="var(--sub-ink)">applianceBreakdown</text><text class="ft" x="1108" y="630" fill="var(--sub-ink)" text-anchor="end">array</text>
+      <text class="fn" x="832" y="647" fill="var(--sub-ink)">peakPower · peakHour</text><text class="ft" x="1108" y="647" fill="var(--sub-ink)" text-anchor="end">number</text>
+      <text class="fn" x="832" y="664" fill="var(--sub-ink)">seeded</text><text class="ft" x="1108" y="664" fill="var(--sub-ink)" text-anchor="end">boolean · demo rows</text>
+      <text class="fn" x="832" y="681" fill="var(--sub-ink)">createdAt</text><text class="ft" x="1108" y="681" fill="var(--sub-ink)" text-anchor="end">timestamp</text>
+      <line class="rel" x1="592" y1="530" x2="818" y2="530" marker-start="url(#one)" marker-end="url(#crow)"></line>
+      <text class="lbl" x="705" y="522" text-anchor="middle">rolls up daily</text>
+
+      <!-- ======================= BUDGET (right) ======================= -->
+      <rect class="e-sub" x="820" y="745" width="300" height="157" rx="3"></rect>
+      <path class="h-sub" d="M 820 748 a 3 3 0 0 1 3 -3 h 294 a 3 3 0 0 1 3 3 v 25 h -300 z"></path>
+      <text class="th" x="832" y="766">BUDGET</text>
+      <text class="fn" x="832" y="791" fill="var(--sub-ink)">month</text><text class="fk" x="1108" y="791" fill="var(--sub-head)" text-anchor="end">PK · "YYYY-MM"</text>
+      <text class="fn" x="832" y="808" fill="var(--sub-ink)">monthlyBudget</text><text class="ft" x="1108" y="808" fill="var(--sub-ink)" text-anchor="end">number</text>
+      <text class="fn" x="832" y="825" fill="var(--sub-ink)">currentSpending</text><text class="ft" x="1108" y="825" fill="var(--sub-ink)" text-anchor="end">number</text>
+      <text class="fn" x="832" y="842" fill="var(--sub-ink)">outlet1Spending</text><text class="ft" x="1108" y="842" fill="var(--sub-ink)" text-anchor="end">number</text>
+      <text class="fn" x="832" y="859" fill="var(--sub-ink)">outlet2Spending</text><text class="ft" x="1108" y="859" fill="var(--sub-ink)" text-anchor="end">number</text>
+      <text class="fn" x="832" y="876" fill="var(--sub-ink)">thresholds</text><text class="ft" x="1108" y="876" fill="var(--sub-ink)" text-anchor="end">map · fifty…hundred</text>
+      <text class="fn" x="832" y="893" fill="var(--sub-ink)">lastUpdated</text><text class="ft" x="1108" y="893" fill="var(--sub-ink)" text-anchor="end">timestamp</text>
+      <line class="rel" x1="592" y1="800" x2="818" y2="800" marker-start="url(#one)" marker-end="url(#crow)"></line>
+      <text class="lbl" x="705" y="792" text-anchor="middle">budgets monthly</text>
+
+      <!-- ======================= REFERENCE_COMPARISON (right) ======================= -->
+      <rect class="e-sub" x="820" y="945" width="300" height="174" rx="3"></rect>
+      <path class="h-sub" d="M 820 948 a 3 3 0 0 1 3 -3 h 294 a 3 3 0 0 1 3 3 v 25 h -300 z"></path>
+      <text class="th" x="832" y="966">REFERENCE_COMPARISON</text>
+      <text class="fn" x="832" y="991" fill="var(--sub-ink)">month</text><text class="fk" x="1108" y="991" fill="var(--sub-head)" text-anchor="end">PK · "YYYY-MM"</text>
+      <text class="fn" x="832" y="1008" fill="var(--sub-ink)">previousBillKWh</text><text class="ft" x="1108" y="1008" fill="var(--sub-ink)" text-anchor="end">number</text>
+      <text class="fn" x="832" y="1025" fill="var(--sub-ink)">previousBillCost</text><text class="ft" x="1108" y="1025" fill="var(--sub-ink)" text-anchor="end">number</text>
+      <text class="fn" x="832" y="1042" fill="var(--sub-ink)">outlet1Energy</text><text class="ft" x="1108" y="1042" fill="var(--sub-ink)" text-anchor="end">number</text>
+      <text class="fn" x="832" y="1059" fill="var(--sub-ink)">outlet2Energy</text><text class="ft" x="1108" y="1059" fill="var(--sub-ink)" text-anchor="end">number</text>
+      <text class="fn" x="832" y="1076" fill="var(--sub-ink)">notes</text><text class="ft" x="1108" y="1076" fill="var(--sub-ink)" text-anchor="end">string</text>
+      <text class="fn" x="832" y="1093" fill="var(--sub-ink)">createdAt · updatedAt</text><text class="ft" x="1108" y="1093" fill="var(--sub-ink)" text-anchor="end">timestamp</text>
+      <line class="rel-x" x1="592" y1="1000" x2="818" y2="1000" marker-start="url(#one)" marker-end="url(#crow)"></line>
+      <text class="lbl-x" x="705" y="992" text-anchor="middle">was missing entirely</text>
+
+      <!-- ======================= INVOICE (right) ======================= -->
+      <rect class="e-sub" x="820" y="1160" width="300" height="174" rx="3"></rect>
+      <path class="h-sub" d="M 820 1163 a 3 3 0 0 1 3 -3 h 294 a 3 3 0 0 1 3 3 v 25 h -300 z"></path>
+      <text class="th" x="832" y="1181">INVOICE</text>
+      <text class="fn" x="832" y="1206" fill="var(--sub-ink)">invoiceId</text><text class="fk" x="1108" y="1206" fill="var(--sub-head)" text-anchor="end">PK · string</text>
+      <text class="fn" x="832" y="1223" fill="var(--sub-ink)">billingMonth</text><text class="ft" x="1108" y="1223" fill="var(--sub-ink)" text-anchor="end">"YYYY-MM"</text>
+      <text class="fn" x="832" y="1240" fill="var(--sub-ink)">readingDateFrom · To</text><text class="ft" x="1108" y="1240" fill="var(--sub-ink)" text-anchor="end">string</text>
+      <text class="fn" x="832" y="1257" fill="var(--sub-ink)">totalEnergy</text><text class="ft" x="1108" y="1257" fill="var(--sub-ink)" text-anchor="end">number</text>
+      <text class="fn" x="832" y="1274" fill="var(--sub-ink)">totalAmountDue</text><text class="ft" x="1108" y="1274" fill="var(--sub-ink)" text-anchor="end">number</text>
+      <text class="fn" x="832" y="1291" fill="var(--sub-ink)">status</text><text class="ft" x="1108" y="1291" fill="var(--sub-ink)" text-anchor="end">draft|final</text>
+      <text class="fn" x="832" y="1308" fill="var(--sub-ink)">generatedAt</text><text class="ft" x="1108" y="1308" fill="var(--sub-ink)" text-anchor="end">timestamp</text>
+      <line class="rel" x1="592" y1="1215" x2="818" y2="1215" marker-start="url(#one)" marker-end="url(#crow)"></line>
+      <text class="lbl" x="705" y="1207" text-anchor="middle">is billed</text>
+
+      <!-- ======================= NOTIFICATION (right) ======================= -->
+      <rect class="e-sub" x="820" y="1375" width="300" height="174" rx="3"></rect>
+      <path class="h-sub" d="M 820 1378 a 3 3 0 0 1 3 -3 h 294 a 3 3 0 0 1 3 3 v 25 h -300 z"></path>
+      <text class="th" x="832" y="1396">NOTIFICATION</text>
+      <text class="fn" x="832" y="1421" fill="var(--sub-ink)">notificationId</text><text class="fk" x="1108" y="1421" fill="var(--sub-head)" text-anchor="end">PK · string</text>
+      <text class="fn" x="832" y="1438" fill="var(--sub-ink)">type</text><text class="ft" x="1108" y="1438" fill="var(--sub-ink)" text-anchor="end">device|safety|budget|…</text>
+      <text class="fn" x="832" y="1455" fill="var(--sub-ink)">title · message</text><text class="ft" x="1108" y="1455" fill="var(--sub-ink)" text-anchor="end">string</text>
+      <text class="fn" x="832" y="1472" fill="var(--sub-ink)">outlet</text><text class="fk" x="1108" y="1472" fill="var(--sub-head)" text-anchor="end">FK · number | null</text>
+      <text class="fn" x="832" y="1489" fill="var(--sub-ink)">metadata</text><text class="ft" x="1108" y="1489" fill="var(--sub-ink)" text-anchor="end">map</text>
+      <text class="fn" x="832" y="1506" fill="var(--sub-ink)">read</text><text class="ft" x="1108" y="1506" fill="var(--sub-ink)" text-anchor="end">boolean</text>
+      <text class="fn" x="832" y="1523" fill="var(--sub-ink)">timestamp</text><text class="ft" x="1108" y="1523" fill="var(--sub-ink)" text-anchor="end">timestamp</text>
+      <line class="rel" x1="592" y1="1430" x2="818" y2="1430" marker-start="url(#one)" marker-end="url(#crow)"></line>
+      <text class="lbl" x="705" y="1422" text-anchor="middle">receives</text>
+
+      <!-- ======================= SECURITY_EVENT (right) ======================= -->
+      <rect class="e-sub" x="820" y="1590" width="300" height="123" rx="3"></rect>
+      <path class="h-sub" d="M 820 1593 a 3 3 0 0 1 3 -3 h 294 a 3 3 0 0 1 3 3 v 25 h -300 z"></path>
+      <text class="th" x="832" y="1611">SECURITY_EVENT</text>
+      <text class="fn" x="832" y="1636" fill="var(--sub-ink)">eventId</text><text class="fk" x="1108" y="1636" fill="var(--sub-head)" text-anchor="end">PK · string</text>
+      <text class="fn" x="832" y="1653" fill="var(--sub-ink)">type</text><text class="ft" x="1108" y="1653" fill="var(--sub-ink)" text-anchor="end">string</text>
+      <text class="fn" x="832" y="1670" fill="var(--sub-ink)">detail</text><text class="ft" x="1108" y="1670" fill="var(--sub-ink)" text-anchor="end">string · sanitised</text>
+      <text class="fn" x="832" y="1687" fill="var(--sub-ink)">at</text><text class="ft" x="1108" y="1687" fill="var(--sub-ink)" text-anchor="end">timestamp</text>
+      <text class="fn" x="832" y="1704" fill="var(--sub-ink)">expireAt</text><text class="ft" x="1108" y="1704" fill="var(--sub-ink)" text-anchor="end">timestamp · 90-day TTL</text>
+      <line class="rel" x1="592" y1="1645" x2="818" y2="1645" marker-start="url(#one)" marker-end="url(#crow)"></line>
+      <text class="lbl" x="705" y="1637" text-anchor="middle">audits</text>
+
+      <!-- ============ OUTLET cross-references, routed in the far-left channel ============ -->
+      <path class="rel-x" d="M 60 630 L 38 630 L 38 390 L 58 390" marker-end="url(#crow)"></path>
+      <path class="rel-x" d="M 60 880 L 26 880 L 26 410 L 58 410" marker-end="url(#crow)"></path>
+      <path class="rel-x" d="M 60 1100 L 14 1100 L 14 430 L 58 430" marker-end="url(#crow)"></path>
+      <text class="lbl-x" x="66" y="384">targets</text>
+      <text class="lbl-x" x="66" y="404">controls</text>
+      <text class="lbl-x" x="66" y="424">logs</text>
+    </svg>
+    <figcaption><b>Corrected ERD.</b> The vertical spine is the correction: in Firestore almost everything is a subcollection of <span style="font-family:'IBM Plex Mono',monospace">users/{userId}</span>, so USER — not DEVICE, not OUTLET — is the parent of HISTORY_DAILY, POWER_SAFETY and the appliance profiles. Dashed green lines are references to an outlet carried as a field rather than as a parent path.</figcaption>
+  </figure>
+
+  <!-- ================= WHAT CHANGED ================= -->
+  <section>
+    <h2>What changed from your draft</h2>
+    <div class="scroller">
+      <table>
+        <thead>
+          <tr><th>Severity</th><th>Entity</th><th>Was</th><th>Is</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><span class="pill hi">Structural</span></td><td>HISTORY_DAILY</td><td class="was">FK outletID</td><td class="now">One row per date, under USER</td></tr>
+          <tr><td><span class="pill hi">Structural</span></td><td>POWER_SAFETY</td><td class="was">FK outletID</td><td class="now">One doc per user, id "settings"</td></tr>
+          <tr><td><span class="pill hi">Structural</span></td><td>APPLIANCE_SIGNATURE</td><td class="was">FK outletID, own table</td><td class="now">applianceProfiles array on USER</td></tr>
+          <tr><td><span class="pill hi">Structural</span></td><td>OUTLET</td><td class="was">FK deviceID</td><td class="now">Subcollection of USER</td></tr>
+          <tr><td><span class="pill hi">Systemic</span></td><td>every entity</td><td class="was">PK/FK typed int</td><td class="now">string — Firestore doc IDs</td></tr>
+          <tr><td><span class="pill lo">Missing</span></td><td>REFERENCE_COMPARISON</td><td class="was">absent</td><td class="now">added — the bill-accuracy feature</td></tr>
+          <tr><td><span class="pill lo">Missing</span></td><td>MAIL</td><td class="was">absent</td><td class="now">added — the outbound email queue</td></tr>
+          <tr><td><span class="pill lo">Field</span></td><td>HISTORY_LOG</td><td class="was">power, energy, cost</td><td class="now">action, source, outletName, power</td></tr>
+          <tr><td><span class="pill lo">Field</span></td><td>HISTORY_DAILY</td><td class="was">totalPower</td><td class="now">totalEnergy (kWh, not watts)</td></tr>
+          <tr><td><span class="pill lo">Field</span></td><td>HISTORY_DAILY</td><td class="was">applianceDetection</td><td class="now">applianceBreakdown</td></tr>
+          <tr><td><span class="pill lo">Field</span></td><td>POWER_SAFETY</td><td class="was">currentLimit boolean</td><td class="now">thresholds.currentMax number</td></tr>
+          <tr><td><span class="pill lo">Field</span></td><td>OUTLET</td><td class="was">voltage absent, isOn boolean</td><td class="now">voltage, current; status string</td></tr>
+          <tr><td><span class="pill lo">Field</span></td><td>USER</td><td class="was">subscription bool</td><td class="now">removed — nothing writes it</td></tr>
+          <tr><td><span class="pill lo">Field</span></td><td>USER</td><td class="was">no rate fields</td><td class="now">rateProfileId, supplyRates</td></tr>
+          <tr><td><span class="pill lo">Field</span></td><td>SECURITY_EVENT</td><td class="was">eventType, ipAddress, details</td><td class="now">type, detail, at, expireAt</td></tr>
+          <tr><td><span class="pill lo">Field</span></td><td>BUDGET</td><td class="was">currentSpend</td><td class="now">currentSpending + per-outlet split</td></tr>
+          <tr><td><span class="pill lo">Typo</span></td><td>INVOICE</td><td class="was">invoicsID</td><td class="now">invoiceId</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ================= SECOND PASS ================= -->
+  <section>
+    <h2>Corrected again on 29 August</h2>
+    <p class="body-copy">This diagram was built on 19 August. Ten fields have been
+    renamed or retyped in the code since, and until now the diagram and the
+    <strong>WattWise Data Dictionary</strong> disagreed about them. They agree
+    again. Each row below is a name a panel could have looked up in the console
+    and not found.</p>
+    <div class="scroller">
+      <table>
+        <thead><tr><th>Entity</th><th>Diagram said</th><th>Code writes</th><th>Why it matters</th></tr></thead>
+        <tbody>
+          <tr><td>USER</td><td class="was">expoPushToken · string</td><td class="now">pushTokens · array</td><td>One account can be signed in on several phones; a single string cannot describe that.</td></tr>
+          <tr><td>USER</td><td class="was">deviceId · string</td><td class="now">device · map</td><td>The link carries a token, a previous token, a rotation time and an active flag — not just an id.</td></tr>
+          <tr><td>OUTLET</td><td class="was">— absent —</td><td class="now">energyDateKey</td><td>The Manila date a running total belongs to. Without it, yesterday's kWh was reported as today's.</td></tr>
+          <tr><td>POWER_SAFETY</td><td class="was">stage</td><td class="now">currentStage</td><td>Plain rename; the old name is not in the document.</td></tr>
+          <tr><td>POWER_SAFETY</td><td class="was">{powerMax, voltageMin…}</td><td class="now">{power:{max}, voltage:{min,max}}</td><td>The map is nested, not flat. Neither flat key exists.</td></tr>
+          <tr><td>BUDGET</td><td class="was">budgetAmount</td><td class="now">monthlyBudget</td><td>Rename.</td></tr>
+          <tr><td>BUDGET</td><td class="was">alertsSent · map</td><td class="now">thresholds · map</td><td>Name and contents both differ — the keys are fifty, seventyFive, ninety, hundred.</td></tr>
+          <tr><td>SCHEDULE</td><td class="was">outlet · number</td><td class="now">outlet · string</td><td>Written through <code>String(…)</code>. HISTORY_LOG and NOTIFICATION really do store it as a number, so the inconsistency is real.</td></tr>
+          <tr><td>NOTIFICATION</td><td class="was">createdAt</td><td class="now">timestamp</td><td>Rename — and it changes any query described as ordering by <code>createdAt</code>.</td></tr>
+          <tr><td>INVOICE</td><td class="was">totalAmount</td><td class="now">totalAmountDue</td><td>Rename, plus effectiveRate, projectedTotal and supplyRates which were omitted.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">The lesson is not that the diagram was careless — it was right when it was written.
+    A schema document is a claim about code that keeps moving, so it carries a date, and the date is
+    the first thing to check before defending it.</p>
+  </section>
+
+  <!-- ================= PATH TABLE ================= -->
+  <section>
+    <h2>Every entity, and where it lives</h2>
+    <p class="body-copy">This is the table that makes the diagram defensible. Each row can be opened in the Firebase console.</p>
+    <div class="scroller">
+      <table>
+        <thead><tr><th>Entity</th><th>Firestore path</th><th>Document ID is</th></tr></thead>
+        <tbody>
+          <tr><td>USER</td><td class="mono">users/{userId}</td><td>Firebase Auth UID</td></tr>
+          <tr><td>APPLIANCE_PROFILE</td><td class="mono">users/{userId} → applianceProfiles[]</td><td>embedded, keyed by name</td></tr>
+          <tr><td>OUTLET</td><td class="mono">users/{userId}/outlets/{outletId}</td><td class="mono">"outlet1" | "outlet2"</td></tr>
+          <tr><td>DEVICE_COMMAND</td><td class="mono">users/{userId}/device_commands/{commandId}</td><td>auto-generated</td></tr>
+          <tr><td>SCHEDULE</td><td class="mono">users/{userId}/schedules/{scheduleId}</td><td>auto-generated</td></tr>
+          <tr><td>POWER_SAFETY</td><td class="mono">users/{userId}/power_safety/settings</td><td class="mono">"settings" — fixed</td></tr>
+          <tr><td>HISTORY_LOG</td><td class="mono">users/{userId}/history_logs/{logId}</td><td>auto-generated</td></tr>
+          <tr><td>HISTORY_DAILY</td><td class="mono">users/{userId}/history_daily/{date}</td><td class="mono">"2026-08-18"</td></tr>
+          <tr><td>BUDGET</td><td class="mono">users/{userId}/budget/{month}</td><td class="mono">"2026-08"</td></tr>
+          <tr><td>REFERENCE_COMPARISON</td><td class="mono">users/{userId}/reference_comparison/{month}</td><td class="mono">"2026-08"</td></tr>
+          <tr><td>INVOICE</td><td class="mono">users/{userId}/invoices/{invoiceId}</td><td>auto-generated</td></tr>
+          <tr><td>NOTIFICATION</td><td class="mono">users/{userId}/notifications/{notificationId}</td><td>auto-generated</td></tr>
+          <tr><td>SECURITY_EVENT</td><td class="mono">users/{userId}/security_events/{eventId}</td><td>auto-generated</td></tr>
+          <tr><td>DEVICE</td><td class="mono">devices/{deviceId}</td><td>hardware device ID</td></tr>
+          <tr><td>MAIL</td><td class="mono">mail/{mailId}</td><td>auto-generated</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <hr>
+
+  <section>
+    <h2>Three things a panel will probe</h2>
+    <ul class="pts">
+      <li><strong>"This is a document database — why an ERD at all?"</strong> Because the entities and their relationships are real regardless of the store. What changes is that a subcollection path <em>is</em> the foreign key: <code>users/abc123/outlets/outlet1</code> already encodes the ownership that a relational schema would need a <code>userID</code> column for. That is why USER appears as the parent rather than as a column on every table.</li>
+      <li><strong>"Why is OUTLET a table if there are only ever two rows per user?"</strong> Because the two-outlet limit is a design constraint, not a schema one. The document holds live telemetry that changes every few seconds — it is a record with state, not a lookup value.</li>
+      <li><strong>"Where is the appliance detection stored?"</strong> On the user, not the outlet — up to four signatures per appliance. Deliberate: an appliance moved from outlet 1 to outlet 2 keeps its learned profile. Storing signatures per outlet would make the system re-learn the same fan twice.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Copy this into a new chat</h2>
+    <pre>Draw an Entity Relationship Diagram for WattWise, a smart energy monitoring
+system for an apartment room with exactly two switchable outlets. The store is
+Cloud Firestore, so ALL primary and foreign keys are strings, never integers.
+
+USER is the root. Almost everything else is a subcollection beneath it, so draw
+USER at the centre with its children branching off.
+
+ROOT DOCUMENT
+  USER  (users/{userId})
+    userId PK string (Firebase Auth UID), name string, email string,
+    rateProfileId string, supplyRates map, applianceProfiles array,
+    device map, pushTokens array&lt;string&gt;
+
+EMBEDDED IN USER (array, not its own collection)
+  APPLIANCE_PROFILE : applianceName key, signatures array (max 4),
+                      sampleCount number, updatedAt timestamp
+
+SUBCOLLECTIONS OF USER  (USER 1 --- many, unless noted)
+  OUTLET                (outlets/{outletId})        EXACTLY 2 per user
+     outletId PK string "outlet1"|"outlet2", outletNumber number,
+     applianceName string, status string, pendingStatus string,
+     voltage number, current number, power number, energy number,
+     energyDateKey string "YYYY-MM-DD", totalEnergy number,
+     applianceIdentity map, safety map, relayFault map,
+     metricsUpdatedAtMs number, lastUpdated timestamp
+  DEVICE_COMMAND        (device_commands/{commandId})
+     commandId PK string, deviceId FK string, outletId FK string,
+     action string, reason string, source string, delivery map,
+     acknowledgment map, metadata map, issuedAtMs number, issuedAt timestamp
+  SCHEDULE              (schedules/{scheduleId})
+     scheduleId PK string, outlet FK string "1"|"2", type string, time string,
+     days array, action string, active boolean, countdownRemaining number,
+     lastTriggered timestamp
+  POWER_SAFETY          (power_safety/settings)     EXACTLY 1 per user
+     id PK "settings", thresholds map {voltage:{min,max}, current:{max},
+     power:{max}} NESTED, currentStage string, protectionEnabled boolean,
+     alerts array, lastCutoff timestamp
+  HISTORY_LOG           (history_logs/{logId})
+     logId PK string, outlet FK number, outletName string, action string,
+     source string, power number, delivery map, timestamp timestamp
+  HISTORY_DAILY         (history_daily/{date})   ONE ROW PER DATE, NOT PER OUTLET
+     date PK string "YYYY-MM-DD", outlet1Energy number, outlet2Energy number,
+     outlet1Cost number, outlet2Cost number, outlet1Name string,
+     outlet2Name string, totalEnergy number, cost number, bill map,
+     applianceBreakdown array, peakPower number, peakHour number,
+     seeded boolean, createdAt timestamp
+  BUDGET                (budget/{month})
+     month PK string "YYYY-MM", monthlyBudget number, currentSpending number,
+     outlet1Spending number, outlet2Spending number,
+     thresholds map {fifty, seventyFive, ninety, hundred}, lastUpdated timestamp
+  REFERENCE_COMPARISON  (reference_comparison/{month})
+     month PK string "YYYY-MM", previousBillKWh number, previousBillCost
+     number, outlet1Energy number, outlet2Energy number, notes string,
+     createdAt timestamp, updatedAt timestamp
+  INVOICE               (invoices/{invoiceId})
+     invoiceId PK string, billingMonth string, readingDateFrom string,
+     readingDateTo string, totalKwh number, totalAmountDue number,
+     effectiveRate number, projectedTotal number, supplyRates map,
+     status string, generatedAt timestamp
+  NOTIFICATION          (notifications/{notificationId})
+     notificationId PK string, type string, title string, message string,
+     outlet FK number nullable, metadata map, read boolean, timestamp timestamp
+  SECURITY_EVENT        (security_events/{eventId})
+     eventId PK string, type string, detail string, at timestamp,
+     expireAt timestamp (90-day TTL)
+
+TOP-LEVEL COLLECTIONS (not under a user)
+  DEVICE  (devices/{deviceId})
+     deviceId PK string, userId FK string, pendingCommandIds array,
+     health map, lastCommandTimeoutAtMs number, updatedAt timestamp
+     DEVICE many --- 1 USER
+  MAIL    (mail/{mailId})
+     mailId PK string, to string, message map, delivery map
+     No user FK - it is an outbound queue drained by an extension.
+
+REFERENCES TO AN OUTLET carried as a field rather than a parent path
+(draw these as dashed relationships, OUTLET 1 --- many):
+  DEVICE_COMMAND.outletId -> OUTLET
+  SCHEDULE.outlet         -> OUTLET
+  HISTORY_LOG.outlet      -> OUTLET
+  NOTIFICATION.outlet     -> OUTLET  (nullable)
+
+Use crow's foot notation. Mark PK and FK on every key. Show the data type
+beside every attribute.</pre>
+  </section>
+
+  <footer>
+    First built 19 August 2026 and re-verified against <span class="mono">functions/src/</span> and <span class="mono">src/services/firebase/</span> on 29 August, when ten fields were found to have been renamed or retyped since. Those are listed above. The document shapes come from the code that writes them, not from <span class="mono">docs/firebase-schema.md</span>, which is the original design doc and is stale in places. Attribute lists are the load-bearing fields; a few housekeeping keys are omitted for legibility — the WattWise Data Dictionary carries the complete list.
+  </footer>
+
+</div>
