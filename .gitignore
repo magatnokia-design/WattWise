@@ -61,9 +61,3 @@ GoogleService-Info.plist
 firebase-debug.log
 firebase-debug.*.log
 functions/firebase-debug.log
-
-# The Hub booklet carries the device token, AP password and pairing QR for the
-# unit it ships with. Those are credentials, both repos are public, and this
-# token has been exposed in commit history once already. Kept on disk, never
-# committed - regenerate the QR with `npm run device:qr` after any rotation.
-docs/hub-setup-booklet.html
