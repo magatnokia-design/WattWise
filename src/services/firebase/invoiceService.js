@@ -65,6 +65,30 @@ export const invoiceService = {
   },
 
   /**
+   * Emails one month's statement again, PDF attached.
+   *
+   * The backend renders the PDF fresh on every call rather than re-sending a
+   * stored copy, so this is also how a statement picks up a change - a month
+   * finalized after its original email, or a fix to the document itself.
+   *
+   * Refuses a period that has not closed, and is throttled to one per minute
+   * because rendering the PDF is the expensive part. Both come back as ordinary
+   * failures with the server's own wording, which is more specific than
+   * anything worth writing here.
+   */
+  resendStatement: async (billingMonth) => {
+    try {
+      const callable = httpsCallable(functions, 'sendInvoiceEmail');
+      const result = await callable({ billingMonth });
+
+      return { success: true, data: result?.data || null };
+    } catch (error) {
+      console.error('Error re-sending statement:', error);
+      return { success: false, error: error.message, code: error.code };
+    }
+  },
+
+  /**
    * Locks one billing month to the official PELCO III rates for that month.
    *
    * `supplyRates` may carry the generation rate alone - that is the only figure

@@ -87,6 +87,13 @@ const StatementsModal = ({ visible, userId, onClose }) => {
   const [saving, setSaving] = useState(false);
   const [result, setResult] = useState(null);
 
+  // Re-sending the statement email is separate from finalizing and has its own
+  // outcome: it can succeed on a month there is nothing to finalize, and it
+  // fails for its own reasons (a period still open, or the one-per-minute
+  // throttle on PDF rendering).
+  const [emailing, setEmailing] = useState(false);
+  const [emailNote, setEmailNote] = useState(null);
+
   const load = useCallback(async () => {
     if (!userId) return;
 
@@ -118,7 +125,7 @@ const StatementsModal = ({ visible, userId, onClose }) => {
     load();
   }, [visible, load]);
 
-  const openFinalize = useCallback((invoice) => {
+  const openStatement = useCallback((invoice) => {
     setEditing(invoice);
     // Seeded from whatever priced the estimate, so the user edits one number
     // rather than retyping Block 1 from scratch.
@@ -126,6 +133,7 @@ const StatementsModal = ({ visible, userId, onClose }) => {
     setErrors({});
     setFormError(null);
     setResult(null);
+    setEmailNote(null);
     setShowAdvanced(false);
   }, []);
 
@@ -133,7 +141,29 @@ const StatementsModal = ({ visible, userId, onClose }) => {
     setEditing(null);
     setResult(null);
     setFormError(null);
+    setEmailNote(null);
   }, []);
+
+  const handleResend = useCallback(async () => {
+    if (!editing) return;
+
+    setEmailing(true);
+    setEmailNote(null);
+
+    const response = await invoiceService.resendStatement(editing.billingMonth);
+
+    setEmailing(false);
+    setEmailNote(
+      response.success
+        ? { tone: 'good', text: 'Sent. Check your inbox, and your spam folder.' }
+        : {
+          tone: 'bad',
+          text: isConnectivityError(response)
+            ? 'No connection — the statement was not sent.'
+            : response.error || 'Could not send the statement.',
+        }
+    );
+  }, [editing]);
 
   const handleChange = useCallback((key, text) => {
     setValues((current) => ({ ...current, [key]: text }));
@@ -255,16 +285,17 @@ const StatementsModal = ({ visible, userId, onClose }) => {
 
         {invoices.map((invoice) => {
           const status = STATUS_COPY[invoice.status] || STATUS_COPY.DRAFT;
+          // Every row opens, not just the ones that can be finalized: a month
+          // already final still has a statement worth emailing again.
           const canFinalize = invoice.status === 'PENDING';
 
           return (
             <TouchableOpacity
               key={invoice.billingMonth}
               style={styles.row}
-              activeOpacity={canFinalize ? 0.7 : 1}
-              disabled={!canFinalize}
-              onPress={() => openFinalize(invoice)}
-              accessibilityRole={canFinalize ? 'button' : 'text'}
+              activeOpacity={0.7}
+              onPress={() => openStatement(invoice)}
+              accessibilityRole="button"
             >
               <View style={styles.rowMain}>
                 <Text style={styles.rowMonth}>{formatMonthName(invoice.billingMonth)}</Text>
@@ -293,7 +324,7 @@ const StatementsModal = ({ visible, userId, onClose }) => {
 
               <View style={styles.rowRight}>
                 <Text style={styles.rowAmount}>{peso(invoice.totalAmountDue)}</Text>
-                {canFinalize ? <Text style={styles.rowArrow}>›</Text> : null}
+                <Text style={styles.rowArrow}>›</Text>
               </View>
             </TouchableOpacity>
           );
@@ -322,9 +353,15 @@ const StatementsModal = ({ visible, userId, onClose }) => {
         </Text>
       ) : null}
 
-      <TouchableOpacity style={styles.primaryButton} onPress={backToList} activeOpacity={0.8}>
-        <Text style={styles.primaryButtonText}>Done</Text>
-      </TouchableOpacity>
+      {/* The obvious next thing to want: the emailed copy still shows the
+          estimate, and the PDF is rendered fresh on each send. */}
+      <View style={styles.resultActions}>
+        {renderResend()}
+
+        <TouchableOpacity style={styles.primaryButton} onPress={backToList} activeOpacity={0.8}>
+          <Text style={styles.primaryButtonText}>Done</Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 
@@ -346,13 +383,60 @@ const StatementsModal = ({ visible, userId, onClose }) => {
     </View>
   );
 
+  /**
+   * Emailing the statement again. Offered on any closed month, including one
+   * already finalized - the PDF is rendered fresh on each send, so this is also
+   * how a statement picks up a rate entered after its original email went out.
+   */
+  const renderResend = () => {
+    // The backend refuses a period that has not closed, so an open month must
+    // not be offered a button that can only fail.
+    if (editing.status === 'DRAFT') return null;
+
+    return (
+      <View style={styles.resendBlock}>
+        <TouchableOpacity
+          style={[styles.secondaryButton, emailing ? styles.primaryButtonDisabled : null]}
+          onPress={handleResend}
+          disabled={emailing}
+          activeOpacity={0.8}
+        >
+          {emailing ? (
+            <ActivityIndicator color={COLORS.primary} />
+          ) : (
+            <Text style={styles.secondaryButtonText}>✉  Email me this statement</Text>
+          )}
+        </TouchableOpacity>
+
+        {emailNote ? (
+          <Text
+            style={[
+              styles.emailNote,
+              emailNote.tone === 'good' ? styles.emailNoteGood : styles.emailNoteBad,
+            ]}
+          >
+            {emailNote.text}
+          </Text>
+        ) : (
+          <Text style={styles.resendHint}>
+            Sends the PDF to your account email. One per minute.
+          </Text>
+        )}
+      </View>
+    );
+  };
+
   const renderForm = () => {
     if (result) return renderResult();
+
+    const canFinalize = editing.status === 'PENDING';
 
     return (
       <>
         <View style={styles.estimateCard}>
-          <Text style={styles.estimateLabel}>Current estimate</Text>
+          <Text style={styles.estimateLabel}>
+            {editing.status === 'FINALIZED' ? 'Final amount' : 'Current estimate'}
+          </Text>
           <Text style={styles.estimateAmount}>{peso(editing.totalAmountDue)}</Text>
           <Text style={styles.estimateMeta}>
             {Number(editing.totalKwh || 0).toFixed(2)} kWh over{' '}
@@ -360,6 +444,21 @@ const StatementsModal = ({ visible, userId, onClose }) => {
           </Text>
         </View>
 
+        {renderResend()}
+
+        {/* A month that is already final, or still open, has nothing to apply a
+            rate to - the callable refuses both. Only the form is hidden; the
+            statement and its email stay available. */}
+        {!canFinalize ? (
+          <Text style={styles.settledNote}>
+            {editing.status === 'FINALIZED'
+              ? 'This month is locked to its official rate and will not change again.'
+              : 'This period is still running. It can be finalized once the month ends.'}
+          </Text>
+        ) : null}
+
+        {canFinalize ? (
+          <>
         <Text style={styles.formIntro}>
           Enter the generation rate printed on your PELCO III bill for{' '}
           {formatMonthName(editing.billingMonth)}. The other Block 1 lines keep their
@@ -399,6 +498,8 @@ const StatementsModal = ({ visible, userId, onClose }) => {
             <Text style={styles.primaryButtonText}>Apply official rate</Text>
           )}
         </TouchableOpacity>
+          </>
+        ) : null}
       </>
     );
   };
@@ -419,7 +520,7 @@ const StatementsModal = ({ visible, userId, onClose }) => {
               ) : null}
 
               <Text style={styles.title}>
-                {editing ? 'Finalize statement' : 'Monthly statements'}
+                {editing ? formatMonthName(editing.billingMonth) : 'Monthly statements'}
               </Text>
 
               <TouchableOpacity onPress={onClose} activeOpacity={0.7} style={styles.close}>
@@ -615,6 +716,36 @@ const styles = StyleSheet.create({
   primaryButtonDisabled: { opacity: 0.7 },
   primaryButtonText: { color: COLORS.white, fontWeight: '700', fontSize: 14.5 },
 
+  resendBlock: { marginBottom: 16 },
+  secondaryButton: {
+    borderWidth: 1.5,
+    borderColor: COLORS.primary,
+    backgroundColor: COLORS.white,
+    borderRadius: 999,
+    paddingVertical: 13,
+    minHeight: 48,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  secondaryButtonText: { color: COLORS.primary, fontWeight: '700', fontSize: 14 },
+  resendHint: {
+    fontSize: 11.5,
+    color: COLORS.textLight,
+    textAlign: 'center',
+    marginTop: 7,
+  },
+  emailNote: { fontSize: 12.5, textAlign: 'center', marginTop: 8, lineHeight: 18 },
+  emailNoteGood: { color: COLORS.primaryDark },
+  emailNoteBad: { color: COLORS.error },
+  settledNote: {
+    fontSize: 12.5,
+    color: COLORS.textLight,
+    lineHeight: 18,
+    textAlign: 'center',
+    marginBottom: 4,
+  },
+
+  resultActions: { alignSelf: 'stretch' },
   resultCard: { alignItems: 'center', paddingVertical: 8 },
   resultTitle: { fontSize: 15, fontWeight: '700', color: COLORS.text, marginBottom: 6 },
   resultAmount: { fontSize: 30, fontWeight: '700', color: COLORS.primaryDark },
