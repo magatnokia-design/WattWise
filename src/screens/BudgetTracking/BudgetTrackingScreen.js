@@ -17,6 +17,7 @@ import ProjectedCost from './components/ProjectedCost';
 import SetBudgetModal from './components/SetBudgetModal';
 import { OfflineState } from '../../components/common/OfflineNotice';
 import useBudgetTracking from './hooks/useBudgetTracking';
+import { useOfflineRetry } from '../../hooks/useOfflineRetry';
 
 const BudgetTrackingScreen = ({ navigation }) => {
   const {
@@ -33,6 +34,12 @@ const BudgetTrackingScreen = ({ navigation }) => {
     handleSetBudget,
     handleRefresh,
   } = useBudgetTracking();
+
+  // Recovers on its own when the connection comes back, instead of sitting on
+  // "Try again" until the user thinks to tap it. Calls the hook's refresh
+  // rather than `onRefresh` below, so the pull-to-refresh spinner does not
+  // flash every ten seconds while nothing is happening.
+  useOfflineRetry(showOfflineState, handleRefresh);
 
   const [refreshing, setRefreshing] = useState(false);
   const [showBudgetModal, setShowBudgetModal] = useState(false);

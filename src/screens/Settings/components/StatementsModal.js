@@ -18,6 +18,7 @@ import { SUPPLY_RATE_FIELDS, normalizeSupplyRates } from '../../../utils/billing
 import { validateSupplyRates } from '../utils/settingsHelpers';
 import { isConnectivityError } from '../../../utils/connectivity';
 import { OfflineState } from '../../../components/common/OfflineNotice';
+import { useOfflineRetry } from '../../../hooks/useOfflineRetry';
 
 const PRIMARY_FIELD = SUPPLY_RATE_FIELDS.find((field) => field.primary);
 const ADVANCED_FIELDS = SUPPLY_RATE_FIELDS.filter((field) => !field.primary);
@@ -180,6 +181,14 @@ const StatementsModal = ({ visible, userId, onClose }) => {
     setResult(response.data);
     load();
   }, [editing, values, load]);
+
+  // Only while the list itself could not be read, and only while the modal is
+  // open - a rate form the user is mid-way through typing must never be torn
+  // out from under them by a background reload.
+  useOfflineRetry(
+    visible && !editing && !!loadFailure && isConnectivityError(loadFailure),
+    load
+  );
 
   const pendingCount = useMemo(
     () => invoices.filter((invoice) => invoice.status === 'PENDING').length,

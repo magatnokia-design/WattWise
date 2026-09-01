@@ -16,6 +16,7 @@ import ProtectionSettings from './components/ProtectionSettings';
 import AlertHistoryList from './components/AlertHistoryList';
 import { OfflineState } from '../../components/common/OfflineNotice';
 import usePowerSafety from './hooks/usePowerSafety';
+import { useOfflineRetry } from '../../hooks/useOfflineRetry';
 
 const PowerSafetyScreen = ({ navigation }) => {
   const {
@@ -32,6 +33,10 @@ const PowerSafetyScreen = ({ navigation }) => {
     handleSaveThresholds,
     handleRefresh,
   } = usePowerSafety();
+
+  // Recovers on its own when the connection returns. This screen matters more
+  // than most: until a read lands it cannot say what the user's limits are.
+  useOfflineRetry(showOfflineState, handleRefresh);
 
   const [refreshing, setRefreshing] = useState(false);
 

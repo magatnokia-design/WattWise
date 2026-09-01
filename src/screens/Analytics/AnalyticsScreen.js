@@ -27,6 +27,7 @@ import { WebAppNotice } from '../../components/common/WebAppNotice';
 import { WEB_APP_LINKS } from '../../constants/webApp';
 import { useDismissibleNotice } from '../../hooks/useDismissibleNotice';
 import { useLoadOutcome } from '../../hooks/useLoadTracker';
+import { useOfflineRetry } from '../../hooks/useOfflineRetry';
 import { OfflineBanner } from '../../components/common/OfflineNotice';
 
 const { width } = Dimensions.get('window');
@@ -422,10 +423,21 @@ export const AnalyticsScreen = ({ navigation }) => {
   // Whether a budget read has actually returned. Without it the zeros above
   // are drawn as the user's own figures.
   const [budgetKnown, setBudgetKnown] = useState(false);
+
+  // The analytics fetch lives inside its effect rather than in a callback, so
+  // this is what re-runs it: bumping the tick is the retry. See useOfflineRetry.
+  const [retryTick, setRetryTick] = useState(0);
   const [loading, setLoading] = useState(false);
   // A flat chart and a zero bill are measurements. Neither may be drawn from a
   // range that could not be read.
   const load = useLoadOutcome();
+
+  // Retries the fetch above while the screen is admitting it could not load,
+  // so turning wi-fi back on fixes the screen instead of needing the app
+  // restarted. Declared here rather than beside `retryTick` because `load` has
+  // to exist first.
+  useOfflineRetry(load.showOfflineState, () => setRetryTick((tick) => tick + 1));
+
   const [outlets, setOutlets] = useState([]);
   // Insights are dismissed by signature, so an insight returns when the figures
   // it quotes change. Session-scoped on purpose: a new day should start clean.
@@ -586,7 +598,7 @@ export const AnalyticsScreen = ({ navigation }) => {
     return () => {
       active = false;
     };
-  }, [authLoading, selectedTab, user?.uid]);
+  }, [authLoading, selectedTab, user?.uid, retryTick]);
 
   // Compute from stored history plus the live day. This re-runs on every
   // telemetry update, which is what makes today's figures move in real time.

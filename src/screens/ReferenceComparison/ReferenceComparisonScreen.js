@@ -19,6 +19,7 @@ import { WebAppNotice } from '../../components/common/WebAppNotice';
 import { OfflineState } from '../../components/common/OfflineNotice';
 import { WEB_APP_LINKS } from '../../constants/webApp';
 import { useDismissibleNotice } from '../../hooks/useDismissibleNotice';
+import { useOfflineRetry } from '../../hooks/useOfflineRetry';
 
 const formatKwh = (value) => `${(Number(value) || 0).toFixed(2)} kWh`;
 const formatPeso = (value) => `₱${(Number(value) || 0).toFixed(2)}`;
@@ -39,6 +40,10 @@ const ReferenceComparisonScreen = ({ navigation }) => {
     showOfflineState,
     refresh,
   } = useReferenceComparison();
+
+  // Recovers on its own when the connection returns, rather than waiting for a
+  // tap on Try again that a user has no reason to expect is needed.
+  useOfflineRetry(showOfflineState, refresh);
 
   const [refreshing, setRefreshing] = useState(false);
   const [showBillModal, setShowBillModal] = useState(false);
