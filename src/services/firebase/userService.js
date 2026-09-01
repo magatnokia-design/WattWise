@@ -170,9 +170,23 @@ export const userService = {
     try {
       const profileResult = await userService.getUserProfile(userId);
       if (!profileResult.success) {
+        // A profile that is genuinely absent is an answer - a new account
+        // really does have no rates yet, and the defaults describe it. A read
+        // that never reached the server is not an answer, and callers use
+        // `hasSupplyRates` to decide whether to tell the user their costs are
+        // estimates and to go set their rates in Settings. Offline that banner
+        // fired on the Dashboard and Analytics for a user who had already
+        // entered theirs, telling them to fix something that was not broken.
+        const known = profileResult.notFound === true;
         return {
           success: true,
-          data: { ...DEFAULT_USER_PREFERENCES },
+          preferencesKnown: known,
+          data: {
+            ...DEFAULT_USER_PREFERENCES,
+            supplyRates: null,
+            // null, not false: "we did not find out" rather than "they have none".
+            hasSupplyRates: known ? false : null,
+          },
         };
       }
 

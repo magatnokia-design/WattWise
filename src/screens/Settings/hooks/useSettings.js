@@ -160,7 +160,7 @@ export const useSettings = () => {
         currency: preferencesData.currency || '₱',
         rateProfileId: preferencesData.rateProfileId || null,
         supplyRates: preferencesData.supplyRates || null,
-        hasSupplyRates: preferencesData.hasSupplyRates === true,
+        hasSupplyRates: preferencesData.hasSupplyRates !== false,
         notifications: preferencesData.notificationsEnabled ?? true,
         monthlyBudget: Number(budgetData.monthlyBudget || profileData.monthlyBudget || 0),
         profileName: profileData.name || authUser?.displayName || 'User',

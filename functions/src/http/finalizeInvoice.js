@@ -3,6 +3,7 @@ const logger = require('firebase-functions/logger');
 const { HttpsError } = require('firebase-functions/v2/https');
 const { buildInvoice, buildFinalizationDelta, getBillingPeriod, STATUS } = require('../lib/invoice');
 const { getManilaDateKey } = require('../lib/manilaTime');
+const { normalizeSupplyRates: fillSupplyRates } = require('../lib/billing');
 
 // Block 1 fields the user may supply from the official rate posting.
 const SUPPLY_RATE_KEYS = [
@@ -43,7 +44,14 @@ const normalizeSupplyRates = (raw = {}) => {
     throw new HttpsError('invalid-argument', 'A generation rate is required to finalize');
   }
 
-  return rates;
+  // Completed before it is stored. The caller supplies only the lines that
+  // differ on their posting - often the generation rate alone, since that is
+  // the one figure PELCO III publishes monthly - and this object is kept as
+  // the invoice's officialRates and reused to seed the following month.
+  // calculatePelcoIIIBill fills the gaps itself, so the bill was never wrong;
+  // storing the partial object meant the record of what was charged did not
+  // list every rate that produced it.
+  return fillSupplyRates(rates);
 };
 
 /**

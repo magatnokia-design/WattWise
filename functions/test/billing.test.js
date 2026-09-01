@@ -167,6 +167,31 @@ test('supply-side EVAT tracks the entered generation rate', () => {
   assert.equal(evat(dear), roundish(dear.totals.generationTransmission * EVAT_SUPPLY_FACTOR));
 });
 
+test('a partial supply-rate object keeps the other Block 1 lines at their defaults', () => {
+  // The statement email asks for the generation rate alone, because that is
+  // the only figure PELCO III publishes monthly - so this is the shape a
+  // finalize request really arrives in. `resolveSupplyRates` used to hand it
+  // straight through, and an absent line read as 0 is dropped from the bill
+  // entirely by `perKwhItem`: Transmission, Ancillary and System Loss vanished
+  // off the statement and took the EVAT-on-Gen/Trans base down with them.
+  const partial = calculatePelcoIIIBill(100, { supplyRates: { generation: 5.5034 } });
+  const label = (key) => partial.items.generationTransmission.find((item) => item.key === key);
+
+  assert.ok(label('transmission'), 'Transmission still appears');
+  assert.ok(label('systemLoss'), 'and so does System Loss');
+  // Ancillary is genuinely 0 in the seeded profile - it is folded into that
+  // profile's transmission rate - so it is correctly absent here rather than
+  // filled in. Only a bill carrying its own ancillary rate prints the line.
+
+  // The supplied rate is honoured; the rest fall back rather than to zero.
+  assert.equal(label('generation').rate, 5.5034);
+  assert.ok(label('transmission').rate > 0);
+
+  const full = calculatePelcoIIIBill(100, {});
+  assert.equal(label('transmission').rate,
+    full.items.generationTransmission.find((item) => item.key === 'transmission').rate);
+});
+
 test('universal charge lines carry their correct labels and rates', () => {
   const result = calculatePelcoIIIBill(216, {});
   const find = (key) => result.items.government.find((item) => item.key === key);

@@ -160,11 +160,15 @@ async function processInvoiceForUser({
       encoding: 'base64',
       contentType: 'application/pdf',
     }],
+    // No "Update to actual rate" button exists in either client - the
+    // finalizeInvoice callable is exported and reachable from nothing, so this
+    // told the reader to tap something that is not there. Describes what the
+    // app can actually do until that screen is built.
     note:
       'PELCO III publishes the official generation rate a few days after the period closes. '
-      + 'Open Settings, enter the generation rate printed on your paper bill, then tap '
-      + '"Update to actual rate" here to lock this statement to the real figure. Until you do, '
-      + 'this total is an estimate. Rates at pelco3.org/rates.php.',
+      + 'Open Settings and enter the generation rate printed on your paper bill so your '
+      + 'statements are priced with your real figures. Until an official rate is applied to '
+      + 'this month, the total above stays an estimate. Rates at pelco3.org/rates.php.',
     tag: 'invoice',
   });
 

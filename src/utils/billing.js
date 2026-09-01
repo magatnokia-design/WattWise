@@ -185,7 +185,15 @@ const fixedItem = (key, label, amount) => {
 const sumItems = (items) => roundCurrency(items.reduce((sum, item) => sum + item.amount, 0));
 
 const resolveSupplyRates = ({ supplyRates, profileId, profiles }) => {
-  if (supplyRates) return { id: 'custom', name: 'Custom rates', rates: supplyRates };
+  if (supplyRates) {
+    // Normalized, not passed through: `finalizeInvoice` accepts a partial rate
+    // object (the email only ever asks for the generation rate), and an absent
+    // line read as 0 is dropped from the bill entirely by `perKwhItem` - so
+    // Transmission, Ancillary and System Loss would silently vanish and take
+    // the EVAT-on-Gen/Trans base with them. This is what the normalizer's own
+    // docstring has always promised and nothing was calling it.
+    return { id: 'custom', name: 'Custom rates', rates: normalizeSupplyRates(supplyRates) };
+  }
 
   const pool = Array.isArray(profiles) && profiles.length > 0 ? profiles : RATE_PROFILES;
   const profile = (profileId && pool.find((entry) => entry.id === profileId)) || pool[0];
@@ -273,6 +281,12 @@ export const calculatePelcoIIIBill = (
   ].filter(Boolean);
 
   const totals = {
+    // Rounded once on the block, never summed from the rounded lines. That is
+    // what PELCO III itself does: the 94 kWh sample bill's gen/trans total is
+    // P754.04, and adding its own rounded lines gives P754.03. The printed
+    // lines can therefore miss their subtotal by a centavo, and that is the
+    // bill being reproduced faithfully, not a defect to "fix" - billing.test.js
+    // holds this against seven real bills.
     generationTransmission: genTransTotal,
     distribution: sumItems(distribution),
     government: sumItems(government),

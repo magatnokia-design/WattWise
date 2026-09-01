@@ -63,22 +63,38 @@ const previousMonth = (billingMonth) => {
  */
 const resolveSupplyRates = ({ billingMonth, officialRates, lastFinalized, userRates }) => {
   if (officialRates) {
-    return { rates: officialRates, rateSourceMonth: billingMonth, isEstimate: false };
+    return {
+      rates: officialRates,
+      rateSourceMonth: billingMonth,
+      rateSource: 'official',
+      isEstimate: false,
+    };
   }
 
   if (lastFinalized?.supplyRates) {
     return {
       rates: lastFinalized.supplyRates,
       rateSourceMonth: lastFinalized.billingMonth || null,
+      rateSource: 'lastFinalized',
       isEstimate: true,
     };
   }
 
   if (hasSupplyRates(userRates)) {
-    return { rates: userRates, rateSourceMonth: null, isEstimate: true };
+    // `rateSourceMonth` answers "which billing month's finalized rates were
+    // reused", which is genuinely null here - these came from the Settings
+    // editor, not from a month. The PDF used to read that null as "the seeded
+    // defaults" and tell a user who had carefully entered their own rates that
+    // the statement was priced with default ones. Named explicitly instead.
+    return { rates: userRates, rateSourceMonth: null, rateSource: 'settings', isEstimate: true };
   }
 
-  return { rates: DEFAULT_SUPPLY_RATES, rateSourceMonth: null, isEstimate: true };
+  return {
+    rates: DEFAULT_SUPPLY_RATES,
+    rateSourceMonth: null,
+    rateSource: 'default',
+    isEstimate: true,
+  };
 };
 
 const resolveStatus = ({ period, officialRates, todayKey }) => {
@@ -151,7 +167,7 @@ const buildInvoice = ({
     });
   });
 
-  const { rates, rateSourceMonth, isEstimate } = resolveSupplyRates({
+  const { rates, rateSourceMonth, rateSource, isEstimate } = resolveSupplyRates({
     billingMonth,
     officialRates,
     lastFinalized,
@@ -190,6 +206,7 @@ const buildInvoice = ({
     status,
     isEstimate,
     rateSourceMonth,
+    rateSource,
     supplyRates: rates,
     isLifeline: !!isLifeline,
 

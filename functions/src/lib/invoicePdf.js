@@ -145,9 +145,18 @@ const drawHeadline = (doc, { invoice, top }) => {
 const drawNotice = (doc, { invoice, top }) => {
   if (!invoice.isEstimate) return top;
 
+  // Which rates these figures came from. `rateSourceMonth` is null both for the
+  // rates the user typed into Settings and for the seeded defaults, and calling
+  // the first of those "default rates" told a user who had entered their own
+  // that the statement ignored them. Older invoices carry no `rateSource`, so
+  // fall back to the previous wording rather than printing nothing.
+  const rateSourceLabel = invoice.rateSourceMonth
+    ? `${formatMonthName(invoice.rateSourceMonth)} rates`
+    : (invoice.rateSource === 'settings' ? 'the rates you entered in Settings' : 'default rates');
+
   const message = invoice.status === 'PENDING'
-    ? `This period has closed but the official ${formatMonthName(invoice.billingMonth)} rate has not been entered yet. Figures use ${invoice.rateSourceMonth ? formatMonthName(invoice.rateSourceMonth) : 'default'} rates and will change once finalized.`
-    : `This period is still open. Figures are an estimate using ${invoice.rateSourceMonth ? formatMonthName(invoice.rateSourceMonth) : 'default'} rates - PELCO III publishes each month's rate only after the period closes.`;
+    ? `This period has closed but the official ${formatMonthName(invoice.billingMonth)} rate has not been entered yet. Figures use ${rateSourceLabel} and will change once the official rate is applied.`
+    : `This period is still open. Figures are an estimate using ${rateSourceLabel} - PELCO III publishes each month's rate only after the period closes.`;
 
   const height = 42;
   doc.roundedRect(MARGIN, top + 10, CONTENT_WIDTH, height, 6)

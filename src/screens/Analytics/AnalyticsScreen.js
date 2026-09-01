@@ -419,6 +419,9 @@ export const AnalyticsScreen = ({ navigation }) => {
   const webNotice = useDismissibleNotice('analytics-web-app');
   const showRateNotice = !hasSupplyRates && rateNotice.visible;
   const [budget, setBudget] = useState({ monthlyBudget: 0, currentSpending: 0 });
+  // Whether a budget read has actually returned. Without it the zeros above
+  // are drawn as the user's own figures.
+  const [budgetKnown, setBudgetKnown] = useState(false);
   const [loading, setLoading] = useState(false);
   // A flat chart and a zero bill are measurements. Neither may be drawn from a
   // range that could not be read.
@@ -477,6 +480,13 @@ export const AnalyticsScreen = ({ navigation }) => {
           monthlyBudget: toNumber(result.data.monthlyBudget),
           currentSpending: toNumber(result.data.currentSpending),
         });
+        setBudgetKnown(true);
+      } else {
+        // The failure used to be dropped here, leaving the useState zeros on
+        // screen as "0% / P0.00 used / P0.00 remaining" - which is what an
+        // account with no budget set looks like, not one that could not be
+        // read. The Dashboard's own budget card already tracks this.
+        setBudgetKnown(false);
       }
     };
 
@@ -489,7 +499,7 @@ export const AnalyticsScreen = ({ navigation }) => {
       if (result.success) {
         setRateProfileId(result.data.rateProfileId || null);
         setSupplyRates(result.data.supplyRates || null);
-        setHasSupplyRates(result.data.hasSupplyRates === true);
+        setHasSupplyRates(result.data.hasSupplyRates !== false);
       }
     };
 
@@ -991,23 +1001,31 @@ export const AnalyticsScreen = ({ navigation }) => {
         <View style={styles.budgetProgressCard}>
           <View style={styles.budgetProgressHeader}>
             <Text style={styles.budgetProgressTitle}>Budget Progress</Text>
-            <Text style={styles.budgetProgressPercent}>{budgetPercent.toFixed(0)}%</Text>
+            <Text style={styles.budgetProgressPercent}>
+              {budgetKnown ? `${budgetPercent.toFixed(0)}%` : '—'}
+            </Text>
           </View>
           <View style={styles.budgetProgressBar}>
             <View
               style={[
                 styles.budgetProgressFill,
-                { width: `${Math.min(100, budgetPercent)}%` },
+                { width: `${budgetKnown ? Math.min(100, budgetPercent) : 0}%` },
               ]}
             />
           </View>
           <View style={styles.budgetProgressFooter}>
-            <Text style={styles.budgetProgressText}>
-              {formatCurrency(budget.currentSpending)} used
-            </Text>
-            <Text style={styles.budgetProgressText}>
-              {formatCurrency(remainingBudget)} remaining
-            </Text>
+            {budgetKnown ? (
+              <>
+                <Text style={styles.budgetProgressText}>
+                  {formatCurrency(budget.currentSpending)} used
+                </Text>
+                <Text style={styles.budgetProgressText}>
+                  {formatCurrency(remainingBudget)} remaining
+                </Text>
+              </>
+            ) : (
+              <Text style={styles.budgetProgressText}>Not loaded — needs a connection</Text>
+            )}
           </View>
         </View>
 

@@ -508,7 +508,7 @@ export const useOutletControl = () => {
           if (prefs?.success) {
             setRateProfileId(prefs.data?.rateProfileId || null);
             setSupplyRates(prefs.data?.supplyRates || null);
-            setHasSupplyRates(prefs.data?.hasSupplyRates === true);
+            setHasSupplyRates(prefs.data?.hasSupplyRates !== false);
           }
         })
         .catch((error) => console.warn('Could not load rate profile:', error?.message));
