@@ -14,7 +14,13 @@ import MonthComparePicker from './components/MonthComparePicker';
 import CompareMetric from './components/CompareMetric';
 import AddPreviousBillModal from './components/AddPreviousBillModal';
 import useReferenceComparison from './hooks/useReferenceComparison';
-import { buildTrend, explainAccuracy, formatMonthShort } from './utils/comparisonHelpers';
+import {
+  buildTrend,
+  explainAccuracy,
+  formatMonthShort,
+  describeCostBasis,
+  labelCostBasis,
+} from './utils/comparisonHelpers';
 import { foldApplianceRows } from '../../utils/applianceBreakdown';
 import { WebAppNotice } from '../../components/common/WebAppNotice';
 import { OfflineState } from '../../components/common/OfflineNotice';
@@ -191,14 +197,13 @@ const ReferenceComparisonScreen = ({ navigation }) => {
                       July's configured ones and report the gap as a change in
                       consumption. So the comparison stays like-for-like and the
                       billed figure is stated here instead of hidden. */}
-                  {totals.isFinal ? (
+                  {totals.costBasis === 'estimate' ? null : (
                     <Text style={styles.basisNote}>
-                      {label} was finalized at {formatPeso(totals.cost)} using PELCO III&apos;s
-                      official rates for that month, which is the figure on your emailed
-                      statement. The change above prices both months with your own rates so
-                      the two are measured the same way.
+                      {label} comes to {formatPeso(totals.cost)}.{' '}
+                      {describeCostBasis(totals.costBasis, label)} The change above prices both
+                      months with your own rates so the two are measured the same way.
                     </Text>
-                  ) : null}
+                  )}
 
                   <Text style={styles.sectionTitle}>Which outlet changed</Text>
                   <View style={styles.outletCard}>
@@ -303,12 +308,7 @@ const ReferenceComparisonScreen = ({ navigation }) => {
                   <Text style={styles.totalsFooter}>
                     {totals.daysRecorded} {totals.daysRecorded === 1 ? 'day' : 'days'} recorded,
                     from outlet 1 and outlet 2 only. Each outlet is named for the appliance
-                    it held most recently.
-                    {totals.isFinal
-                      ? ' The cost is the finalized figure from your emailed statement, priced'
-                        + ' with PELCO III’s official rates for this month.'
-                      : ' The cost is an estimate at the rates set in Settings; it is replaced'
-                        + ' by the billed figure once the month is finalized.'}
+                    it held most recently. {describeCostBasis(totals.costBasis, label)}
                   </Text>
                 </View>
               )}
@@ -398,9 +398,7 @@ const ReferenceComparisonScreen = ({ navigation }) => {
                     finalized the row is no longer an estimate - it is the same
                     number the statement billed - and calling it one would put a
                     third description of that figure in front of the user. */}
-                <Text style={styles.accuracyLabel}>
-                  {totals.isFinal ? 'WattWise measured (final)' : 'WattWise estimated'}
-                </Text>
+                <Text style={styles.accuracyLabel}>{labelCostBasis(totals.costBasis)}</Text>
                 <Text style={styles.accuracyValue}>{formatPeso(accuracy.estimatedCost)}</Text>
               </View>
               <View style={styles.accuracyDivider} />

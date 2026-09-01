@@ -8,7 +8,8 @@ import {
 } from '../src/utils/applianceBreakdown.js';
 import {
   summarizeDailyEntries,
-  applyFinalizedCost,
+  applyInvoiceCost,
+  describeCostBasis,
   compareMonths,
 } from '../src/screens/ReferenceComparison/utils/comparisonHelpers.js';
 
@@ -132,28 +133,94 @@ const AUGUST = summarizeDailyEntries([
 ]);
 
 test('a finalized month shows the billed figure, not the estimate', () => {
-  const final = applyFinalizedCost(AUGUST, { status: 'FINALIZED', totalAmountDue: 85.09 });
+  const final = applyInvoiceCost(AUGUST, {
+    status: 'FINALIZED',
+    totalAmountDue: 85.09,
+    totalKwh: 7.24,
+  });
 
   assert.equal(final.cost, 85.09);
   assert.equal(final.isFinal, true);
+  assert.equal(final.costBasis, 'final');
   assert.equal(final.estimatedCost, AUGUST.estimatedCost, 'the estimate is kept, not overwritten');
 });
 
-test('an unfinalized, absent or unreadable invoice leaves the estimate standing', () => {
-  for (const invoice of [null, undefined, { status: 'PENDING', totalAmountDue: 85.09 }]) {
-    const result = applyFinalizedCost(AUGUST, invoice);
+test('a finalized month is adopted even if a day was backfilled behind it', () => {
+  // It is a billed fact in an inbox and a locked record. The energy guard below
+  // is for estimates, which are still moving.
+  const final = applyInvoiceCost(AUGUST, {
+    status: 'FINALIZED',
+    totalAmountDue: 85.09,
+    totalKwh: 6.1,
+  });
+
+  assert.equal(final.cost, 85.09);
+  assert.equal(final.costBasis, 'final');
+});
+
+/*
+ * The quiet half of the same bug. `resolveSupplyRates` prices an unfinalized
+ * month from the last FINALIZED month's official rates and falls back to
+ * Settings; this screen only ever used Settings. So the moment one month is
+ * finalized, every later statement is priced from it and the screen is not.
+ */
+
+test('a pending month takes the statement estimate rather than computing its own', () => {
+  const pending = applyInvoiceCost(AUGUST, {
+    status: 'PENDING',
+    totalAmountDue: 83.40,
+    totalKwh: 7.24,
+  });
+
+  assert.equal(pending.cost, 83.40);
+  assert.equal(pending.isFinal, false, 'still not final - no official rate has been entered');
+  assert.equal(pending.costBasis, 'statement');
+});
+
+test('an unfinalized invoice pricing different energy is not adopted', () => {
+  // The open month's invoice is refreshed once a day and can lag a rollup.
+  // Printing its pesos beside freshly summed kWh would put a total next to a
+  // price computed for a different number of kilowatt-hours.
+  const stale = applyInvoiceCost(AUGUST, {
+    status: 'DRAFT',
+    totalAmountDue: 71.10,
+    totalKwh: 6.4,
+  });
+
+  assert.equal(stale.cost, AUGUST.estimatedCost);
+  assert.equal(stale.costBasis, 'estimate');
+});
+
+test('rounding in the stored kWh does not reject a matching invoice', () => {
+  // totalKwh is stored to three places; the screen sums unrounded.
+  const rounded = applyInvoiceCost(AUGUST, {
+    status: 'PENDING',
+    totalAmountDue: 83.40,
+    totalKwh: 7.2404,
+  });
+
+  assert.equal(rounded.costBasis, 'statement');
+});
+
+test('an absent or unreadable invoice leaves the estimate standing', () => {
+  for (const invoice of [null, undefined]) {
+    const result = applyInvoiceCost(AUGUST, invoice);
     assert.equal(result.cost, AUGUST.estimatedCost);
+    assert.equal(result.costBasis, 'estimate');
     assert.equal(result.isFinal, false);
   }
 });
 
-test('a finalized document with no total does not overwrite the estimate with zero', () => {
-  // `Number(null)` is 0, not NaN, so coercing first would bill this month at
-  // P0.00 and call it final.
+test('an invoice with no total does not overwrite the estimate with zero', () => {
+  // `Number(null)` is 0, not NaN, so coercing first would bill the month at
+  // P0.00 and, for a finalized one, call that final.
   for (const total of [null, undefined, '', 'n/a']) {
-    const result = applyFinalizedCost(AUGUST, { status: 'FINALIZED', totalAmountDue: total });
-    assert.equal(result.cost, AUGUST.estimatedCost);
-    assert.equal(result.isFinal, false);
+    for (const status of ['FINALIZED', 'PENDING']) {
+      const result = applyInvoiceCost(AUGUST, { status, totalAmountDue: total, totalKwh: 7.24 });
+      assert.equal(result.cost, AUGUST.estimatedCost);
+      assert.equal(result.isFinal, false);
+      assert.equal(result.costBasis, 'estimate');
+    }
   }
 });
 
@@ -161,7 +228,11 @@ test('the month-on-month change prices both months the same way', () => {
   const july = summarizeDailyEntries([
     { date: '2026-07-01', totalEnergy: 6.0, outlet1Energy: 4, outlet2Energy: 2 },
   ]);
-  const august = applyFinalizedCost(AUGUST, { status: 'FINALIZED', totalAmountDue: 85.09 });
+  const august = applyInvoiceCost(AUGUST, {
+    status: 'FINALIZED',
+    totalAmountDue: 85.09,
+    totalKwh: 7.24,
+  });
 
   const comparison = compareMonths(august, july);
 
@@ -171,4 +242,19 @@ test('the month-on-month change prices both months the same way', () => {
     'the finalized figure must not enter the delta - July has no official rates to meet it'
   );
   assert.equal(comparison.cost.previous, july.estimatedCost);
+});
+
+test('each basis describes itself differently, and none of them lie', () => {
+  const final = describeCostBasis('final', 'Aug 2026');
+  const statement = describeCostBasis('statement', 'Aug 2026');
+  const estimate = describeCostBasis('estimate', 'Aug 2026');
+
+  assert.match(final, /finalized figure/);
+  assert.match(final, /official rates/);
+  // The one that used to be wrong: a pending month priced from last month's
+  // official rates was described as "an estimate at the rates set in Settings".
+  assert.doesNotMatch(statement, /rates set in Settings/);
+  assert.match(statement, /same estimate your emailed statement/);
+  assert.match(estimate, /rates set in Settings/);
+  assert.equal(new Set([final, statement, estimate]).size, 3);
 });

@@ -366,6 +366,30 @@ the code over that doc for data flow). Current top-level structure under `users/
   **rejects** offline rather than resolving empty - the estimate stands and
   nothing claims a basis it did not read.
 
+  **The quiet half took a second pass.** A month that is only PENDING still
+  disagreed, because the two sides pick their *estimate* differently:
+  `resolveSupplyRates` prefers the last FINALIZED month's official rates and
+  falls back to Settings, while the screen only ever used Settings. So the
+  moment one month is finalized, every later statement is priced from it and
+  the screen is not - invisible until the next month closes, then wrong by
+  exactly the figure the user just typed in. `applyInvoiceCost` now adopts the
+  statement's total whenever there is one, and `costBasis` names which of the
+  three it is: `final`, `statement`, or `estimate`. Every caption is generated
+  from it (`describeCostBasis`), because the old wording called a
+  last-month-official-rates figure "an estimate at the rates set in Settings".
+
+  **An unfinalized invoice is only adopted when it prices the same energy**
+  (`totalKwh` within 0.005 kWh). The open month's invoice is refreshed daily
+  and can lag a rollup, and printing its pesos beside freshly summed kWh puts a
+  total next to a price computed for a different number of kilowatt-hours. A
+  FINALIZED invoice is exempt: it is a billed fact in someone's inbox.
+
+  **Three surfaces, not two.** Fixing the card left the web month rail still
+  answering by the old rule, four lines above it, with a comment claiming it
+  "cannot disagree with the cards below it". `useMonthStrip` priced all twelve
+  months itself. Grep for `summarizeDailyEntries` before assuming a fix landed
+  everywhere.
+
 - **A block that itemises a total must add up to it.** `drawApplianceBlock` in
   `invoicePdf.js` was a bare `slice(0, 6)` with no residual row and no total
   bar, while its percentage column divided by the full `totalKwh`. The August

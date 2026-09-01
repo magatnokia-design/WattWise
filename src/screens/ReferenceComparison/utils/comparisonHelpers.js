@@ -11,7 +11,7 @@ export const emptyMonthTotals = {
   // What this month's energy comes to at the user's configured rates. Kept
   // beside `cost` rather than instead of it, because once a month is finalized
   // `cost` becomes the billed figure and the two stop being the same number -
-  // see applyFinalizedCost.
+  // see applyInvoiceCost.
   estimatedCost: 0,
   outlet1: 0,
   outlet2: 0,
@@ -20,6 +20,8 @@ export const emptyMonthTotals = {
   appliances: [],
   daysRecorded: 0,
   isFinal: false,
+  // 'final' | 'statement' | 'estimate' - see applyInvoiceCost.
+  costBasis: 'estimate',
 };
 
 const toNumber = (value) => {
@@ -133,52 +135,111 @@ export const summarizeDailyEntries = (entries, { supplyRates = null, profileId =
     appliances: aggregateApplianceUsage(rows),
     daysRecorded: rows.length,
     isFinal: false,
+    costBasis: 'estimate',
   };
 };
 
 /**
- * Replaces a month's estimated cost with the figure it was actually billed at,
- * once that month has been finalized.
+ * Prices a month from its own monthly statement rather than from a second
+ * calculation that only sometimes agrees with it.
  *
- * Until `finalizeInvoice` runs, a month is priced with whatever supply rates
- * are configured in Settings - an estimate, because PELCO III does not publish
- * the official generation rate until after the period closes. Finalizing
- * recomputes the month with the real rates and emails that figure out as the
- * statement. From that moment there are two peso answers for one month, and
- * this screen was still showing the first: August 2026 read P79.39 here beside
- * a statement marked FINAL for P85.09, same 7.24 kWh, with nothing on either
- * surface naming which rate set produced it.
+ * There are two ways this screen and the statement drifted apart.
  *
- * The billed figure wins, because it is the one in the user's inbox.
+ * The loud one: a FINALIZED month. Until `finalizeInvoice` runs, a month is
+ * priced with rates that are an estimate, because PELCO III does not publish
+ * the official generation rate until the period closes. Finalizing recomputes
+ * with the real rates and mails that figure out. August 2026 read P79.39 here
+ * beside a statement stamped FINAL for P85.09, same 7.24 kWh, with nothing on
+ * either surface naming which rate set produced it. The billed figure wins,
+ * because it is the one in the user's inbox.
  *
- * `estimatedCost` deliberately survives untouched. It is what the
- * month-on-month comparison runs on, and it has to: a finalized August against
- * an unfinalized July would otherwise measure one month's official rates
- * against another month's configured ones and report the difference as a change
- * in consumption. Same rule for both months, or the comparison is not one.
+ * The quiet one: a month that is only PENDING still disagreed, because the two
+ * sides pick their estimate differently. `resolveSupplyRates` prefers the last
+ * FINALIZED month's official rates and falls back to Settings; this screen has
+ * only ever used Settings. So the moment one month is finalized, every later
+ * statement is priced from it while the screen is not - invisible until the
+ * next month closes, and then wrong by exactly the difference the user just
+ * typed in.
+ *
+ * So the statement's figure is adopted whenever there is one, and `costBasis`
+ * names which of the three it is: 'final' (official rates, locked), 'statement'
+ * (the same estimate the emailed statement used) or 'estimate' (this screen's
+ * own, at the Settings rates).
+ *
+ * **An unfinalized invoice is only adopted when it prices the same energy.**
+ * The open month's invoice is refreshed once a day, so it can lag a rollup;
+ * printing its pesos beside this screen's freshly summed kWh would put a total
+ * next to a price computed for a different number of kilowatt-hours. A
+ * FINALIZED invoice is exempt - it is a billed fact and a locked historical
+ * record, and it stays on screen even if a day is backfilled behind it.
+ *
+ * `estimatedCost` survives all of this untouched. It is what the month-on-month
+ * comparison runs on, and it has to: a finalized August against an unfinalized
+ * July would otherwise measure one month's official rates against another
+ * month's configured ones and report the difference as a change in
+ * consumption. Same rule for both months, or the comparison is not one.
  *
  * A read that failed is not a month that was never finalized, so an absent or
- * unreadable invoice leaves the totals exactly as they were rather than
- * asserting "estimate".
+ * unreadable invoice leaves the totals exactly as they were.
  *
  * @param {object} totals Output of `summarizeDailyEntries`.
  * @param {object|null} invoice The stored `invoices/{billingMonth}` document.
  */
-export const applyFinalizedCost = (totals, invoice) => {
+export const applyInvoiceCost = (totals, invoice) => {
   const base = totals || emptyMonthTotals;
-  if (invoice?.status !== 'FINALIZED') return base;
+  if (!invoice) return base;
 
-  // `Number(null)` is 0, not NaN, so a finalized document missing its total
-  // would coerce to a billed figure of P0.00 and overwrite a real estimate
-  // with a fabricated zero.
+  // `Number(null)` is 0, not NaN, so coercing first would turn a document
+  // missing its total into a real figure of P0.00 and overwrite a good
+  // estimate with a fabricated zero.
   const raw = invoice.totalAmountDue;
   if (raw === null || raw === undefined || raw === '') return base;
 
   const billed = Number(raw);
   if (!Number.isFinite(billed)) return base;
 
-  return { ...base, cost: billed, isFinal: true };
+  if (invoice.status === 'FINALIZED') {
+    return { ...base, cost: billed, isFinal: true, costBasis: 'final' };
+  }
+
+  // Half a hundredth of a kWh: `totalKwh` is stored rounded to three places,
+  // and anything larger than that is a real difference in what was measured.
+  const invoiceKwh = Number(invoice.totalKwh);
+  if (!Number.isFinite(invoiceKwh) || Math.abs(invoiceKwh - toNumber(base.kWh)) > 0.005) {
+    return base;
+  }
+
+  return { ...base, cost: billed, isFinal: false, costBasis: 'statement' };
 };
+
+/**
+ * What the month's cost figure actually is, in one sentence.
+ *
+ * Lives here rather than in a screen so both clients say the same thing about
+ * the same document - the mistake this whole file has been correcting is two
+ * surfaces describing one month differently.
+ *
+ * @param {string} costBasis From `applyInvoiceCost`.
+ * @param {string} monthLabel e.g. "Aug 2026".
+ */
+export const describeCostBasis = (costBasis, monthLabel) => {
+  if (costBasis === 'final') {
+    return `The cost is the finalized figure from your emailed statement for ${monthLabel}, `
+      + 'priced with PELCO III’s official rates for that month.';
+  }
+
+  if (costBasis === 'statement') {
+    return `The cost is the same estimate your emailed statement for ${monthLabel} used. It `
+      + 'becomes final once you enter that month’s official rate under Monthly Statements.';
+  }
+
+  return 'The cost is an estimate at the rates set in Settings; it is replaced by the '
+    + 'statement’s figure once that month has one.';
+};
+
+/** How to name the row that carries the month's own cost. */
+export const labelCostBasis = (costBasis) =>
+  (costBasis === 'final' ? 'WattWise measured (final)' : 'WattWise estimated');
 
 /**
  * Signed change from `previous` to `current`.
@@ -216,7 +277,7 @@ export const compareMonths = (totalsA, totalsB) => {
 
   return {
     energy: buildDelta(a.kWh, b.kWh),
-    // Estimated cost on both sides, never the billed one. See applyFinalizedCost.
+    // Estimated cost on both sides, never the billed one. See applyInvoiceCost.
     cost: buildDelta(a.estimatedCost ?? a.cost, b.estimatedCost ?? b.cost),
     outlet1: buildDelta(a.outlet1, b.outlet1),
     outlet2: buildDelta(a.outlet2, b.outlet2),

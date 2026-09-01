@@ -15,7 +15,7 @@ import {
   emptyMonthTotals,
   previousMonthKey,
   summarizeDailyEntries,
-  applyFinalizedCost,
+  applyInvoiceCost,
   compareMonths,
   compareToActualBill,
 } from '../utils/comparisonHelpers';
@@ -125,8 +125,8 @@ const useReferenceComparison = () => {
       ]);
 
       // A failed read leaves the estimate in place rather than asserting the
-      // month was never finalized - see applyFinalizedCost.
-      setTotalsA(applyFinalizedCost(
+      // month has no statement - see applyInvoiceCost.
+      setTotalsA(applyInvoiceCost(
         nextA.totals,
         invoiceResult.success ? invoiceResult.data : null
       ));
