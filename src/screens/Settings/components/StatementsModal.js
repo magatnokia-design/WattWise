@@ -448,8 +448,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  // `flex: 1` is load-bearing, not tidiness. Without a parent that has a
+  // height, the sheet's percentage maxHeight below resolves against nothing:
+  // the card collapsed to less than its content, and since Android does not
+  // reliably clip on `overflow: 'hidden'`, the status badge drew outside the
+  // white card and over the screen behind it.
   keyboardWrap: {
+    flex: 1,
     width: '100%',
+    justifyContent: 'center',
     alignItems: 'center',
   },
   sheet: {
@@ -466,14 +473,17 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
   },
-  back: { paddingRight: 10 },
-  backText: { fontSize: 24, color: COLORS.primary, lineHeight: 26 },
+  // Both are icon-sized glyphs, so the padding is the tap target.
+  back: { paddingRight: 12, paddingVertical: 4 },
+  backText: { fontSize: 26, color: COLORS.primary, lineHeight: 28 },
   title: { flex: 1, fontSize: 16, fontWeight: '700', color: COLORS.text },
-  close: { paddingLeft: 10 },
-  closeText: { fontSize: 16, color: COLORS.textLight },
+  close: { paddingLeft: 12, paddingVertical: 4, paddingRight: 2 },
+  closeText: { fontSize: 18, color: COLORS.textLight },
 
-  body: { maxHeight: 520 },
-  bodyContent: { padding: 16 },
+  // Shrinks to whatever the sheet has left after the header, rather than a
+  // fixed 520 that could be taller than the sheet itself on a short screen.
+  body: { flexShrink: 1 },
+  bodyContent: { padding: 16, paddingBottom: 20 },
 
   centered: { alignItems: 'center', paddingVertical: 28 },
   centeredText: { marginTop: 10, fontSize: 13, color: COLORS.textLight },
@@ -504,13 +514,20 @@ const styles = StyleSheet.create({
   },
   noticeText: { fontSize: 12.5, color: '#92400E', lineHeight: 18 },
 
+  // A row is a button when the month can be finalized, so it needs a target
+  // worth aiming at rather than a 12pt strip of text.
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+    marginBottom: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.white,
+    minHeight: 72,
   },
   rowMain: { flex: 1, paddingRight: 12 },
   rowMonth: { fontSize: 14.5, fontWeight: '700', color: COLORS.text },
@@ -558,8 +575,19 @@ const styles = StyleSheet.create({
   inputError: { borderColor: COLORS.error },
   fieldError: { fontSize: 11.5, color: COLORS.error, marginTop: 4 },
 
-  advancedToggle: { paddingVertical: 8, marginBottom: 4 },
-  advancedToggleText: { fontSize: 13, color: COLORS.primary, fontWeight: '600' },
+  // Was a bare line of green text, which does not read as something you can
+  // press. Bordered, full width, and tall enough to hit.
+  advancedToggle: {
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    marginTop: 2,
+    marginBottom: 14,
+    alignItems: 'center',
+  },
+  advancedToggleText: { fontSize: 13.5, color: COLORS.primary, fontWeight: '600' },
 
   formError: {
     fontSize: 12.5,
@@ -579,7 +607,9 @@ const styles = StyleSheet.create({
   primaryButton: {
     backgroundColor: COLORS.primary,
     borderRadius: 999,
-    paddingVertical: 13,
+    paddingVertical: 15,
+    minHeight: 50,
+    justifyContent: 'center',
     alignItems: 'center',
   },
   primaryButtonDisabled: { opacity: 0.7 },

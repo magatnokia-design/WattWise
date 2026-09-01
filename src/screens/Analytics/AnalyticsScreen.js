@@ -710,6 +710,14 @@ export const AnalyticsScreen = ({ navigation }) => {
     const summary = {
       totalEnergy,
       totalCost: bill.totals.total,
+      // Which stretch of time this total is actually about. "Monthly" runs from
+      // the 1st to today, so on the 1st of a month it covers a single day and
+      // reads 0.00 kWh - correct, and indistinguishable from a broken screen
+      // unless it says so. The month that just ended lives in the statement,
+      // not here.
+      periodLabel: days.length === 1
+        ? formatShortDate(startDate)
+        : `${formatShortDate(startDate)} – ${formatShortDate(endDate)} · ${days.length} days`,
       averageUsage: days.length ? totalEnergy / days.length : 0,
       peakUsage,
       peakHour: 'N/A',
@@ -868,6 +876,9 @@ export const AnalyticsScreen = ({ navigation }) => {
               ? 'Not loaded — needs a connection'
               : `${formatCurrency(summary.totalCost)} estimated cost`}
           </Text>
+          {summary.periodLabel && !load.showOfflineState ? (
+            <Text style={styles.summaryPeriod}>{summary.periodLabel}</Text>
+          ) : null}
           {summary.emptyDayNote && !load.showOfflineState ? (
             <Text style={styles.summaryNote}>{summary.emptyDayNote}</Text>
           ) : null}
@@ -1122,6 +1133,12 @@ const styles = StyleSheet.create({
     ...FONTS.body,
     color: COLORS.white,
     opacity: 0.8,
+  },
+  summaryPeriod: {
+    ...FONTS.small,
+    color: COLORS.white,
+    opacity: 0.8,
+    marginTop: 6,
   },
   summaryNote: {
     ...FONTS.small,
