@@ -15,6 +15,7 @@ import AppDialog from '../../components/common/AppDialog';
 import { OfflineState } from '../../components/common/OfflineNotice';
 import SettingsRow from './components/SettingsRow';
 import SupplyRateModal from './components/SupplyRateModal';
+import StatementsModal from './components/StatementsModal';
 import ESP32DeviceModal from './components/ESP32DeviceModal';
 import DeviceQRScannerModal from './components/DeviceQRScannerModal';
 import ProfileNameModal from './components/ProfileNameModal';
@@ -50,6 +51,7 @@ const formatApplianceSignature = (appliance) => {
 
 const SettingsScreen = ({ navigation }) => {
   const [rateModalVisible, setRateModalVisible] = useState(false);
+  const [statementsVisible, setStatementsVisible] = useState(false);
   const [deviceModalVisible, setDeviceModalVisible] = useState(false);
   const [scannerVisible, setScannerVisible] = useState(false);
   // One dialog at a time, held as its own props. A second setDialog replaces the
@@ -522,6 +524,19 @@ const SettingsScreen = ({ navigation }) => {
             onPress={handleRatePress}
           />
           <Separator />
+          {/* The only route to finalizeInvoice. A statement is emailed as an
+              estimate because PELCO III publishes the month's generation rate
+              only after the period closes, and without this row there was
+              nowhere to enter it - every statement stayed an estimate for ever
+              and the PDF named a control that did not exist. */}
+          <SettingsRow
+            icon="🧾"
+            label="Monthly Statements"
+            value="View"
+            showArrow
+            onPress={() => setStatementsVisible(true)}
+          />
+          <Separator />
           {/* TODO: Budget settings will connect to BudgetTracking screen */}
           <SettingsRow
             icon="💰"
@@ -756,6 +771,13 @@ const SettingsScreen = ({ navigation }) => {
         currentRates={settings.supplyRates}
         onClose={handleRateClose}
         onSave={handleRateSave}
+      />
+
+      {/* Statements, and the one place a closed month can be finalized */}
+      <StatementsModal
+        visible={statementsVisible}
+        userId={user?.uid}
+        onClose={() => setStatementsVisible(false)}
       />
 
       <ESP32DeviceModal

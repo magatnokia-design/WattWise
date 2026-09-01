@@ -160,15 +160,15 @@ async function processInvoiceForUser({
       encoding: 'base64',
       contentType: 'application/pdf',
     }],
-    // No "Update to actual rate" button exists in either client - the
-    // finalizeInvoice callable is exported and reachable from nothing, so this
-    // told the reader to tap something that is not there. Describes what the
-    // app can actually do until that screen is built.
+    // Names the exact route, because this instruction was wrong twice: it once
+    // told the reader to tap "Update to actual rate", which never existed
+    // anywhere. Settings -> Monthly Statements is the only path to
+    // finalizeInvoice, so if that row is ever renamed, rename it here too.
     note:
       'PELCO III publishes the official generation rate a few days after the period closes. '
-      + 'Open Settings and enter the generation rate printed on your paper bill so your '
-      + 'statements are priced with your real figures. Until an official rate is applied to '
-      + 'this month, the total above stays an estimate. Rates at pelco3.org/rates.php.',
+      + 'In WattWise, open Settings, tap Monthly Statements, choose this month and enter the '
+      + 'generation rate printed on your paper bill - that locks this statement to the real '
+      + 'figure. Until you do, the total above stays an estimate. Rates at pelco3.org/rates.php.',
     tag: 'invoice',
   });
 

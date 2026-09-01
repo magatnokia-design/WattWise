@@ -12,4 +12,5 @@ export { budgetService } from './budgetService';
 export { notificationService } from './notificationService';
 export { safetyService } from './safetyService';
 export { comparisonService } from './comparisonService';
+export { invoiceService } from './invoiceService';
 export { initializationService } from './initializationService';
