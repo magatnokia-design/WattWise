@@ -1,4 +1,5 @@
 import { calculatePelcoIIIBill } from '../../../utils/billing';
+import { aggregateApplianceUsage } from '../../../utils/applianceBreakdown';
 
 // How many months back the pickers offer. A year covers a full seasonal cycle,
 // which is the comparison that actually explains a bill jump.
@@ -7,11 +8,18 @@ export const MONTH_OPTION_COUNT = 12;
 export const emptyMonthTotals = {
   kWh: 0,
   cost: 0,
+  // What this month's energy comes to at the user's configured rates. Kept
+  // beside `cost` rather than instead of it, because once a month is finalized
+  // `cost` becomes the billed figure and the two stop being the same number -
+  // see applyFinalizedCost.
+  estimatedCost: 0,
   outlet1: 0,
   outlet2: 0,
   outlet1Name: 'Outlet 1',
   outlet2Name: 'Outlet 2',
+  appliances: [],
   daysRecorded: 0,
+  isFinal: false,
 };
 
 const toNumber = (value) => {
@@ -82,8 +90,13 @@ export const buildMonthOptions = (count = MONTH_OPTION_COUNT, from = new Date())
  *
  * Both mistakes come from treating a sum of days as a bill. Nothing should.
  *
- * Appliance names come from the most recent day that carries them, so an outlet
- * renamed mid-month shows its current name rather than a stale one.
+ * Two attributions come out of this, and they are not interchangeable. The
+ * outlet totals say which of the two physical outlets the energy went through,
+ * named for the appliance each held on the LAST recorded day. `appliances` is
+ * the per-day credit - the name the outlet carried on the day it was measured -
+ * which is the same rule the emailed statement uses and the only one that
+ * survives a rename. Both are returned so a screen can show them side by side
+ * and say which is which, rather than printing one and implying the other.
  *
  * @param {Array} entries `history_daily` documents for the month.
  * @param {object} [rates] `supplyRates` and `profileId` from user preferences.
@@ -102,20 +115,69 @@ export const summarizeDailyEntries = (entries, { supplyRates = null, profileId =
 
   const latest = rows[rows.length - 1] || {};
 
+  // A month WattWise measured nothing in owes it nothing measured. This figure
+  // is labelled as measured usage, so an empty month reads P0.00 rather than
+  // the bare metering flat.
+  const estimatedCost = calculatePelcoIIIBill(totals.kWh, {
+    supplyRates,
+    profileId,
+    includePeriodFlats: totals.kWh > 0,
+  }).totals.total;
+
   return {
     ...totals,
-    // A month WattWise measured nothing in owes it nothing measured. This
-    // figure is labelled as measured usage, so an empty month reads P0.00
-    // rather than the bare metering flat.
-    cost: calculatePelcoIIIBill(totals.kWh, {
-      supplyRates,
-      profileId,
-      includePeriodFlats: totals.kWh > 0,
-    }).totals.total,
+    cost: estimatedCost,
+    estimatedCost,
     outlet1Name: String(latest.outlet1Name || '').trim() || 'Outlet 1',
     outlet2Name: String(latest.outlet2Name || '').trim() || 'Outlet 2',
+    appliances: aggregateApplianceUsage(rows),
     daysRecorded: rows.length,
+    isFinal: false,
   };
+};
+
+/**
+ * Replaces a month's estimated cost with the figure it was actually billed at,
+ * once that month has been finalized.
+ *
+ * Until `finalizeInvoice` runs, a month is priced with whatever supply rates
+ * are configured in Settings - an estimate, because PELCO III does not publish
+ * the official generation rate until after the period closes. Finalizing
+ * recomputes the month with the real rates and emails that figure out as the
+ * statement. From that moment there are two peso answers for one month, and
+ * this screen was still showing the first: August 2026 read P79.39 here beside
+ * a statement marked FINAL for P85.09, same 7.24 kWh, with nothing on either
+ * surface naming which rate set produced it.
+ *
+ * The billed figure wins, because it is the one in the user's inbox.
+ *
+ * `estimatedCost` deliberately survives untouched. It is what the
+ * month-on-month comparison runs on, and it has to: a finalized August against
+ * an unfinalized July would otherwise measure one month's official rates
+ * against another month's configured ones and report the difference as a change
+ * in consumption. Same rule for both months, or the comparison is not one.
+ *
+ * A read that failed is not a month that was never finalized, so an absent or
+ * unreadable invoice leaves the totals exactly as they were rather than
+ * asserting "estimate".
+ *
+ * @param {object} totals Output of `summarizeDailyEntries`.
+ * @param {object|null} invoice The stored `invoices/{billingMonth}` document.
+ */
+export const applyFinalizedCost = (totals, invoice) => {
+  const base = totals || emptyMonthTotals;
+  if (invoice?.status !== 'FINALIZED') return base;
+
+  // `Number(null)` is 0, not NaN, so a finalized document missing its total
+  // would coerce to a billed figure of P0.00 and overwrite a real estimate
+  // with a fabricated zero.
+  const raw = invoice.totalAmountDue;
+  if (raw === null || raw === undefined || raw === '') return base;
+
+  const billed = Number(raw);
+  if (!Number.isFinite(billed)) return base;
+
+  return { ...base, cost: billed, isFinal: true };
 };
 
 /**
@@ -154,7 +216,8 @@ export const compareMonths = (totalsA, totalsB) => {
 
   return {
     energy: buildDelta(a.kWh, b.kWh),
-    cost: buildDelta(a.cost, b.cost),
+    // Estimated cost on both sides, never the billed one. See applyFinalizedCost.
+    cost: buildDelta(a.estimatedCost ?? a.cost, b.estimatedCost ?? b.cost),
     outlet1: buildDelta(a.outlet1, b.outlet1),
     outlet2: buildDelta(a.outlet2, b.outlet2),
     hasData: a.daysRecorded > 0 || b.daysRecorded > 0,

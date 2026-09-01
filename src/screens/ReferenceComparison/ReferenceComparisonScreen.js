@@ -15,6 +15,7 @@ import CompareMetric from './components/CompareMetric';
 import AddPreviousBillModal from './components/AddPreviousBillModal';
 import useReferenceComparison from './hooks/useReferenceComparison';
 import { buildTrend, explainAccuracy, formatMonthShort } from './utils/comparisonHelpers';
+import { foldApplianceRows } from '../../utils/applianceBreakdown';
 import { WebAppNotice } from '../../components/common/WebAppNotice';
 import { OfflineState } from '../../components/common/OfflineNotice';
 import { WEB_APP_LINKS } from '../../constants/webApp';
@@ -53,6 +54,16 @@ const ReferenceComparisonScreen = ({ navigation }) => {
   const previousLabel = formatMonthShort(previousMonth);
 
   const hasUsage = totals.daysRecorded > 0;
+
+  // The same fold the emailed statement uses: six named rows, and a residual
+  // summed from the tail itself so the block can only restate figures that
+  // exist. Kept identical on purpose - two surfaces itemising one month by
+  // different rules is the bug this block was added to close.
+  const applianceRows = useMemo(() => foldApplianceRows(totals.appliances), [totals.appliances]);
+  const applianceKwh = useMemo(
+    () => applianceRows.reduce((sum, row) => sum + (Number(row.energyKwh) || 0), 0),
+    [applianceRows]
+  );
 
   const trend = useMemo(
     () => buildTrend(comparison, label, previousLabel, {
@@ -173,6 +184,22 @@ const ReferenceComparisonScreen = ({ navigation }) => {
                     graded={!trend.partial}
                   />
 
+                  {/* Both months above are priced with the user's configured
+                      rates, including this one - even after it has been
+                      finalized. Swapping in the billed figure for the finalized
+                      month alone would measure August's official rates against
+                      July's configured ones and report the gap as a change in
+                      consumption. So the comparison stays like-for-like and the
+                      billed figure is stated here instead of hidden. */}
+                  {totals.isFinal ? (
+                    <Text style={styles.basisNote}>
+                      {label} was finalized at {formatPeso(totals.cost)} using PELCO III&apos;s
+                      official rates for that month, which is the figure on your emailed
+                      statement. The change above prices both months with your own rates so
+                      the two are measured the same way.
+                    </Text>
+                  ) : null}
+
                   <Text style={styles.sectionTitle}>Which outlet changed</Text>
                   <View style={styles.outletCard}>
                     {/* The slot is carried alongside the name because the two
@@ -231,13 +258,22 @@ const ReferenceComparisonScreen = ({ navigation }) => {
                       are outlet totals for the whole month, labelled with the
                       appliance name each outlet held on the LAST recorded day -
                       not a per-appliance breakdown. Printed as a bare name they
-                      read as one, and the emailed statement itemises the same
-                      month by the name recorded on each day, so the two
-                      disagree wherever anything was renamed. Naming the outlet
-                      is what makes these figures true as written. */}
+                      read as one. The per-appliance answer is the "Where it
+                      went" block below, which credits each day to the name the
+                      outlet carried on that day - the statement's rule. Naming
+                      the outlet here is what keeps these figures true as
+                      written and the two blocks distinguishable. */}
                   {[
                     { key: 'energy', label: 'Energy used', value: formatKwh(totals.kWh) },
-                    { key: 'cost', label: 'Cost', value: formatPeso(totals.cost) },
+                    {
+                      key: 'cost',
+                      label: 'Cost',
+                      value: formatPeso(totals.cost),
+                      // Named rather than assumed. Before a month is finalized
+                      // this is an estimate at the user's configured rates;
+                      // after, it is what the statement billed.
+                      badge: totals.isFinal ? 'Final' : null,
+                    },
                     {
                       key: 'outlet1',
                       label: `Outlet 1 · ${totals.outlet1Name}`,
@@ -253,18 +289,81 @@ const ReferenceComparisonScreen = ({ navigation }) => {
                       key={row.key}
                       style={[styles.totalsRow, index > 0 && styles.totalsRowDivided]}
                     >
-                      <Text style={styles.totalsLabel}>{row.label}</Text>
+                      <View style={styles.totalsLabelWrap}>
+                        <Text style={styles.totalsLabel}>{row.label}</Text>
+                        {row.badge ? (
+                          <View style={styles.finalPill}>
+                            <Text style={styles.finalPillText}>{row.badge}</Text>
+                          </View>
+                        ) : null}
+                      </View>
                       <Text style={styles.totalsValue}>{row.value}</Text>
                     </View>
                   ))}
                   <Text style={styles.totalsFooter}>
                     {totals.daysRecorded} {totals.daysRecorded === 1 ? 'day' : 'days'} recorded,
-                    from outlet 1 and outlet 2 only. Each outlet is named for the
-                    appliance it held most recently; your emailed statement credits
-                    energy to the name the outlet carried on each day.
+                    from outlet 1 and outlet 2 only. Each outlet is named for the appliance
+                    it held most recently.
+                    {totals.isFinal
+                      ? ' The cost is the finalized figure from your emailed statement, priced'
+                        + ' with PELCO III’s official rates for this month.'
+                      : ' The cost is an estimate at the rates set in Settings; it is replaced'
+                        + ' by the billed figure once the month is finalized.'}
                   </Text>
                 </View>
               )}
+
+              {/* Where it went.
+                  The outlet rows above answer "which of the two sockets"; this
+                  answers "which appliance", and they are not the same question.
+                  Outlet totals carry the name each outlet held on the LAST
+                  recorded day, so renaming an appliance rewrites the whole month
+                  retroactively. These rows credit each day's energy to the name
+                  the outlet carried on THAT day, which is the rule the emailed
+                  statement uses and the only one a rename cannot rewrite.
+
+                  Both were already true; only the statement was showing this
+                  one. August 2026 read as six appliances on the PDF and two here
+                  off the same 7.24 kWh, and nothing on this screen said why. */}
+              {applianceRows.length > 0 ? (
+                <>
+                  <Text style={styles.sectionTitle}>Where it went in {label}</Text>
+                  <View style={styles.totalsCard}>
+                    {applianceRows.map((row, index) => {
+                      const share = totals.kWh > 0 ? (row.energyKwh / totals.kWh) * 100 : 0;
+
+                      return (
+                        <View
+                          key={row.applianceName}
+                          style={[styles.totalsRow, index > 0 && styles.totalsRowDivided]}
+                        >
+                          <View style={styles.totalsLabelWrap}>
+                            <Text style={styles.applianceName} numberOfLines={1}>
+                              {row.applianceName}
+                            </Text>
+                            <Text style={styles.applianceShare}>{share.toFixed(0)}%</Text>
+                          </View>
+                          <Text style={styles.totalsValue}>{formatKwh(row.energyKwh)}</Text>
+                        </View>
+                      );
+                    })}
+
+                    {/* The total bar, for the same reason the statement carries
+                        one: a block that itemises a total has to add up to it,
+                        and a shortfall has to be visible rather than silent. */}
+                    <View style={[styles.totalsRow, styles.totalsRowDivided]}>
+                      <Text style={styles.applianceTotalLabel}>Total measured</Text>
+                      <Text style={styles.applianceTotalValue}>{formatKwh(applianceKwh)}</Text>
+                    </View>
+
+                    <Text style={styles.totalsFooter}>
+                      Energy is credited to the name the outlet carried on the day it was
+                      measured, so an appliance renamed mid-month appears under both names.
+                      This is the same split as your emailed statement.
+                    </Text>
+                  </View>
+                </>
+              ) : null}
             </>
           ) : (
             <View style={styles.emptyState}>
@@ -295,7 +394,13 @@ const ReferenceComparisonScreen = ({ navigation }) => {
                 <Text style={styles.accuracyValue}>{formatPeso(accuracy.actualCost)}</Text>
               </View>
               <View style={styles.accuracyRow}>
-                <Text style={styles.accuracyLabel}>WattWise estimated</Text>
+                {/* Whose figure this is, and on what basis. Once the month is
+                    finalized the row is no longer an estimate - it is the same
+                    number the statement billed - and calling it one would put a
+                    third description of that figure in front of the user. */}
+                <Text style={styles.accuracyLabel}>
+                  {totals.isFinal ? 'WattWise measured (final)' : 'WattWise estimated'}
+                </Text>
                 <Text style={styles.accuracyValue}>{formatPeso(accuracy.estimatedCost)}</Text>
               </View>
               <View style={styles.accuracyDivider} />
@@ -526,10 +631,62 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: COLORS.border,
   },
-  totalsLabel: {
+  // Holds the label and, on the cost row, the pill naming which basis it is.
+  totalsLabelWrap: {
     flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  totalsLabel: {
+    flexShrink: 1,
     fontSize: 13,
     color: COLORS.textLight,
+  },
+  // The same pill the Monthly Statements list uses for a finalized month, on
+  // purpose: it is the same fact, and a user who has seen one should recognise
+  // the other rather than wonder whether they mean different things.
+  finalPill: {
+    flexShrink: 0,
+    backgroundColor: '#ECFDF5',
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  finalPillText: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: COLORS.primaryDark,
+  },
+  basisNote: {
+    fontSize: 12,
+    color: COLORS.textLight,
+    lineHeight: 17,
+    marginTop: -4,
+    marginBottom: 14,
+  },
+  applianceName: {
+    flexShrink: 1,
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.text,
+  },
+  applianceShare: {
+    flexShrink: 0,
+    fontSize: 12,
+    color: COLORS.textLight,
+  },
+  applianceTotalLabel: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.text,
+  },
+  applianceTotalValue: {
+    flexShrink: 0,
+    fontSize: 15,
+    fontWeight: '700',
+    color: COLORS.primary,
   },
   totalsValue: {
     flexShrink: 0,

@@ -327,20 +327,44 @@ the code over that doc for data flow). Current top-level structure under `users/
 - **Two surfaces may not answer "where did the energy go?" by different rules.**
   The emailed statement credits energy to the name the outlet carried **on the
   day it was measured** (`history_daily/{date}.applianceBreakdown[]`). Compare
-  Usage sums `outlet1Energy` / `outlet2Energy` for the month and labels them
-  with each outlet's name on the **last recorded day** - it never reads the
+  Usage summed `outlet1Energy` / `outlet2Energy` for the month and labelled
+  them with each outlet's name on the **last recorded day** - it never read the
   breakdown at all. So August 2026 came out as six appliances on the PDF and
   two in the app, off the same 7.24 kWh. Renaming an appliance splits one
-  appliance in two on the statement and silently rewrites the whole month in
+  appliance in two on the statement and silently rewrote the whole month in
   the app.
 
   Both rules are defensible; disagreeing without saying which is in force is
   not. **The per-day rule is the correct one** - it is the only attribution
-  that survives a rename - and each surface now prints a line naming its own
-  rule. The totals were never in danger (`outlet1 + outlet2 === total` is an
+  that survives a rename. Compare Usage now shows both blocks: outlet totals
+  ("which socket", most-recent name) and a *Where it went* list built with the
+  same per-day rule and the same fold as the PDF, each captioned with the rule
+  it uses. `src/utils/applianceBreakdown.js` is the one client-side roller -
+  Analytics reads it too - and mirrors `invoice.js` + `invoicePdf.js` on the
+  backend. The totals were never in danger (`outlet1 + outlet2 === total` is an
   identity, and cost comes off the PZEM counter), which is the constraint above
   holding exactly as designed. Do not "fix" this by making the statement use
   current names: that rewrites history on every rename.
+
+- **An estimate and a finalized bill are two numbers for one month, and only
+  one of them is in the user's inbox.** Until `finalizeInvoice` runs, a month
+  is priced with whatever supply rates sit in Settings - PELCO III does not
+  publish the official generation rate until the period closes. Finalizing
+  recomputes and emails that figure. Compare Usage kept showing the first:
+  August 2026 read **P79.39** beside a statement stamped FINAL for **P85.09**,
+  same 7.24 kWh, with nothing on either surface naming which rate set produced
+  it. The billed figure wins, and the row now carries a `Final` pill.
+
+  **The month-on-month comparison must not use it.** `applyFinalizedCost`
+  overwrites `cost` and deliberately leaves `estimatedCost` alone, because
+  `compareMonths` runs on `estimatedCost`: a finalized August against an
+  unfinalized July would otherwise measure one month's official rates against
+  another month's configured ones and report the difference as a change in
+  consumption. Same rule for both months, or it is not a comparison.
+
+  A failed read is not an unfinalized month. `getInvoice` is a `getDoc`, so it
+  **rejects** offline rather than resolving empty - the estimate stands and
+  nothing claims a basis it did not read.
 
 - **A block that itemises a total must add up to it.** `drawApplianceBlock` in
   `invoicePdf.js` was a bare `slice(0, 6)` with no residual row and no total

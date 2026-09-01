@@ -1,4 +1,4 @@
-import { collection, getDocs, orderBy, query, limit } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, orderBy, query, limit } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from './config';
 import { isUnconfirmedEmpty, UNREACHABLE_READ_RESULT } from '../../utils/connectivity';
@@ -60,6 +60,38 @@ export const invoiceService = {
       return { success: true, data: invoices };
     } catch (error) {
       console.error('Error getting invoices:', error);
+      return { success: false, error: error.message, code: error.code };
+    }
+  },
+
+  /**
+   * One month's statement, or null when that month has none.
+   *
+   * Read by Compare Usage so a finalized month shows the figure it was actually
+   * billed at rather than the estimate the screen would otherwise compute for
+   * itself. A month with no invoice yet is a legitimate answer, not a failure -
+   * `processMonthlyInvoice` only writes one once the period closes.
+   *
+   * Unlike the query above, a `getDoc` REJECTS when the phone is offline
+   * instead of resolving empty from the cache, so there is no isUnconfirmedEmpty
+   * check here - an unreachable read arrives as an error and is reported as one.
+   * The caller must not read that as "not finalized": the estimate stands, and
+   * nothing on screen claims which basis it came from.
+   */
+  getInvoice: async (userId, billingMonth) => {
+    try {
+      if (!userId) {
+        return { success: false, error: 'User not authenticated' };
+      }
+
+      const snapshot = await getDoc(doc(db, 'users', userId, 'invoices', billingMonth));
+      if (!snapshot.exists()) {
+        return { success: true, data: null };
+      }
+
+      return { success: true, data: { ...snapshot.data(), billingMonth: snapshot.id } };
+    } catch (error) {
+      console.error('Error getting invoice:', error);
       return { success: false, error: error.message, code: error.code };
     }
   },

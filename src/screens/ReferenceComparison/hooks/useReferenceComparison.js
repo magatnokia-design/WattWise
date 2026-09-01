@@ -1,6 +1,11 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
-import { comparisonService, historyService, userService } from '../../../services/firebase';
+import {
+  comparisonService,
+  historyService,
+  invoiceService,
+  userService,
+} from '../../../services/firebase';
 import { auth } from '../../../services/firebase/config';
 import { useLoadOutcome } from '../../../hooks/useLoadTracker';
 import { isConnectivityError } from '../../../utils/connectivity';
@@ -10,6 +15,7 @@ import {
   emptyMonthTotals,
   previousMonthKey,
   summarizeDailyEntries,
+  applyFinalizedCost,
   compareMonths,
   compareToActualBill,
 } from '../utils/comparisonHelpers';
@@ -108,13 +114,22 @@ const useReferenceComparison = () => {
         }
         : {};
 
-      const [nextA, nextB, billResult] = await Promise.all([
+      const [nextA, nextB, billResult, invoiceResult] = await Promise.all([
         loadMonthTotals(userId, monthA, rates),
         loadMonthTotals(userId, monthB, rates),
         comparisonService.getMonthData(userId, monthA),
+        // Only the selected month. The preceding one is here to be compared
+        // against, and that comparison runs on estimatedCost, which no invoice
+        // ever touches.
+        invoiceService.getInvoice(userId, monthA),
       ]);
 
-      setTotalsA(nextA.totals);
+      // A failed read leaves the estimate in place rather than asserting the
+      // month was never finalized - see applyFinalizedCost.
+      setTotalsA(applyFinalizedCost(
+        nextA.totals,
+        invoiceResult.success ? invoiceResult.data : null
+      ));
       setTotalsB(nextB.totals);
 
       // The accuracy check re-prices the bill's own kWh, so it needs the same
