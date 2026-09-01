@@ -194,6 +194,12 @@ const buildInvoice = ({
     isLifeline: !!isLifeline,
 
     daysElapsed,
+    // How many days actually contributed energy, which is not the length of
+    // the billing period. processDailyRollup writes no document for a day the
+    // Hub never reported, so a 31-day August can be built from 22 rows - and a
+    // statement that prints only "Billing days 31" invites the reader to
+    // divide the total by 31 and get a daily average that was never measured.
+    daysMeasured: entries.length,
     totalKwh: Number(totalKwh.toFixed(3)),
     outlet1Kwh: Number(outlet1Kwh.toFixed(3)),
     outlet2Kwh: Number(outlet2Kwh.toFixed(3)),

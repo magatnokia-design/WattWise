@@ -453,19 +453,32 @@ export const DashboardScreen = ({ navigation }) => {
           </View>
         ))}
 
+        {/* Three figures that are each an assertion about the account, sitting
+            directly above a card that admits it could not reach the outlets.
+            With no read behind them they all collapse to zero, and "0.00 kWh /
+            ₱0.00 / 0/2 Active" is exactly what a real, idle, fully-read account
+            looks like - the reader has no way to tell the two apart. History's
+            summary tiles solved this by printing an em-dash, and that is the
+            pattern here: no number at all beats a number that means nothing. */}
         <View style={styles.snapshotStrip}>
           <View style={styles.snapshotItem}>
-            <Text style={styles.snapshotValue}>{formatEnergyKwh(totalEnergyKwh)}</Text>
+            <Text style={styles.snapshotValue}>
+              {outletsUnreachable ? '—' : formatEnergyKwh(totalEnergyKwh)}
+            </Text>
             <Text style={styles.snapshotLabel}>Total energy</Text>
           </View>
           <View style={styles.snapshotDivider} />
           <View style={styles.snapshotItem}>
-            <Text style={styles.snapshotValue}>₱{formatPeso(estimatedCost)}</Text>
+            <Text style={styles.snapshotValue}>
+              {outletsUnreachable ? '—' : `₱${formatPeso(estimatedCost)}`}
+            </Text>
             <Text style={styles.snapshotLabel}>Est. cost</Text>
           </View>
           <View style={styles.snapshotDivider} />
           <View style={styles.snapshotItem}>
-            <Text style={styles.snapshotValue}>{activeOutletsCount}/2</Text>
+            <Text style={styles.snapshotValue}>
+              {outletsUnreachable ? '—' : `${activeOutletsCount}/2`}
+            </Text>
             <Text style={styles.snapshotLabel}>Active</Text>
           </View>
         </View>

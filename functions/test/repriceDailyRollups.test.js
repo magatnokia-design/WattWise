@@ -51,6 +51,12 @@ test('a whole row is repriced without its energy moving', () => {
   const { repriceDailyRow } = require('../src/lib/repriceDaily');
 
   // Shaped like the 11 Aug row: 0.14 kWh across both outlets, priced at P6.97.
+  // The breakdown entries carry the field names `processDailyRollup` actually
+  // writes - `applianceName` / `energyKwh` / `outlets` (see
+  // upsertApplianceBreakdown). An earlier version of this fixture used
+  // `name` / `energy` / `outlet`, a shape nothing in the codebase produces,
+  // which is what let the repricer read `entry.energy`, get `undefined` for
+  // every real row, and write P0.00 costs unnoticed.
   const row = {
     date: '2026-08-11',
     totalEnergy: 0.14,
@@ -59,8 +65,8 @@ test('a whole row is repriced without its energy moving', () => {
     cost: 6.97,
     bill: { includePeriodFlats: true },
     applianceBreakdown: [
-      { name: "Nokia's Fan", energy: 0.1, cost: 4.98, outlet: 1 },
-      { name: 'Nokia Charger', energy: 0.04, cost: 1.99, outlet: 2 },
+      { applianceName: "Nokia's Fan", energyKwh: 0.1, cost: 4.98, outlets: [1] },
+      { applianceName: 'Nokia Charger', energyKwh: 0.04, cost: 1.99, outlets: [2] },
     ],
   };
 
@@ -90,9 +96,23 @@ test('a whole row is repriced without its energy moving', () => {
 
   // Breakdown entries keep their names and energy, and are recosted.
   assert.equal(update.applianceBreakdown.length, 2);
-  assert.equal(update.applianceBreakdown[0].name, "Nokia's Fan");
-  assert.equal(update.applianceBreakdown[0].energy, 0.1);
+  assert.equal(update.applianceBreakdown[0].applianceName, "Nokia's Fan");
+  assert.equal(update.applianceBreakdown[0].energyKwh, 0.1);
   assert.ok(update.applianceBreakdown[0].cost < 4.98);
+
+  // Recosted, not zeroed. `< 4.98` alone passed while the repricer was reading
+  // a field that did not exist and writing P0.00 into every row, so the shares
+  // are asserted directly: each appliance keeps its proportion of the day.
+  assert.ok(update.applianceBreakdown[0].cost > 0, 'the fan still costs something');
+  assert.ok(update.applianceBreakdown[1].cost > 0, 'so does the charger');
+  assert.equal(
+    update.applianceBreakdown[0].cost,
+    Number((update.cost * (0.1 / 0.14)).toFixed(2))
+  );
+  assert.equal(
+    update.applianceBreakdown[1].cost,
+    Number((update.cost * (0.04 / 0.14)).toFixed(2))
+  );
 });
 
 test('a row already priced without the flats is left untouched', () => {

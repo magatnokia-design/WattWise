@@ -830,11 +830,23 @@ export const AnalyticsScreen = ({ navigation }) => {
               <Text style={styles.summaryBadgeText}>{selectedTab}</Text>
             </View>
           </View>
-          <Text style={styles.summaryValue}>{summary.totalEnergy.toFixed(2)} kWh</Text>
-          <Text style={styles.summarySubValue}>
-            {formatCurrency(summary.totalCost)} estimated cost
+          {/* The banner above already says the totals could not be loaded, and
+              this card printed "0.00 kWh / ₱0.00 estimated cost" underneath it
+              in the same breath. Two claims on one screen, one of them false.
+              The banner was the right choice for the charts - "No signal" (the
+              Hub stopped reporting) and "no connection" (the phone cannot reach
+              Firestore) are different facts and conflating them would blame the
+              hardware for a wi-fi problem - but a headline total is not a
+              chart. It is the number a reader takes away. */}
+          <Text style={styles.summaryValue}>
+            {load.showOfflineState ? '—' : `${summary.totalEnergy.toFixed(2)} kWh`}
           </Text>
-          {summary.emptyDayNote ? (
+          <Text style={styles.summarySubValue}>
+            {load.showOfflineState
+              ? 'Not loaded — needs a connection'
+              : `${formatCurrency(summary.totalCost)} estimated cost`}
+          </Text>
+          {summary.emptyDayNote && !load.showOfflineState ? (
             <Text style={styles.summaryNote}>{summary.emptyDayNote}</Text>
           ) : null}
         </View>
@@ -860,8 +872,12 @@ export const AnalyticsScreen = ({ navigation }) => {
           <View style={styles.chartHeader}>
             <Text style={styles.chartTitle}>Energy Consumption</Text>
             <View style={styles.peakBadge}>
+              {/* Same unread condition as the total above: a peak of 0.00 kWh
+                  is a measurement nobody took. */}
               <Text style={styles.peakBadgeText}>
-                Peak: {summary.peakUsage.toFixed(2)} kWh
+                {load.showOfflineState
+                  ? 'Peak: —'
+                  : `Peak: ${summary.peakUsage.toFixed(2)} kWh`}
               </Text>
             </View>
           </View>

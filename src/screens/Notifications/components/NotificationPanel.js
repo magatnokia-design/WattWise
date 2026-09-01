@@ -20,6 +20,7 @@ const NotificationPanel = ({ visible, onClose }) => {
   const {
     notifications,
     unreadCount,
+    unreadKnown,
     markAsRead,
     markAllAsRead,
     clearAll,
@@ -66,10 +67,15 @@ const NotificationPanel = ({ visible, onClose }) => {
     )
   ), [showOfflineState]);
 
+  // "All read" is the same claim as "You're all caught up!" in miniature, and
+  // an unread count that never arrived cannot support it. With nothing read,
+  // the header says how much it knows, which is nothing.
   const renderHeader = useMemo(() => (
     <View style={styles.listHeader}>
       <Text style={styles.listHeaderText}>
-        {unreadCount > 0 ? `${unreadCount} unread` : 'All read'}
+        {unreadKnown
+          ? (unreadCount > 0 ? `${unreadCount} unread` : 'All read')
+          : 'Not loaded'}
       </Text>
       {notifications.length > 0 && (
         <TouchableOpacity onPress={handleClearAll} activeOpacity={0.7}>
@@ -77,7 +83,7 @@ const NotificationPanel = ({ visible, onClose }) => {
         </TouchableOpacity>
       )}
     </View>
-  ), [unreadCount, notifications.length, handleClearAll]);
+  ), [unreadCount, unreadKnown, notifications.length, handleClearAll]);
 
   return (
     <Modal

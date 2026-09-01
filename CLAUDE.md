@@ -305,6 +305,53 @@ the code over that doc for data flow). Current top-level structure under `users/
   drew 200-250 V, 10 A and 2000 W as the user's own limits, four times what the
   firmware enforces, because nothing tracked whether a read had landed.
 
+- **Wiring the screen is half of it. A listener that drops `snapshot.metadata`
+  makes the flag unreachable no matter what the screen does.** Notifications
+  shipped in 1.1.13 looking fixed and was not: `NotificationPanel` branched on
+  `showOfflineState` correctly, but `subscribeToNotifications` passed only the
+  array to its callback, and `useNotifications` called neither `load.succeeded()`
+  nor `load.failed()` on that path. Offline it drew "No Notifications - You're
+  all caught up!" over an account holding four unread alerts, which is the
+  worst screen in the app to be wrong on: budget and safety alerts land there,
+  so a missed alert renders as no alert.
+
+  Two traps made it look done. `getNotifications` (the `getDocs` path) *was*
+  guarded with `isUnconfirmedEmpty` - but nothing calls it, so the guard was
+  dead code. And the error callback looks like the place to report failure,
+  yet it never fires: a cache-served snapshot arrives through the **success**
+  path. **The checklist for a listener is three items, not one:** the service
+  forwards `snapshot.metadata`, the hook tests `isUnconfirmedEmpty` behind an
+  `UNCONFIRMED_GRACE_MS` timer, and the screen renders the flag.
+  `scheduleService` + `useSchedule` are the reference pair.
+
+- **Two surfaces may not answer "where did the energy go?" by different rules.**
+  The emailed statement credits energy to the name the outlet carried **on the
+  day it was measured** (`history_daily/{date}.applianceBreakdown[]`). Compare
+  Usage sums `outlet1Energy` / `outlet2Energy` for the month and labels them
+  with each outlet's name on the **last recorded day** - it never reads the
+  breakdown at all. So August 2026 came out as six appliances on the PDF and
+  two in the app, off the same 7.24 kWh. Renaming an appliance splits one
+  appliance in two on the statement and silently rewrites the whole month in
+  the app.
+
+  Both rules are defensible; disagreeing without saying which is in force is
+  not. **The per-day rule is the correct one** - it is the only attribution
+  that survives a rename - and each surface now prints a line naming its own
+  rule. The totals were never in danger (`outlet1 + outlet2 === total` is an
+  identity, and cost comes off the PZEM counter), which is the constraint above
+  holding exactly as designed. Do not "fix" this by making the statement use
+  current names: that rewrites history on every rename.
+
+- **A block that itemises a total must add up to it.** `drawApplianceBlock` in
+  `invoicePdf.js` was a bare `slice(0, 6)` with no residual row and no total
+  bar, while its percentage column divided by the full `totalKwh`. The August
+  2026 statement went to a real inbox showing six rows summing to 6.72 of
+  7.24 kWh and percentages summing to 92%. Fold the tail into an "Other" row
+  summed **from the tail itself**, never as `total - shown`, so the block can
+  only restate figures that exist - and keep the total bar, which is what makes
+  a genuine shortfall visible instead of silent. `foldApplianceRows` is
+  exported and tested for exactly this.
+
 - **`Alert.alert` is gone from `src/` and does not come back.** It rendered a dark
   grey slab with cyan text on the test handset - a palette this app contains
   nowhere else - and it cannot carry an icon or mark a destructive action as

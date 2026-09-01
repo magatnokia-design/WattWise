@@ -55,7 +55,14 @@ const repriceDailyRow = (row = {}, { userData = {} } = {}) => {
 
   const applianceBreakdown = Array.isArray(row.applianceBreakdown)
     ? row.applianceBreakdown.map((entry) => {
-      const energy = Math.max(0, Number(entry?.energy) || 0);
+      // `processDailyRollup` writes this field as `energyKwh` (see
+      // upsertApplianceBreakdown), never `energy`. Reading the wrong key gave
+      // `undefined` for every row, which fell through to 0 and repriced every
+      // appliance on the day to P0.00 while leaving its kWh intact - so the
+      // Analytics per-appliance cost column under-reported against a PDF that
+      // prices the same energy correctly. The `?? entry.energy` fallback costs
+      // nothing and covers any row written before that name settled.
+      const energy = Math.max(0, Number(entry?.energyKwh ?? entry?.energy) || 0);
       return {
         ...entry,
         cost: totalEnergy > 0 ? Number((cost * (energy / totalEnergy)).toFixed(2)) : 0,

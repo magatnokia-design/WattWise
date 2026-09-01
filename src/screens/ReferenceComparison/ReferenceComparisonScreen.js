@@ -221,14 +221,31 @@ const ReferenceComparisonScreen = ({ navigation }) => {
                    totals. Rendering a delta against an unmeasured month would
                    print a 100% rise off a zero that was never measured. */
                 <View style={styles.totalsCard}>
+                  {/* The slot is carried here for the same reason the sibling
+                      branch above carries it, and for one more. These two rows
+                      are outlet totals for the whole month, labelled with the
+                      appliance name each outlet held on the LAST recorded day -
+                      not a per-appliance breakdown. Printed as a bare name they
+                      read as one, and the emailed statement itemises the same
+                      month by the name recorded on each day, so the two
+                      disagree wherever anything was renamed. Naming the outlet
+                      is what makes these figures true as written. */}
                   {[
-                    { label: 'Energy used', value: formatKwh(totals.kWh) },
-                    { label: 'Cost', value: formatPeso(totals.cost) },
-                    { label: totals.outlet1Name, value: formatKwh(totals.outlet1) },
-                    { label: totals.outlet2Name, value: formatKwh(totals.outlet2) },
+                    { key: 'energy', label: 'Energy used', value: formatKwh(totals.kWh) },
+                    { key: 'cost', label: 'Cost', value: formatPeso(totals.cost) },
+                    {
+                      key: 'outlet1',
+                      label: `Outlet 1 · ${totals.outlet1Name}`,
+                      value: formatKwh(totals.outlet1),
+                    },
+                    {
+                      key: 'outlet2',
+                      label: `Outlet 2 · ${totals.outlet2Name}`,
+                      value: formatKwh(totals.outlet2),
+                    },
                   ].map((row, index) => (
                     <View
-                      key={row.label}
+                      key={row.key}
                       style={[styles.totalsRow, index > 0 && styles.totalsRowDivided]}
                     >
                       <Text style={styles.totalsLabel}>{row.label}</Text>
@@ -237,7 +254,9 @@ const ReferenceComparisonScreen = ({ navigation }) => {
                   ))}
                   <Text style={styles.totalsFooter}>
                     {totals.daysRecorded} {totals.daysRecorded === 1 ? 'day' : 'days'} recorded,
-                    from outlet 1 and outlet 2 only.
+                    from outlet 1 and outlet 2 only. Each outlet is named for the
+                    appliance it held most recently; your emailed statement credits
+                    energy to the name the outlet carried on each day.
                   </Text>
                 </View>
               )}

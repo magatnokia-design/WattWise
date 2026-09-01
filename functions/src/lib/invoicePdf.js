@@ -98,7 +98,19 @@ const drawAccountBlock = (doc, { invoice, account, top }) => {
     leftX,
     top + 48
   );
-  field('Billing days', String(invoice.billingDays), rightX, top + 48);
+  // Both numbers, because they differ whenever the Hub was off or unplugged
+  // for part of the month and only one of them describes the energy above.
+  // Older invoice documents predate `daysMeasured`, so fall back rather than
+  // printing "undefined of 31".
+  const measured = Number.isFinite(invoice.daysMeasured) ? invoice.daysMeasured : null;
+  field(
+    measured === null ? 'Billing days' : 'Days measured',
+    measured === null
+      ? String(invoice.billingDays)
+      : `${measured} of ${invoice.billingDays}`,
+    rightX,
+    top + 48
+  );
 
   return top + 84;
 };
@@ -178,13 +190,59 @@ const drawBlock = (doc, { title, items, total, top, accent = false }) => {
   return y + 20;
 };
 
+/** How many appliances get a row of their own before the rest are folded. */
+const APPLIANCE_ROW_LIMIT = 6;
+
+/**
+ * Fold an appliance breakdown into at most seven printable rows.
+ *
+ * Six named rows at most, but never at the cost of the column adding up.
+ * `applianceBreakdown` is exhaustive by construction - processDailyRollup
+ * writes both outlets' whole energy under some name every day - so anything
+ * sliced off is real energy the reader can see missing. The August 2026
+ * statement showed six rows totalling 6.72 of 7.24 kWh with the percentage
+ * column summing to 92%, because a bare `slice(0, 6)` dropped the seventh
+ * while the shares went on dividing by the full `totalKwh`.
+ *
+ * The remainder is summed from the tail itself rather than derived as
+ * `totalKwh` minus the shown rows, so this can only ever restate figures that
+ * exist. A legacy day carrying no `applianceBreakdown` at all would leave a
+ * genuine shortfall, and the total bar the caller draws is what makes that
+ * visible instead of silent.
+ *
+ * @param {Array<{applianceName: string, energyKwh: number, cost: number}>} breakdown
+ * @returns {Array} rows to print, in the order given.
+ */
+const foldApplianceRows = (breakdown) => {
+  const all = Array.isArray(breakdown) ? breakdown : [];
+  const named = all.slice(0, APPLIANCE_ROW_LIMIT);
+  const tail = all.slice(APPLIANCE_ROW_LIMIT);
+
+  const tailKwh = tail.reduce((sum, item) => sum + (Number(item?.energyKwh) || 0), 0);
+  const tailCost = tail.reduce((sum, item) => sum + (Number(item?.cost) || 0), 0);
+
+  // Below a hundredth of a kWh the row would print as "0.00 kWh" and add a
+  // line that explains nothing.
+  if (tailKwh <= 0.004) return named;
+
+  return [...named, {
+    applianceName: tail.length === 1
+      ? tail[0].applianceName
+      : `Other (${tail.length} appliances)`,
+    energyKwh: tailKwh,
+    cost: tailCost,
+  }];
+};
+
 const drawApplianceBlock = (doc, { invoice, top }) => {
   if (!invoice.applianceBreakdown?.length) return top;
 
-  const rows = invoice.applianceBreakdown.slice(0, 6);
-  // Title, rule, and one 24pt row per appliance. If that would run into the
-  // footer, start a fresh page rather than letting pdfkit paginate mid-bar.
-  const requiredHeight = 30 + (rows.length * 24);
+  const rows = foldApplianceRows(invoice.applianceBreakdown);
+
+  // Title, rule, one 24pt row per appliance, and the total bar underneath. If
+  // that would run into the footer, start a fresh page rather than letting
+  // pdfkit paginate mid-bar.
+  const requiredHeight = 42 + (rows.length * 24) + 22;
   let start = top;
 
   if (top + requiredHeight > FOOTER_Y - 12) {
@@ -194,7 +252,22 @@ const drawApplianceBlock = (doc, { invoice, top }) => {
 
   let y = start + 18;
   doc.font('Helvetica-Bold').fontSize(9).fillColor(COLORS.green).text('WHERE IT WENT', MARGIN, y);
-  y += 14;
+  y += 12;
+  // Which of the two possible attributions this block is making. The app's
+  // Compare Usage screen shows the same month as two outlet totals under each
+  // outlet's most recent name; this credits energy to the name the outlet
+  // carried on the day it was measured, so a rename splits one appliance into
+  // two rows here and rewrites the whole month there. Both are defensible and
+  // they disagree, so each has to say which it is.
+  doc.font('Helvetica').fontSize(7).fillColor(COLORS.muted)
+    .text(
+      'Energy is credited to the name the outlet carried on the day it was measured, '
+      + 'so an appliance renamed mid-month appears under both names.',
+      MARGIN,
+      y,
+      { width: CONTENT_WIDTH }
+    );
+  y += 10;
   doc.moveTo(MARGIN, y).lineTo(MARGIN + CONTENT_WIDTH, y).lineWidth(1).stroke(COLORS.hairline);
   y += 8;
 
@@ -226,7 +299,22 @@ const drawApplianceBlock = (doc, { invoice, top }) => {
     y += 24;
   });
 
-  return y;
+  // The reconciling bar. Every other block on the statement totals its own
+  // lines; this one asserted a decomposition and never showed it adding up,
+  // which is the one piece of arithmetic a reader checks by hand.
+  const shownKwh = rows.reduce((sum, item) => sum + (Number(item.energyKwh) || 0), 0);
+  const shownCost = rows.reduce((sum, item) => sum + (Number(item.cost) || 0), 0);
+
+  y += 2;
+  doc.roundedRect(MARGIN, y, CONTENT_WIDTH, 20, 4).fill('#F9FAFB');
+  doc.font('Helvetica-Bold').fontSize(8.5).fillColor(COLORS.green)
+    .text('Total measured', MARGIN + 8, y + 6);
+  doc.font('Helvetica').fontSize(8).fillColor(COLORS.muted)
+    .text(`${shownKwh.toFixed(2)} kWh`, MARGIN + 200, y + 6, { width: 110, align: 'left' });
+  doc.font('Helvetica-Bold').fontSize(8.5).fillColor(COLORS.green)
+    .text(peso(shownCost), MARGIN + CONTENT_WIDTH - 118, y + 6, { width: 110, align: 'right' });
+
+  return y + 20;
 };
 
 // Anything drawn below this collides with the footer. Kept well clear of the
@@ -315,4 +403,4 @@ const renderInvoicePdf = ({ invoice, account }) => new Promise((resolve, reject)
   }
 });
 
-module.exports = { renderInvoicePdf, formatMonthName };
+module.exports = { renderInvoicePdf, formatMonthName, foldApplianceRows };
