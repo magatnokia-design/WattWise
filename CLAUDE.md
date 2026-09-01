@@ -400,6 +400,34 @@ the code over that doc for data flow). Current top-level structure under `users/
   a genuine shortfall visible instead of silent. `foldApplianceRows` is
   exported and tested for exactly this.
 
+- **Zero watts is two different physical states, and the meter can tell them
+  apart.** The PZEM sits on the **load side** of the relay, so a switched-off
+  outlet reads 0 V. That makes voltage the signal that says whether a contact
+  actually opened:
+
+  | | voltage | power |
+  |---|---|---|
+  | relay opened | **0 V** | 0 W |
+  | relay stuck, load unplugged | **245 V** | 0 W |
+
+  `relayFault.js` cleared a confirmed `stuck_closed` on `watts <= 1` alone, and
+  its comment defended that as a feature - "a user who unplugged the load will
+  see the fault clear". It is not a feature. **Unplugging the appliance proves
+  nothing about the contact.** A real account was told "Outlet 2 responded to a
+  switch-off and is now drawing no power" twice by a relay that had never
+  released; the user had only pulled the laptop charger out, and the outlet was
+  live the whole time. Retracting a safety warning that is still true is worse
+  than never raising it.
+
+  Clearing now requires the load side to be **dead** (`CLEAR_VOLTAGE_FLOOR_V`),
+  not merely idle. A build reporting no voltage falls back to power alone -
+  latching a fault that can never clear would be worse than the bug.
+
+  The same trap sits behind "it works when nothing is plugged in": with no load
+  an outlet reads 0 W whether the contact opened or welded shut, so that test
+  is a **null result**, not a pass. Diagnose a relay with voltage, or with a
+  load on it.
+
 - **`Alert.alert` is gone from `src/` and does not come back.** It rendered a dark
   grey slab with cyan text on the test handset - a palette this app contains
   nowhere else - and it cannot carry an icon or mark a destructive action as

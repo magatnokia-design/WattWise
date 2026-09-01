@@ -42,6 +42,22 @@ const STUCK_POWER_FLOOR_W = 3;
 // hovering around the floor latch and unlatch on consecutive samples.
 const CLEAR_POWER_FLOOR_W = 1;
 
+// The load side has to be DEAD before a confirmed fault is cleared, not merely
+// idle. The PZEM sits on the load side of the relay, so the two states that
+// both read 0 W are physically different and the meter can tell them apart:
+//
+//   relay actually opened        ->   0 V, 0 W
+//   relay stuck + load unplugged -> 245 V, 0 W
+//
+// Clearing on power alone treated the second as recovery. A real account saw
+// "Outlet is switching again - Outlet 2 responded to a switch-off and is now
+// drawing no power" twice, from a relay that had never released; the user had
+// only unplugged the charger. Unplugging the load proves nothing about the
+// contact, and saying otherwise retracts a safety warning that is still true.
+//
+// Well above any capacitive ghost reading on an open contact, far below mains.
+const CLEAR_VOLTAGE_FLOOR_V = 40;
+
 const OK = 'ok';
 const SUSPECTED = 'suspected';
 const STUCK = 'stuck_closed';
@@ -63,6 +79,10 @@ const clearedState = () => ({
  * @param {object} args.previous  Stored outlet document (may be empty).
  * @param {string} args.status    Status after resolveOutletStatus has run.
  * @param {number} args.powerW    Real power from this telemetry sample.
+ * @param {number} [args.voltageV] Load-side voltage from the same sample. Used
+ *   only to clear a fault: current proves a contact is closed, but only the
+ *   absence of voltage proves it opened. Omitted or unreadable, clearing falls
+ *   back to power alone rather than latching a fault that can never clear.
  * @param {boolean} args.pendingHonoured  True while the device has not polled
  *   the latest command yet - during that window the relay is legitimately still
  *   in its old position and the current flowing through it is expected.
@@ -74,6 +94,7 @@ const evaluateRelayFault = ({
   previous = {},
   status,
   powerW,
+  voltageV,
   pendingHonoured = false,
   nowMs = Date.now(),
 } = {}) => {
@@ -102,11 +123,20 @@ const evaluateRelayFault = ({
     });
   }
 
-  // The relay opened. This is the only path that clears a confirmed fault, and
-  // it is the right one: a welded contact that later releases has genuinely
-  // stopped being stuck, and a user who unplugged the load will see the fault
-  // clear rather than having to hunt for a reset button.
-  if (watts <= CLEAR_POWER_FLOOR_W) return settled(clearedState());
+  // The relay opened. The only path that clears a confirmed fault, and it now
+  // asks the question that actually settles it: is the load side dead?
+  //
+  // No current used to be enough. It is not - see CLEAR_VOLTAGE_FLOOR_V. An
+  // outlet reading 0 W at 245 V, commanded off, is a contact that is still
+  // closed with nothing plugged into it, and reporting that as recovery is how
+  // a live outlet came to be marked safe.
+  //
+  // A build that does not report voltage falls back to power alone. Latching a
+  // fault that can never clear would be worse than the bug being fixed.
+  const volts = toFiniteNumber(voltageV, NaN);
+  const loadSideDead = Number.isFinite(volts) ? volts <= CLEAR_VOLTAGE_FLOOR_V : true;
+
+  if (watts <= CLEAR_POWER_FLOOR_W && loadSideDead) return settled(clearedState());
 
   if (watts <= STUCK_POWER_FLOOR_W) {
     // Between the two floors: not enough to call it a load, not little enough
@@ -144,5 +174,6 @@ module.exports = {
   STUCK_CONFIRM_MS,
   STUCK_POWER_FLOOR_W,
   CLEAR_POWER_FLOOR_W,
+  CLEAR_VOLTAGE_FLOOR_V,
   RELAY_FAULT_STATES: { OK, SUSPECTED, STUCK },
 };

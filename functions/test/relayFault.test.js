@@ -5,6 +5,7 @@ const {
   evaluateRelayFault,
   STUCK_CONFIRM_MS,
   RELAY_FAULT_STATES,
+  CLEAR_VOLTAGE_FLOOR_V,
 } = require('../src/lib/relayFault');
 
 const T0 = 1700000000000;
@@ -146,12 +147,108 @@ test('a confirmed fault clears when the relay finally opens', () => {
     previous: previousWith(confirmed),
     status: 'off',
     powerW: 0,
+    // The load side is dead, which is what "the relay opened" actually means.
+    voltageV: 0,
     nowMs: T0 + 120000,
   });
 
   assert.equal(cleared.state, RELAY_FAULT_STATES.OK);
   assert.equal(cleared.justCleared, true);
   assert.equal(cleared.firstSeenAtMs, 0);
+});
+
+/*
+ * Unplugging the appliance is not the relay recovering.
+ *
+ * The PZEM sits on the load side of the contact, so 0 W at mains voltage and
+ * 0 W at 0 V are different physical states and the meter can tell them apart.
+ * Clearing on power alone conflated them: a real account was told "Outlet 2
+ * responded to a switch-off and is now drawing no power" twice, by a relay that
+ * had never released - the user had only pulled the laptop charger out.
+ */
+
+const CONFIRMED_STUCK = {
+  state: RELAY_FAULT_STATES.STUCK,
+  firstSeenAtMs: T0,
+  observedW: 15.4,
+  confirmedAtMs: T0 + STUCK_CONFIRM_MS,
+};
+
+test('unplugging the load does not clear a stuck relay', () => {
+  const result = evaluateRelayFault({
+    previous: previousWith(CONFIRMED_STUCK),
+    status: 'off',
+    powerW: 0,
+    // Still energised: the contact is closed with nothing plugged into it.
+    voltageV: 245.1,
+    nowMs: T0 + 120000,
+  });
+
+  assert.equal(result.state, RELAY_FAULT_STATES.STUCK, 'the outlet is still live');
+  assert.equal(result.justCleared, false, 'and the user must not be told it recovered');
+});
+
+test('plugging the load back in does not re-trip as though it were news', () => {
+  // The alternation the account actually saw. It must read as one unbroken
+  // fault, not as stuck / recovered / stuck.
+  let previous = previousWith(CONFIRMED_STUCK);
+
+  for (const [watts, volts] of [[0, 245.1], [7.4, 245.1], [0, 244.8], [9.1, 245.3]]) {
+    const result = evaluateRelayFault({
+      previous,
+      status: 'off',
+      powerW: watts,
+      voltageV: volts,
+      nowMs: T0 + 120000,
+    });
+
+    assert.equal(result.state, RELAY_FAULT_STATES.STUCK);
+    assert.equal(result.justCleared, false);
+    assert.equal(result.justTripped, false, 'no second alert for a fault already raised');
+    previous = previousWith(result);
+  }
+});
+
+test('a genuinely opened relay still clears, load or no load', () => {
+  const result = evaluateRelayFault({
+    previous: previousWith(CONFIRMED_STUCK),
+    status: 'off',
+    powerW: 0,
+    voltageV: 0,
+    nowMs: T0 + 120000,
+  });
+
+  assert.equal(result.state, RELAY_FAULT_STATES.OK);
+  assert.equal(result.justCleared, true);
+});
+
+test('a build that reports no voltage falls back to clearing on power alone', () => {
+  // Latching a fault that can never clear would be worse than the bug fixed.
+  for (const voltageV of [undefined, null, NaN, 'n/a']) {
+    const result = evaluateRelayFault({
+      previous: previousWith(CONFIRMED_STUCK),
+      status: 'off',
+      powerW: 0,
+      voltageV,
+      nowMs: T0 + 120000,
+    });
+
+    assert.equal(result.state, RELAY_FAULT_STATES.OK);
+    assert.equal(result.justCleared, true);
+  }
+});
+
+test('a ghost reading on an open contact still counts as dead', () => {
+  // An open contact can couple a few volts capacitively; that is not mains.
+  const result = evaluateRelayFault({
+    previous: previousWith(CONFIRMED_STUCK),
+    status: 'off',
+    powerW: 0,
+    voltageV: CLEAR_VOLTAGE_FLOOR_V - 1,
+    nowMs: T0 + 120000,
+  });
+
+  assert.equal(result.state, RELAY_FAULT_STATES.OK);
 });
 
 test('sensor noise on an open outlet does not trip it', () => {

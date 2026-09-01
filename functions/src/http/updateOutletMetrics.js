@@ -290,6 +290,10 @@ async function updateOutletMetrics(req, res) {
         previous: previousOutletData,
         status: statusResolution.status,
         powerW: power,
+        // Current proves a contact is closed; only the absence of voltage
+        // proves it opened. Without this, unplugging the appliance cleared the
+        // fault and told the user the relay had recovered when it had not.
+        voltageV: voltage,
         pendingHonoured: statusResolution.pendingHonoured,
         nowMs: now,
       });
