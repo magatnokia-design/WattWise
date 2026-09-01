@@ -23,8 +23,13 @@ export const invoiceService = {
   /**
    * The most recent statements, newest first.
    *
-   * Document ids are the billing month (`YYYY-MM`), which sorts correctly as a
-   * string, so ordering by name needs no extra field.
+   * Ordered by the stored `billingMonth` field, not by `__name__`. The document
+   * id is the billing month and sorts identically, but Firestore's automatic
+   * index on document ids is ASCENDING only - a descending `orderBy('__name__')`
+   * demands a composite index that does not exist, and the screen opened to
+   * "The query requires an index" with a console link. A regular field gets an
+   * automatic single-field index in both directions, so this needs none.
+   * `processMonthlyInvoice` orders the same collection the same way.
    */
   getInvoices: async (userId, max = INVOICES_LIMIT) => {
     try {
@@ -34,12 +39,15 @@ export const invoiceService = {
 
       const invoicesRef = collection(db, 'users', userId, 'invoices');
       const snapshot = await getDocs(
-        query(invoicesRef, orderBy('__name__', 'desc'), limit(max))
+        query(invoicesRef, orderBy('billingMonth', 'desc'), limit(max))
       );
 
       const invoices = snapshot.docs.map((docSnapshot) => ({
-        billingMonth: docSnapshot.id,
         ...docSnapshot.data(),
+        // The id is authoritative: it is what `finalizeInvoice` is called with,
+        // and a document whose stored field somehow disagreed would otherwise
+        // finalize the wrong month.
+        billingMonth: docSnapshot.id,
       }));
 
       // A query resolves from the local cache when the phone is offline rather
