@@ -55,6 +55,45 @@ const normalizeSupplyRates = (raw = {}) => {
 };
 
 /**
+ * What a finalized total should be measured against.
+ *
+ * On a first finalize this is the estimate the user was shown, which is simply
+ * the stored total. On a second - correcting a rate that was typed wrong, or
+ * one PELCO III revised - the stored total is the PREVIOUS FINAL, and taking it
+ * would overwrite the only record of what the estimate ever said. Re-finalizing
+ * twice would then report a delta of zero against itself and quietly erase the
+ * comparison the field exists for.
+ *
+ * So an invoice that has already been finalized keeps the baseline it was given
+ * the first time, and `estimateTotalBeforeFinalize` always means the same
+ * thing: what this month cost before any official rate was applied to it.
+ *
+ * @param {object|null} existing The stored invoice, or null if there is none.
+ * @returns {number|null}
+ */
+const resolveEstimateBaseline = (existing) => {
+  if (!existing) return null;
+
+  // `Number(null)` is 0, not NaN, so coercing first would turn a missing figure
+  // into a real one - and a delta measured against a fabricated 0 claims the
+  // bill rose by its entire value. An absent baseline has to stay absent.
+  // A stored 0 is different: a month that measured nothing really did cost
+  // nothing, and that is an answer.
+  const asAmount = (value) => {
+    if (value === null || value === undefined || value === '') return null;
+    const numeric = Number(value);
+    return Number.isFinite(numeric) ? numeric : null;
+  };
+
+  if (existing.status === STATUS.FINALIZED) {
+    const original = asAmount(existing.estimateTotalBeforeFinalize);
+    if (original !== null) return original;
+  }
+
+  return asAmount(existing.totalAmountDue);
+};
+
+/**
  * Locks a billing month to the official PELCO III rates for that month.
  *
  * Until this runs an invoice is an estimate priced with the previous month's
@@ -102,7 +141,7 @@ async function finalizeInvoice(request) {
     ]);
 
     const existing = existingDoc.exists ? existingDoc.data() : null;
-    const estimateTotal = existing?.totalAmountDue ?? null;
+    const estimateTotal = resolveEstimateBaseline(existing);
 
     const finalized = buildInvoice({
       billingMonth,
@@ -155,4 +194,4 @@ async function finalizeInvoice(request) {
   }
 }
 
-module.exports = { finalizeInvoice };
+module.exports = { finalizeInvoice, resolveEstimateBaseline };

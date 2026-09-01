@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -94,6 +94,15 @@ const StatementsModal = ({ visible, userId, onClose }) => {
   const [emailing, setEmailing] = useState(false);
   const [emailNote, setEmailNote] = useState(null);
 
+  // Which statement is on screen right now, readable from inside an awaited
+  // callback. Rendering a PDF takes a moment, and in that moment the user can
+  // go back and open a different month - without this, "Sent." would appear
+  // under the wrong statement.
+  const editingRef = useRef(null);
+  useEffect(() => {
+    editingRef.current = editing;
+  }, [editing]);
+
   const load = useCallback(async () => {
     if (!userId) return;
 
@@ -120,6 +129,7 @@ const StatementsModal = ({ visible, userId, onClose }) => {
     setEditing(null);
     setResult(null);
     setFormError(null);
+    setEmailNote(null);
     setErrors({});
     setShowAdvanced(false);
     load();
@@ -147,12 +157,22 @@ const StatementsModal = ({ visible, userId, onClose }) => {
   const handleResend = useCallback(async () => {
     if (!editing) return;
 
+    const month = editing.billingMonth;
+
     setEmailing(true);
     setEmailNote(null);
 
-    const response = await invoiceService.resendStatement(editing.billingMonth);
+    const response = await invoiceService.resendStatement(month);
 
+    // Always cleared, whichever statement is on screen now - leaving it set
+    // would carry a spinner onto the next month the user opens.
     setEmailing(false);
+
+    // The user may have moved on while the PDF rendered. Reporting an outcome
+    // for a statement they are no longer looking at is worse than reporting
+    // none, so the send stands and the message is dropped.
+    if (editingRef.current?.billingMonth !== month) return;
+
     setEmailNote(
       response.success
         ? { tone: 'good', text: 'Sent. Check your inbox, and your spam folder.' }
@@ -285,10 +305,10 @@ const StatementsModal = ({ visible, userId, onClose }) => {
 
         {invoices.map((invoice) => {
           const status = STATUS_COPY[invoice.status] || STATUS_COPY.DRAFT;
-          // Every row opens, not just the ones that can be finalized: a month
-          // already final still has a statement worth emailing again.
-          const canFinalize = invoice.status === 'PENDING';
 
+          // Every row opens, not just the ones awaiting a rate: a month already
+          // final still has a statement worth emailing, and one that can be
+          // recomputed if the rate was typed wrong.
           return (
             <TouchableOpacity
               key={invoice.billingMonth}
@@ -429,7 +449,13 @@ const StatementsModal = ({ visible, userId, onClose }) => {
   const renderForm = () => {
     if (result) return renderResult();
 
-    const canFinalize = editing.status === 'PENDING';
+    // A finalized month can be finalized again. The rate is typed by hand off a
+    // paper bill, so it can be typed wrong, and PELCO III occasionally revises
+    // a published figure - a locked total nobody can correct is worse than one
+    // that records what it was corrected from. The backend keeps the original
+    // estimate as the baseline however many times this runs.
+    const isFinalized = editing.status === 'FINALIZED';
+    const canFinalize = editing.status === 'PENDING' || isFinalized;
 
     return (
       <>
@@ -451,18 +477,16 @@ const StatementsModal = ({ visible, userId, onClose }) => {
             statement and its email stay available. */}
         {!canFinalize ? (
           <Text style={styles.settledNote}>
-            {editing.status === 'FINALIZED'
-              ? 'This month is locked to its official rate and will not change again.'
-              : 'This period is still running. It can be finalized once the month ends.'}
+            This period is still running. It can be finalized once the month ends.
           </Text>
         ) : null}
 
         {canFinalize ? (
           <>
         <Text style={styles.formIntro}>
-          Enter the generation rate printed on your PELCO III bill for{' '}
-          {formatMonthName(editing.billingMonth)}. The other Block 1 lines keep their
-          current values unless you change them.
+          {isFinalized
+            ? `This month is already locked to an official rate. Entering a different one for ${formatMonthName(editing.billingMonth)} recomputes it and replaces the figure above.`
+            : `Enter the generation rate printed on your PELCO III bill for ${formatMonthName(editing.billingMonth)}. The other Block 1 lines keep their current values unless you change them.`}
         </Text>
 
         {renderField(PRIMARY_FIELD)}
@@ -482,8 +506,9 @@ const StatementsModal = ({ visible, userId, onClose }) => {
         {formError ? <Text style={styles.formError}>{formError}</Text> : null}
 
         <Text style={styles.caution}>
-          Finalizing recomputes this month with the rates above and locks it. Distribution
-          and government charges are ERC-approved and are not editable.
+          {isFinalized
+            ? 'The original estimate is kept as the comparison, however many times this month is recomputed. Distribution and government charges are ERC-approved and are not editable.'
+            : 'Finalizing recomputes this month with the rates above and locks it. Distribution and government charges are ERC-approved and are not editable.'}
         </Text>
 
         <TouchableOpacity
@@ -495,7 +520,9 @@ const StatementsModal = ({ visible, userId, onClose }) => {
           {saving ? (
             <ActivityIndicator color={COLORS.white} />
           ) : (
-            <Text style={styles.primaryButtonText}>Apply official rate</Text>
+            <Text style={styles.primaryButtonText}>
+              {isFinalized ? 'Recompute with this rate' : 'Apply official rate'}
+            </Text>
           )}
         </TouchableOpacity>
           </>
