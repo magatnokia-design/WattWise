@@ -23,10 +23,15 @@ const usePowerSafety = () => {
     current: 0,
     power: 0,
   });
+  // Placeholders only - thresholdsKnown tracks whether a read has landed and
+  // nothing renders these as the user own limits. Kept in step with
+  // powerSafety.js regardless, so a frame drawn before the read cannot flash a
+  // limit the backend does not enforce. 2000 W was four times the ceiling the
+  // firmware actually permits.
   const [thresholds, setThresholds] = useState({
-    voltage: { min: 200, max: 250 },
+    voltage: { min: 190, max: 260 },
     current: { max: 10 },
-    power: { max: 2000 },
+    power: { max: 500 },
   });
   const [protectionEnabled, setProtectionEnabled] = useState(true);
   // Whether the two values above were read from the account or are still this

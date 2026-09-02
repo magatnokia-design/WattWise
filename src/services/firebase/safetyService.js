@@ -5,12 +5,19 @@ import { withWriteTimeout } from '../../utils/connectivity';
 const getSafetyRef = (userId) => doc(db, 'users', userId, 'power_safety', 'settings');
 const MAX_POWER_W = 500;
 
+// 190-260 V, matching DEFAULT_VOLTAGE_MIN/MAX in functions/src/lib/powerSafety.js
+// and the Protection Settings form. All three used to disagree: this service
+// fell back to 200-250 while the backend graded against 190-260, so an account
+// that had never saved a threshold showed a red Critical chip on 252 V mains
+// that the backend considered entirely normal - a limit the enforcement engine
+// had never heard of. Philippine mains runs 240-254 V, so 250 fails most
+// evenings, on every reading, for ever.
 const getDefaultSafetyData = () => ({
   currentStage: 'normal',
   protectionEnabled: true,
   autoProtectionEnabled: true,
   thresholds: {
-    voltage: { min: 200, max: 250 },
+    voltage: { min: 190, max: 260 },
     current: { max: 10 },
     power: { max: MAX_POWER_W },
   },
@@ -39,8 +46,8 @@ const normalizeThresholds = (rawThresholds = {}) => {
   if (rawThresholds?.voltage || rawThresholds?.current || rawThresholds?.power) {
     return {
       voltage: {
-        min: Number(rawThresholds?.voltage?.min ?? 200),
-        max: Number(rawThresholds?.voltage?.max ?? 250),
+        min: Number(rawThresholds?.voltage?.min ?? 190),
+        max: Number(rawThresholds?.voltage?.max ?? 260),
       },
       current: {
         max: Number(rawThresholds?.current?.max ?? 10),
@@ -53,8 +60,8 @@ const normalizeThresholds = (rawThresholds = {}) => {
 
   return {
     voltage: {
-      min: Number(rawThresholds?.voltageMin ?? 200),
-      max: Number(rawThresholds?.voltageMax ?? 250),
+      min: Number(rawThresholds?.voltageMin ?? 190),
+      max: Number(rawThresholds?.voltageMax ?? 260),
     },
     current: {
       max: Number(rawThresholds?.currentMax ?? 10),
