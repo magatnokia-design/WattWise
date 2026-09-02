@@ -31,6 +31,24 @@ image, they accumulate, and deleting the functions does **not** delete them.
 
 ---
 
+## Run it as a script
+
+`scripts/shutdown-firebase.ps1` does steps 3, 4 and 6 below. It is written to
+be usable from the file alone, with no help and no memory of this project.
+
+```powershell
+# Prints the plan and changes nothing. Safe to run any time.
+.scriptsshutdown-firebase.ps1
+
+# For real. Asks you to type the project id first.
+.scriptsshutdown-firebase.ps1 -Execute
+```
+
+It deliberately stops short of Artifact Registry, Cloud Storage and the plan
+change, because those need `gcloud` and it is not installed here. The script
+prints the console links for them at the end. **Step 5 below is the one that
+keeps billing if you skip it.**
+
 ## The order, and why it is this order
 
 Consumers before producers, so nothing spends the shutdown retrying against
