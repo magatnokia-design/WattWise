@@ -1,8 +1,9 @@
 import { useState, useCallback, useEffect } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
-import { budgetService } from '../../../services/firebase';
+import { budgetService, invoiceService } from '../../../services/firebase';
 import { auth } from '../../../services/firebase/config';
 import { useLoadOutcome } from '../../../hooks/useLoadTracker';
+import { applyFinalizedSpend } from '../utils/budgetHelpers';
 
 const useBudgetTracking = () => {
   const [userId, setUserId] = useState(null);
@@ -68,10 +69,24 @@ const useBudgetTracking = () => {
         setProjectedCost(avgDaily * daysInMonth);
       }
 
-      // Fetch budget history (last 3 months)
-      const historyResult = await budgetService.getBudgetHistory(userId, 3);
+      // Fetch budget history (last 3 months), and the statements that priced
+      // any of those months for real. A month the user has finalized was billed
+      // at PELCO III's official rates, and this table says "spend against the
+      // budget in force then" - see applyFinalizedSpend.
+      const [historyResult, invoiceResult] = await Promise.all([
+        budgetService.getBudgetHistory(userId, 3),
+        invoiceService.getInvoices(userId, 3),
+      ]);
+
       if (historyResult.success) {
-        setBudgetHistory(historyResult.data);
+        // A failed invoice read leaves every row on its stored figure rather
+        // than asserting that none of those months were finalized.
+        const invoices = new Map(
+          (invoiceResult.success ? invoiceResult.data : [])
+            .map((invoice) => [invoice.billingMonth, invoice])
+        );
+
+        setBudgetHistory(applyFinalizedSpend(historyResult.data, invoices));
         load.succeeded();
       } else {
         load.failed(historyResult);

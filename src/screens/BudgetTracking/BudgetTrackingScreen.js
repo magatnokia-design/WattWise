@@ -159,20 +159,39 @@ const BudgetTrackingScreen = ({ navigation }) => {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Previous Months</Text>
             <View style={styles.historyContainer}>
-              {budgetHistory.map((item, index) => (
-                <View key={index} style={styles.historyItem}>
+              {budgetHistory.map((item) => (
+                // Keyed on the month, not the array index: the list is re-read
+                // on every refresh and a stable key is what keeps a row's
+                // identity across that.
+                <View key={item.monthKey || item.id} style={styles.historyItem}>
                   <View style={styles.historyMonth}>
                     <Text style={styles.monthName}>{item.month}</Text>
                     <Text style={styles.monthYear}>{item.year}</Text>
                   </View>
                   <View style={styles.historyStats}>
-                    <Text style={styles.historyAmount}>₱{item.spent.toFixed(2)}</Text>
-                    <Text style={[
-                      styles.historyStatus,
-                      { color: item.spent <= item.budget ? COLORS.success : COLORS.error }
-                    ]}>
-                      {item.spent <= item.budget ? 'Under budget' : 'Over budget'}
-                    </Text>
+                    <View style={styles.historyAmountRow}>
+                      <Text style={styles.historyAmount}>₱{item.spent.toFixed(2)}</Text>
+                      {/* Which figure this is. A finalized month shows what the
+                          statement billed, not what the rollup estimated. */}
+                      {item.isFinal ? (
+                        <View style={styles.historyPill}>
+                          <Text style={styles.historyPillText}>Final</Text>
+                        </View>
+                      ) : null}
+                    </View>
+                    {item.budget > 0 ? (
+                      <Text style={[
+                        styles.historyStatus,
+                        { color: item.spent <= item.budget ? COLORS.success : COLORS.error }
+                      ]}>
+                        {item.spent <= item.budget ? 'Under budget' : 'Over budget'}
+                      </Text>
+                    ) : (
+                      // No budget was set that month, so there is nothing to be
+                      // under or over. It used to read "Over budget" against a
+                      // limit of zero, which every month with any usage failed.
+                      <Text style={styles.historyStatus}>No budget set</Text>
+                    )}
                   </View>
                 </View>
               ))}
@@ -319,6 +338,23 @@ const styles = StyleSheet.create({
   },
   historyStats: {
     alignItems: 'flex-end',
+  },
+  historyAmountRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  // The same pill Monthly Statements and Compare Usage use for a billed month.
+  historyPill: {
+    backgroundColor: '#ECFDF5',
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  historyPillText: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: COLORS.primaryDark,
   },
   historyAmount: {
     fontSize: 16,

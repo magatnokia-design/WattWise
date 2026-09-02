@@ -119,6 +119,9 @@ export const budgetService = {
 
         history.push({
           id: budgetDoc.id,
+          // The raw YYYY-MM, so a caller can line a row up with its invoice
+          // without re-parsing the display labels back into a key.
+          monthKey,
           month: labels.month,
           year: labels.year,
           spent: Number(data.currentSpending || 0),

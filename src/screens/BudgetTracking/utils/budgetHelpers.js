@@ -11,6 +11,51 @@ export const formatCurrency = (amount) => {
   return `₱${amount.toFixed(2)}`;
 };
 
+/**
+ * Replaces a closed month's spend with the figure it was actually billed.
+ *
+ * `processDailyRollup` writes `currentSpending` from calculatePelcoIIIBill at
+ * whatever supply rates sit in Settings, and `finalizeInvoice` never touches
+ * the budget document. So the moment a month is finalized the two disagree for
+ * ever: August 2026 read P79.39 here against a statement stamped FINAL for
+ * P85.09, under a heading that says "spend against the budget in force then".
+ * The billed figure is the one in the user's inbox, so it wins.
+ *
+ * **FINALIZED only, deliberately.** An open month is left exactly as stored,
+ * because `handleBudgetAlerts` fires on that stored `currentSpending` - a
+ * screen showing a different number than the one that triggers "you have used
+ * 75% of your budget" would be a new disagreement in place of the one being
+ * fixed. A finalized month is closed and raises no further alerts, so there is
+ * nothing left to contradict.
+ *
+ * @param {Array} history Rows from `budgetService.getBudgetHistory`.
+ * @param {Map|object} invoices Keyed by `YYYY-MM`. A month that is absent, or
+ *   whose read failed, keeps its stored figure rather than being asserted
+ *   unfinalized.
+ * @returns {Array} the same rows, with `spent` corrected and `isFinal` set.
+ */
+export const applyFinalizedSpend = (history, invoices) => {
+  const rows = Array.isArray(history) ? history : [];
+  const lookup = invoices instanceof Map
+    ? invoices
+    : new Map(Object.entries(invoices || {}));
+
+  return rows.map((row) => {
+    const invoice = lookup.get(row.monthKey || row.id);
+    if (invoice?.status !== 'FINALIZED') return { ...row, isFinal: false };
+
+    // `Number(null)` is 0, not NaN, so coercing first would bill a closed month
+    // at P0.00 and call that final.
+    const raw = invoice.totalAmountDue;
+    if (raw === null || raw === undefined || raw === '') return { ...row, isFinal: false };
+
+    const billed = Number(raw);
+    if (!Number.isFinite(billed)) return { ...row, isFinal: false };
+
+    return { ...row, spent: billed, isFinal: true };
+  });
+};
+
 export const calculateProjectedCost = (currentSpending, currentDay, daysInMonth) => {
   if (currentDay === 0) return 0;
   const dailyAverage = currentSpending / currentDay;
