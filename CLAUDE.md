@@ -31,12 +31,24 @@ cd functions; node --test test/applianceDetector.test.js   # run a single test f
 cd functions; firebase emulators:start --only functions     # npm run serve
 cd functions; firebase functions:shell                       # npm run shell
 cd functions; firebase deploy --only functions               # npm run deploy
+
+# Deploying ALL 27 at once needs a longer discovery timeout than the 10 s default:
+$env:FUNCTIONS_DISCOVERY_TIMEOUT = 120; firebase deploy --only functions
 cd functions; firebase functions:log                          # npm run logs
 
 # Android release APK - GitHub Actions, NOT this laptop. Ask before running.
 gh workflow run build-apk.yml --ref main -f version=1.1.3 -f publish_release=false
 gh run watch                 # ~10 min
 ```
+
+**A full functions deploy fails at 10 seconds unless you raise the discovery
+timeout.** The CLI boots `index.js` in a subprocess to work out what to deploy,
+and loading all 27 exports plus `pdfkit` takes longer than its default allows.
+It fails as `Cannot determine backend specification. Timeout after 10000`, which
+names neither the cause nor the fix. Set `FUNCTIONS_DISCOVERY_TIMEOUT=120`.
+Single-function deploys (`--only functions:finalizeInvoice`) stay under it, which
+is why this only bites on a full deploy - the one you reach for when production
+may have drifted from the repo.
 
 **The APK is built in CI and nowhere else.** EAS quota is exhausted until 1 Sept
 2026, and the local Gradle path was retired on 18 Aug 2026 ("lets just use
