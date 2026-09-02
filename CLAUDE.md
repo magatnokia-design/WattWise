@@ -255,6 +255,13 @@ the code over that doc for data flow). Current top-level structure under `users/
   a full day went into rediscovering them after a laptop reset. Write the lesson here,
   in `docs/`, or in the file it concerns - the commit message is the record of *why a
   change was made*, not the place knowledge lives.
+- **Shutting the project down without leaving a bill:** `docs/SHUTDOWN.md`.
+  The trap it exists for: deleting the Cloud Functions does **not** delete their
+  container images, and the `gcf-artifacts` Artifact Registry repository keeps
+  billing per GB every month afterwards. Also note Spark is the *last* step, not
+  the first - switching plans before deleting anything breaks all 27 v2
+  functions instantly and silently.
+
 - **Rebuilding this environment from nothing:** `docs/FRESH-MACHINE.md` is the runbook -
   installs, logins, the three `npm ci` locations, the ESP32 toolchain, and what does and
   does not survive a reset. It was written from an actual recovery, not from memory.
