@@ -61,3 +61,9 @@ GoogleService-Info.plist
 firebase-debug.log
 firebase-debug.*.log
 functions/firebase-debug.log
+
+# Team-only working notes: the triage runbook, the mock-defence checklist and
+# the artifact source. Deliberately NOT published - they are internal, and the
+# checklist names what to avoid doing in front of a panel. Keep your own backup
+# (phone or drive); nothing here is recoverable from the remote.
+team/
