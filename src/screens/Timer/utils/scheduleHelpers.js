@@ -105,7 +105,14 @@ export const countdownSecondsRemaining = (item, nowMs = Date.now()) => {
   const stored = Number(item?.countdownRemaining);
   if (Number.isFinite(stored)) return Math.max(0, stored);
 
-  return Number.isFinite(baseDuration) ? Math.max(0, baseDuration) : null;
+  // A timer carrying no duration and no remaining value is unknown, not zero.
+  // parseClockToSeconds answers 0 for a missing clock string, so without this
+  // an empty object came back as "no time left" - and describeTimerState then
+  // announced "Switching now" about a timer it knew nothing about. Absent is
+  // not zero, here as everywhere else in this project.
+  if (!Number.isFinite(baseDuration) || baseDuration <= 0) return null;
+
+  return Math.max(0, baseDuration);
 };
 
 export const getLiveCountdownDisplay = (item, nowMs = Date.now()) => {
