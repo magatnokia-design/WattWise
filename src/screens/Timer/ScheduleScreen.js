@@ -60,13 +60,26 @@ const ScheduleScreen = () => {
     toggleSchedule,
   } = useSchedule();
 
-  // Ticks once a minute so the "next run" line stays honest without the
-  // per-second re-render each TimerCard already does for its own countdown.
+  /*
+   * Once a minute was fine for "next run in 3 hours" and wrong for everything
+   * else. A 30-second countdown was announced as "in 00:00:27" and stayed at 27
+   * while the card beneath it counted down and fired - the banner was not
+   * lagging, it was frozen between ticks.
+   *
+   * A countdown needs the same one-second tick the cards already run. A
+   * scheduled timer measured in hours does not, so the interval follows what is
+   * actually on screen rather than paying for the worst case all the time.
+   */
   const [nowMs, setNowMs] = useState(Date.now());
+  const hasLiveCountdown = useMemo(
+    () => schedules.some((item) => item?.active && item?.type === 'countdown'),
+    [schedules]
+  );
+
   useEffect(() => {
-    const id = setInterval(() => setNowMs(Date.now()), 60000);
+    const id = setInterval(() => setNowMs(Date.now()), hasLiveCountdown ? 1000 : 60000);
     return () => clearInterval(id);
-  }, []);
+  }, [hasLiveCountdown]);
 
   const handleFilterPress = useCallback((filter) => {
     setActiveFilter(filter);
