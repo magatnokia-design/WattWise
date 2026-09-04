@@ -41,8 +41,51 @@ the constants, never both and never neither. The symptom of getting it wrong is
 specific and quiet: both outlets report plausible voltage, but **each shows the
 other's watts.**
 
-Verify with your own eyes, not from memory. At boot the Hub prints a `[MAP]`
-line; check it against the loom.
+### Which physical meter is which
+
+The two boards are identical and unmarked. **The only thing that identifies
+them is where their UART pair lands on the ESP32:**
+
+| Board | ESP32 RX | ESP32 TX | Reports as |
+|---|---|---|---|
+| **PZEM 1** | GPIO16 | GPIO17 | `outlet2` |
+| **PZEM 2** | GPIO26 | GPIO27 | `outlet1` |
+
+**Label them with tape before you unplug anything.** Once four identical wires
+are loose on a bench, the mapping exists nowhere but in the loom you just
+dismantled. Write the socket on the tape - "socket 1" on PZEM 2 and "socket 2"
+on PZEM 1 - because the socket is the thing you can see and the channel number
+is not.
+
+At boot the Hub prints its own view, which is worth reading back:
+
+```
+[MAP] Control: outlet1->relay1, outlet2->relay2
+[MAP] Sensor:  outlet1->PZEM2, outlet2->PZEM1  (loom is crossed)
+[MAP] Outlet1 relayCH=1 pin=23 meter=PZEM2  Outlet2 relayCH=2 pin=22 meter=PZEM1
+```
+
+That is the firmware stating what it *expects*. It prints the same thing whether
+the loom matches or not, so it confirms the software half only.
+
+### The two-minute proof you did not swap them
+
+After any rewire, before you trust anything else. This needs no tracing and no
+continuity tester:
+
+1. Plug a real load - a fan - into **socket 1 only**. Leave socket 2 empty.
+2. Switch socket 1 on.
+3. Open the app or wattwise.site.
+
+**The watts must appear on Outlet 1.** If they appear on Outlet 2, the meters
+are swapped relative to the firmware: either the UART pairs went back onto the
+wrong ESP32 pins, or the meters were physically exchanged.
+
+Repeat with the load in socket 2 only. Between them, the two runs prove the
+mapping in both directions - which one run cannot.
+
+Do not skip to a two-load test. With both sockets drawing, a swap still shows
+plausible numbers on both outlets and you will not notice.
 
 ---
 
