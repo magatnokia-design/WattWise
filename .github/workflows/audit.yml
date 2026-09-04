@@ -49,13 +49,60 @@ jobs:
         with:
           node-version: '20'
 
+      # `npm audit` exits 1 for two completely different things: it found
+      # vulnerabilities, and it could not reach the registry. Treating them the
+      # same is how a security gate becomes a red X people learn to ignore -
+      # which happened on 4 Sep 2026, when registry.npmjs.org returned 503 for
+      # about ten minutes and this job simply reported failure.
+      #
+      # So: retry a transient registry error, and if it never clears, report a
+      # SKIPPED audit rather than a failed one. A real finding still fails the
+      # job on the first attempt, with no retry and no delay.
       - name: Audit ${{ matrix.name }}
         working-directory: ${{ matrix.path }}
-        run: npm audit --audit-level=${{ matrix.level }}
+        # npm retries a dead endpoint for minutes on its own; this run took 11
+        # before it gave up. Cap it so a bad day costs a minute, not a coffee.
+        timeout-minutes: 8
+        env:
+          LEVEL: ${{ matrix.level }}
+          NAME: ${{ matrix.name }}
+        run: |
+          # Fail fast on a dead registry rather than letting npm grind.
+          npm config set fetch-retries 2
+          npm config set fetch-retry-maxtimeout 20000
+
+          # Anything here means "the audit could not run", not "the audit found
+          # something". Matched against the combined output, not the exit code.
+          UNREACHABLE='audit endpoint returned an error|Service Unavailable|503|ENOTFOUND|EAI_AGAIN|ETIMEDOUT|ECONNRESET|network'
+
+          for attempt in 1 2 3; do
+            if out=$(npm audit --audit-level="$LEVEL" 2>&1); then
+              echo "$out"
+              echo "::notice::$NAME: no vulnerabilities at $LEVEL or above."
+              exit 0
+            fi
+
+            if printf '%s' "$out" | grep -qiE "$UNREACHABLE"; then
+              echo "::warning::$NAME: npm registry unreachable (attempt $attempt of 3). Retrying."
+              sleep $((attempt * 20))
+              continue
+            fi
+
+            # A real finding. Print it and stop - there is nothing transient here.
+            echo "$out"
+            echo "::error::$NAME: vulnerabilities found at $LEVEL or above."
+            exit 1
+          done
+
+          echo "$out"
+          echo "::warning::$NAME: AUDIT SKIPPED - npm registry was unreachable after 3 attempts. This is not a clean result; re-run this workflow once the registry recovers."
+          exit 0
 
       - name: Full report (informational)
         # Always runs, so a failure above is read next to the whole picture
-        # rather than just the first thing that tripped it.
+        # rather than just the first thing that tripped it. Never fails the job,
+        # and never hangs it either.
         if: always()
         working-directory: ${{ matrix.path }}
+        timeout-minutes: 5
         run: npm audit || true
