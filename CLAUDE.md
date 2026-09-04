@@ -259,6 +259,22 @@ the code over that doc for data flow). Current top-level structure under `users/
   can talk itself past is not a guardrail. `git clean` is on that list for a specific
   reason: it would delete `secrets.h`, `android/`, and every other gitignored file that
   cannot be recovered from the remote.
+- **A parse is not a check. Run `npm run check:imports`.** A generated edit put
+  `describeTimerState` into the `react-native` import block instead of
+  `../utils/scheduleHelpers`. Importing a name a module does not export is not a
+  syntax error, so Babel was happy; eslint's core rules do not resolve modules;
+  and with no React renderer in the tests, nothing ever rendered the component.
+  It shipped in 1.1.23 and every tap on Schedule hit the error boundary.
+
+  `scripts/check-imports.js` resolves every named import against what the target
+  actually exports, and separately flags a name **this project exports** being
+  imported **from a package** - which is the exact shape of an edit landing in
+  the wrong block. It is in `npm run verify`.
+
+  Its first version missed the very bug it was written for, because it skipped
+  non-relative specifiers and the bad import was from `react-native`. **Test a
+  checker by reintroducing the bug**, not by watching it pass on clean code.
+
 - **A reinstall is not a clean install unless you say so.** Android Auto Backup
   is on by default - Expo writes `android:allowBackup="true"` unless
   `expo.android.allowBackup` says otherwise - and it restores **AsyncStorage**

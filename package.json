@@ -11,8 +11,9 @@
     "device:qr": "node scripts/generate-device-qr.js",
     "lint:app": "node functions/node_modules/eslint/bin/eslint.js src --ext .js",
     "test:app": "node --import ./test/vite-resolve-hook.js --test test/*.test.js",
-    "verify": "npm run lint:app && npm run test:app && npm run verify:functions",
-    "booklet": "node scripts/build-hub-booklet.js"
+    "verify": "npm run lint:app && npm run check:imports && npm run test:app && npm run verify:functions",
+    "booklet": "node scripts/build-hub-booklet.js",
+    "check:imports": "node scripts/check-imports.js"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",

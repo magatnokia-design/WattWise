@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  describeTimerState,
   View,
   Text,
   StyleSheet,
@@ -10,6 +9,7 @@ import {
 } from 'react-native';
 import { COLORS } from '../../../constants/colors';
 import {
+  describeTimerState,
   formatDays,
   formatDuration,
   formatOutletName,
