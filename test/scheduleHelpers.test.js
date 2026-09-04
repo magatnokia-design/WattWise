@@ -131,3 +131,59 @@ test('the labels carry real characters, not raw escapes', () => {
   assert.ok(waiting.includes('…'), 'ellipsis rendered');
   assert.ok(done.includes('·'), 'middle dot rendered');
 });
+
+/*
+ * A paused timer is not counting.
+ *
+ * Elapsed time since countdownStartedAt only means anything while the timer is
+ * running. Without this guard - dropped when countdownSecondsRemaining was
+ * factored out of getLiveCountdownDisplay - a timer the user had switched off
+ * carried on counting down on screen, beside the words "Finished - ran once".
+ */
+
+test('a paused timer holds its stored remaining instead of counting', () => {
+  const item = {
+    type: 'countdown',
+    active: false,
+    countdownDuration: 120,
+    countdownStartedAt: startedAgo(300),
+    countdownRemaining: 53,
+  };
+
+  assert.equal(countdownSecondsRemaining(item, NOW), 53);
+  assert.equal(getLiveCountdownDisplay(item, NOW), '00:00:53');
+});
+
+test('a paused timer does not move as time passes', () => {
+  const item = {
+    type: 'countdown',
+    active: false,
+    countdownDuration: 120,
+    countdownStartedAt: startedAgo(10),
+    countdownRemaining: 44,
+  };
+
+  const first = countdownSecondsRemaining(item, NOW);
+  const later = countdownSecondsRemaining(item, NOW + 30000);
+
+  assert.equal(first, later, 'thirty seconds later, still the same number');
+});
+
+test('a paused timer with no stored remaining shows its full duration', () => {
+  const item = { type: 'countdown', active: false, countdownTime: '00:01:00' };
+  assert.equal(countdownSecondsRemaining(item, NOW), 60);
+});
+
+test('switching a timer back on resumes counting from its start', () => {
+  const item = {
+    type: 'countdown',
+    active: true,
+    countdownDuration: 120,
+    countdownStartedAt: startedAgo(30),
+    countdownRemaining: 53,
+  };
+
+  // Running: the clock wins over the stored value, which is only refreshed
+  // once a minute by checkScheduledTimers.
+  assert.equal(countdownSecondsRemaining(item, NOW), 90);
+});

@@ -76,7 +76,17 @@ const TimerCard = ({ item, onDelete, onToggle }) => {
               {item.type === 'countdown' ? '⏱ Countdown' : '🕐 Scheduled'}
             </Text>
           </View>
-          <Text style={styles.outletName}>{formatOutletName(item.outlet)}</Text>
+          {/* One phrase, not two. The card carried "Outlet 1" on the left, a
+              red "Turn OFF" on the right and a green on/off switch above it -
+              three controls that all looked like on and off, and only one of
+              them was. Saying what the timer DOES in a single line leaves the
+              switch as the only thing a tap can change. */}
+          <Text style={styles.outletName}>
+            {formatOutletName(item.outlet)}
+            <Text style={item.action === 'ON' ? styles.actionOn : styles.actionOff}>
+              {item.action === 'ON' ? ' · turns ON' : ' · turns OFF'}
+            </Text>
+          </Text>
         </View>
         <Switch
           value={item.active || false}
@@ -93,11 +103,10 @@ const TimerCard = ({ item, onDelete, onToggle }) => {
             ? liveCountdownText
             : item.scheduledTime || '--:--'}
         </Text>
-        {/* Shown for both kinds now. A countdown card printed a time and a
-            toggle and never said what it would do when it reached zero, so the
-            only way to find out was to let it run. */}
-        <Text style={styles.actionLabel}>
-          {item.action === 'ON' ? '🟢 Turn ON' : '🔴 Turn OFF'}
+        {/* The action now lives in the header line beside the outlet, so
+            this row carries only the time. */}
+        <Text style={styles.timeCaption}>
+          {item.type === 'countdown' ? 'left to run' : 'each week'}
         </Text>
       </View>
 
@@ -177,6 +186,18 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: COLORS.text,
     letterSpacing: 1,
+  },
+  actionOn: {
+    fontWeight: '700',
+    color: COLORS.primaryDark,
+  },
+  actionOff: {
+    fontWeight: '700',
+    color: COLORS.error,
+  },
+  timeCaption: {
+    fontSize: 12,
+    color: COLORS.textLight,
   },
   actionLabel: {
     fontSize: 13,

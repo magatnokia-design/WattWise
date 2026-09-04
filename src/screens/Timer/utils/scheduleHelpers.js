@@ -97,6 +97,21 @@ export const formatOutletName = (outlet) => {
 export const countdownSecondsRemaining = (item, nowMs = Date.now()) => {
   const baseDuration = Number(item?.countdownDuration ?? parseClockToSeconds(item?.countdownTime));
   const startedAt = toDate(item?.countdownStartedAt);
+  const stored0 = Number(item?.countdownRemaining);
+
+  /*
+   * A paused timer is not counting. Elapsed time since countdownStartedAt is
+   * only meaningful while the thing is running, and without this guard a timer
+   * the user had switched off - or one that had already finished - carried on
+   * counting down on screen beside the words "Finished - ran once".
+   *
+   * The guard existed in getLiveCountdownDisplay before this function was
+   * factored out of it, and was dropped in the move. Restored, and now tested.
+   */
+  if (item && item.active === false) {
+    if (Number.isFinite(stored0)) return Math.max(0, stored0);
+    return Number.isFinite(baseDuration) && baseDuration > 0 ? baseDuration : null;
+  }
 
   if (startedAt && Number.isFinite(baseDuration) && baseDuration > 0) {
     return Math.max(0, baseDuration - Math.floor((nowMs - startedAt.getTime()) / 1000));
