@@ -259,6 +259,23 @@ the code over that doc for data flow). Current top-level structure under `users/
   can talk itself past is not a guardrail. `git clean` is on that list for a specific
   reason: it would delete `secrets.h`, `android/`, and every other gitignored file that
   cannot be recovered from the remote.
+- **A reinstall is not a clean install unless you say so.** Android Auto Backup
+  is on by default - Expo writes `android:allowBackup="true"` unless
+  `expo.android.allowBackup` says otherwise - and it restores **AsyncStorage**
+  from Google Drive when the app is installed again. AsyncStorage is where both
+  the Firebase Auth session (`getReactNativePersistence`) and the
+  `onboarding_complete` flag live, so an uninstall-reinstall came back already
+  signed in, past onboarding, and never asked for notification permission. Three
+  symptoms, one cause, and it made first-run behaviour untestable by the only
+  method a tester would think to use.
+
+  Now `allowBackup: false`. It also keeps auth tokens out of a Drive backup,
+  which matters more than usual for an app whose buttons switch mains. Nothing
+  is lost by it: every real record lives in Firestore, not on the phone.
+
+  **To get a genuine first run, uninstall AND clear the app's data** - or on a
+  build before 1.1.24, disable backup for it in Android settings first.
+
 - **A hard-won lesson goes in a file someone opens, not only in the commit message.**
   Two of the most expensive traps in this project - that `compile` and `upload` must
   share a build path, and that the Hub was running older firmware than the repo - were
