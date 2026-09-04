@@ -100,9 +100,12 @@ jobs:
 
       - name: Full report (informational)
         # Always runs, so a failure above is read next to the whole picture
-        # rather than just the first thing that tripped it. Never fails the job,
-        # and never hangs it either.
+        # rather than just the first thing that tripped it.
         if: always()
         working-directory: ${{ matrix.path }}
-        timeout-minutes: 5
-        run: npm audit || true
+        # The timeout has to live INSIDE the shell, not in timeout-minutes. A
+        # step timeout kills the step and fails the job, and `|| true` never gets
+        # to run - which is exactly how this "informational" step failed a run
+        # whose actual audit had already passed. `timeout` exits 124, the shell
+        # stays alive, and `|| true` swallows it as intended.
+        run: timeout 240 npm audit || true
