@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  describeTimerState,
   View,
   Text,
   StyleSheet,
@@ -32,6 +33,8 @@ const TimerCard = ({ item, onDelete, onToggle }) => {
     () => getLiveCountdownDisplay(item, nowMs),
     [item, nowMs]
   );
+
+  const timerState = useMemo(() => describeTimerState(item, nowMs), [item, nowMs]);
 
   const nextRunSeconds = useMemo(
     () => getNextScheduledRunSeconds(item?.scheduledTime, item?.days, nowMs),
@@ -90,11 +93,12 @@ const TimerCard = ({ item, onDelete, onToggle }) => {
             ? liveCountdownText
             : item.scheduledTime || '--:--'}
         </Text>
-        {item.type === 'scheduled' && (
-          <Text style={styles.actionLabel}>
-            {item.action === 'ON' ? '🟢 Turn ON' : '🔴 Turn OFF'}
-          </Text>
-        )}
+        {/* Shown for both kinds now. A countdown card printed a time and a
+            toggle and never said what it would do when it reached zero, so the
+            only way to find out was to let it run. */}
+        <Text style={styles.actionLabel}>
+          {item.action === 'ON' ? '🟢 Turn ON' : '🔴 Turn OFF'}
+        </Text>
       </View>
 
       {/* Days Row */}
@@ -107,8 +111,13 @@ const TimerCard = ({ item, onDelete, onToggle }) => {
 
       {/* Bottom Row */}
       <View style={styles.bottomRow}>
-        <Text style={styles.statusText}>
-          {item.active ? '● Active' : '○ Inactive'}
+        {/* "Active" was wrong at both ends of a countdown's life: at 00:00:00
+            it still read Active while waiting for the once-a-minute server
+            check, and after firing it read Inactive with a toggle that offered
+            to re-run a timer with zero seconds left. describeTimerState names
+            the state instead. */}
+        <Text style={[styles.statusText, timerState.tone === 'done' && styles.statusDone]}>
+          {timerState.tone === 'done' ? '✓ ' : '● '}{timerState.label}
         </Text>
         <TouchableOpacity
           style={styles.deleteBtn}
@@ -195,6 +204,9 @@ const styles = StyleSheet.create({
     borderTopColor: COLORS.border,
     paddingTop: 10,
     marginTop: 4,
+  },
+  statusDone: {
+    color: COLORS.primaryDark,
   },
   statusText: {
     fontSize: 12,

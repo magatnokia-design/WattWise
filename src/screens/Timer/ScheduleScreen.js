@@ -15,6 +15,7 @@ import AppDialog from '../../components/common/AppDialog';
 import { useSchedule } from './hooks/useSchedule';
 import { OfflineState } from '../../components/common/OfflineNotice';
 import {
+  countdownSecondsRemaining,
   formatDuration,
   formatOutletName,
   getNextScheduledRunSeconds,
@@ -32,21 +33,13 @@ const secondsUntilRun = (item, nowMs) => {
   if (!item?.active) return null;
 
   if (item.type === 'countdown') {
-    // Mirrors getLiveCountdownDisplay: a running countdown is duration minus
-    // elapsed since it started; a stored remaining value covers the case where
-    // no start timestamp was recorded.
-    const duration = Number(item.countdownDuration);
-    const startedAt = item.countdownStartedAt?.toDate
-      ? item.countdownStartedAt.toDate().getTime()
-      : Date.parse(item.countdownStartedAt);
-
-    if (Number.isFinite(duration) && duration > 0 && Number.isFinite(startedAt)) {
-      const remaining = duration - Math.floor((nowMs - startedAt) / 1000);
-      return remaining > 0 ? remaining : null;
-    }
-
-    const stored = Number(item.countdownRemaining);
-    return Number.isFinite(stored) && stored > 0 ? stored : null;
+    // The same function the card uses. This used to be a second implementation
+    // that read countdownDuration first, and only one of the two creation paths
+    // writes that field - so on a timer created the other way the banner fell
+    // back to the server's once-a-minute countdownRemaining and sat up to a
+    // minute behind the card directly below it.
+    const remaining = countdownSecondsRemaining(item, nowMs);
+    return remaining !== null && remaining > 0 ? remaining : null;
   }
 
   const seconds = getNextScheduledRunSeconds(item?.scheduledTime, item?.days, nowMs);

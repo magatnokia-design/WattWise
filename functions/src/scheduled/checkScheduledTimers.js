@@ -125,6 +125,9 @@ async function checkScheduledTimers() {
 
           await outletRef.set({
             status: newStatus ? 'on' : 'off',
+            // So a late device report of this state is not logged a second
+            // time as an uncommanded change. See outletStatus.js.
+            lastCommandedStatus: newStatus ? 'on' : 'off',
             lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
           }, { merge: true });
 
@@ -233,6 +236,9 @@ async function checkScheduledTimers() {
 
           await outletRef.set({
             status: newStatus ? 'on' : 'off',
+            // So a late device report of this state is not logged a second
+            // time as an uncommanded change. See outletStatus.js.
+            lastCommandedStatus: newStatus ? 'on' : 'off',
             lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
           }, { merge: true });
 

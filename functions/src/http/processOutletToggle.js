@@ -81,6 +81,10 @@ async function processOutletToggle(request) {
       // updateOutletMetrics honours the requested status until the device
       // confirms it or the window lapses.
       pendingStatus: status ? 'on' : 'off',
+      // Outlives the pending window. When a slow device finally reports the
+      // state we asked for, isUncommandedStatusChange needs to recognise it
+      // as the answer to this command rather than log a phantom switch.
+      lastCommandedStatus: status ? 'on' : 'off',
       pendingStatusUntilMs: Date.now() + PENDING_STATUS_WINDOW_MS,
       lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
     }, { merge: true });

@@ -79,27 +79,73 @@ export const formatOutletName = (outlet) => {
   return `Outlet ${outlet}`;
 };
 
-export const getLiveCountdownDisplay = (item, nowMs = Date.now()) => {
+/**
+ * Seconds left on a countdown, or null when it is not counting.
+ *
+ * The single source of truth for "how long until this runs". Both the card and
+ * the NEXT UP banner read it, because they used to compute it separately and
+ * drifted apart: the banner read `countdownDuration`, which only one of the two
+ * creation paths in scheduleService writes, so on a timer created the other way
+ * it fell through to `countdownRemaining` - a server field refreshed once a
+ * minute. The card ticked down smoothly while the banner above it sat up to a
+ * minute behind and jumped. One timer, two answers, on the same screen.
+ *
+ * `countdownTime` is the fallback because it is the field every path writes.
+ *
+ * @returns {number|null} seconds, or null when the timer is not running.
+ */
+export const countdownSecondsRemaining = (item, nowMs = Date.now()) => {
   const baseDuration = Number(item?.countdownDuration ?? parseClockToSeconds(item?.countdownTime));
-  const currentRemaining = Number(item?.countdownRemaining);
   const startedAt = toDate(item?.countdownStartedAt);
 
-  if (!item?.active) {
-    if (Number.isFinite(currentRemaining)) return formatDuration(currentRemaining);
-    return formatDuration(baseDuration);
-  }
-
   if (startedAt && Number.isFinite(baseDuration) && baseDuration > 0) {
-    const elapsedSeconds = Math.floor((nowMs - startedAt.getTime()) / 1000);
-    const remaining = Math.max(0, baseDuration - elapsedSeconds);
-    return formatDuration(remaining);
+    return Math.max(0, baseDuration - Math.floor((nowMs - startedAt.getTime()) / 1000));
   }
 
-  if (Number.isFinite(currentRemaining)) {
-    return formatDuration(currentRemaining);
+  const stored = Number(item?.countdownRemaining);
+  if (Number.isFinite(stored)) return Math.max(0, stored);
+
+  return Number.isFinite(baseDuration) ? Math.max(0, baseDuration) : null;
+};
+
+export const getLiveCountdownDisplay = (item, nowMs = Date.now()) => {
+  const seconds = countdownSecondsRemaining(item, nowMs);
+  return formatDuration(seconds === null ? 0 : seconds);
+};
+
+/**
+ * What a timer is actually doing, in the words to put on the card.
+ *
+ * A countdown does not simply stop at zero. It reaches zero on the phone,
+ * and then waits for `checkScheduledTimers` - which runs once a minute - to
+ * notice and switch the outlet. For up to sixty seconds the card therefore
+ * showed **00:00:00** beside the word **Active**, which reads as a timer that
+ * has failed rather than one that is a few seconds from firing.
+ *
+ * Afterwards the backend sets `active: false`, and the same card showed a spent
+ * countdown with a toggle offering to switch it back on - which would re-run it
+ * immediately, because zero seconds remain. Neither state said what it was.
+ *
+ * @returns {{label: string, tone: 'running'|'waiting'|'done'|'paused', canRun: boolean}}
+ */
+export const describeTimerState = (item, nowMs = Date.now()) => {
+  if (item?.type !== 'countdown') {
+    return item?.active
+      ? { label: 'Active', tone: 'running', canRun: true }
+      : { label: 'Paused', tone: 'paused', canRun: false };
   }
 
-  return formatDuration(baseDuration);
+  const remaining = countdownSecondsRemaining(item, nowMs);
+
+  if (!item?.active) {
+    return { label: 'Finished · ran once', tone: 'done', canRun: false };
+  }
+
+  if (remaining !== null && remaining <= 0) {
+    return { label: 'Switching now…', tone: 'waiting', canRun: true };
+  }
+
+  return { label: 'Counting down', tone: 'running', canRun: true };
 };
 
 export const getNextScheduledRunSeconds = (scheduledTime, days, nowMs = Date.now()) => {

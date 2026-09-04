@@ -15,7 +15,20 @@
 
 // Long enough to cover a poll cycle plus relay actuation and the next telemetry
 // post; short enough that a device which never executes stops lying to the UI.
-const PENDING_STATUS_WINDOW_MS = 20000;
+// How long a commanded status overrides what the device reports.
+//
+// Was 20 s, which is shorter than a slow round trip actually takes. On a link
+// losing packets an ack came back in 35 s, so the marker lapsed first, the
+// stored status reverted to what the device was still reporting, and the
+// device's eventual correct report then looked like a change nobody asked for.
+// Every switch wrote a SECOND history row attributed to "Device" - the Activity
+// log inventing a switch, under a heading promising "every switch, wherever it
+// came from".
+//
+// 45 s matches COMMAND_ACK_TIMEOUT_MS in markStaleDeviceCommands, which is the
+// point the system gives up on a command anyway. Past that the command is
+// failed and a device report really is uncommanded.
+const PENDING_STATUS_WINDOW_MS = 45000;
 
 /**
  * @param {object} previous Stored outlet document.
@@ -74,6 +87,12 @@ const isUncommandedStatusChange = (previous, reportedStatus) => {
   if (stored !== 'on' && stored !== 'off') return false;
   if (reported !== 'on' && reported !== 'off') return false;
   if (pending) return false;
+
+  // A device catching up late is not acting on its own. Even with the window
+  // widened, a command that took longer still lands here - and reporting the
+  // state we last asked for is the opposite of uncommanded.
+  const lastCommanded = String(previous?.lastCommandedStatus || '').trim().toLowerCase();
+  if (lastCommanded && lastCommanded === reported) return false;
 
   return stored !== reported;
 };
