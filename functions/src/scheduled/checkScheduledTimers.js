@@ -5,6 +5,7 @@ const { createNotification } = require('../lib/notifications');
 const { getManilaTimeString, getManilaWeekday } = require('../lib/manilaTime');
 const { resolveOutletLogName } = require('../lib/applianceDetector');
 const { resolveLogPower } = require('../lib/historyLog');
+const { toMillis, countdownRemainingSeconds } = require('../lib/countdownClock');
 
 const DAY_LABEL_TO_INDEX = {
   sun: 0,
@@ -31,13 +32,6 @@ const normalizeScheduleDays = (rawDays = []) => {
       return null;
     })
     .filter((day) => Number.isInteger(day));
-};
-
-const toMillis = (value) => {
-  if (!value) return 0;
-  if (typeof value.toDate === 'function') return value.toDate().getTime();
-  const parsed = new Date(value).getTime();
-  return Number.isNaN(parsed) ? 0 : parsed;
 };
 
 const normalizeOutletId = (outlet) => {
@@ -195,15 +189,16 @@ async function checkScheduledTimers() {
         for (const scheduleDoc of countdownSnapshot.docs) {
           const schedule = scheduleDoc.data();
           const { outlet, action } = schedule;
-          const countdownDuration = Number(schedule.countdownDuration || 0);
-          const countdownStartedMs = toMillis(schedule.countdownStartedAt || schedule.createdAt);
+          // Shared with the clients through countdownClock.js. Measuring from
+          // countdownDuration + countdownStartedAt is what lets a paused timer
+          // resume correctly without this job knowing pausing exists.
+          const remainingSeconds = countdownRemainingSeconds(schedule, now.getTime());
 
-          if (!countdownDuration || !countdownStartedMs) {
+          // Unreadable, not expired. Firing on a document we cannot read would
+          // switch an outlet on no evidence.
+          if (remainingSeconds === null) {
             continue;
           }
-
-          const elapsedSeconds = Math.floor((now.getTime() - countdownStartedMs) / 1000);
-          const remainingSeconds = Math.max(0, countdownDuration - elapsedSeconds);
 
           // Keep remaining value fresh for clients.
           await scheduleDoc.ref.set({ countdownRemaining: remainingSeconds }, { merge: true });

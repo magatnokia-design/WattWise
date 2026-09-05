@@ -136,6 +136,84 @@ export const getLiveCountdownDisplay = (item, nowMs = Date.now()) => {
 };
 
 /**
+ * Has this countdown actually run, as opposed to being switched off by hand?
+ *
+ * `active: false` means both things, which is why a paused timer was labelled
+ * "Finished - ran once". The two are already distinguishable in the data and
+ * nothing had read it: `lastTriggered` is written only by checkScheduledTimers
+ * when it fires a countdown, and every client creation path seeds it `null` and
+ * never writes it again.
+ *
+ * Compared against `countdownStartedAt` rather than null-checked, because a
+ * timer that ran, was re-armed and then paused still carries the old
+ * `lastTriggered` - and that one is paused, not finished.
+ */
+const hasAlreadyFired = (item) => {
+  const firedAt = toDate(item?.lastTriggered);
+  if (!firedAt) return false;
+
+  const startedAt = toDate(item?.countdownStartedAt);
+  if (!startedAt) return true;
+
+  return firedAt.getTime() >= startedAt.getTime();
+};
+
+/**
+ * The fields to write when the user works the toggle on a timer.
+ *
+ * Pausing used to write `{ active: false }` and nothing else, which stopped the
+ * display and not the clock. `countdownStartedAt` still pointed at the original
+ * start, so every second spent paused was counted as elapsed: a 30 s timer
+ * paused with 10 s left and resumed a moment later came back at 2 s, and the
+ * backend - which computes remaining from the same field - switched the outlet
+ * on the next tick and sent a notification saying the countdown had finished.
+ * It had not. The user had un-paused it.
+ *
+ * So the pause records what was actually left at the instant of the tap, and
+ * the resume restarts the clock from that figure. Writing `countdownDuration`
+ * on resume is what makes this work on the backend with no change there:
+ * checkScheduledTimers already computes `countdownDuration - (now -
+ * countdownStartedAt)`, and both of its inputs are now correct.
+ *
+ * `countdownTime` is deliberately left alone - it holds the original duration
+ * the user asked for, which is still the truthful answer to "what is this
+ * timer", and it is the fallback every creation path writes.
+ *
+ * Scheduled timers have no clock to preserve, so they keep writing `active`
+ * alone.
+ *
+ * @returns {object} the Firestore field set for this toggle.
+ */
+export const toggleTimerFields = (item, active, nowMs = Date.now()) => {
+  if (item?.type !== 'countdown') {
+    return { active: Boolean(active) };
+  }
+
+  const remaining = countdownSecondsRemaining(item, nowMs);
+
+  if (!active) {
+    // Absent is not zero: a timer we cannot read the remaining time of is left
+    // with whatever it had rather than being frozen at nothing.
+    return remaining === null
+      ? { active: false }
+      : { active: false, countdownRemaining: remaining };
+  }
+
+  if (remaining === null || remaining <= 0) {
+    // Nothing left to run. Re-arming it here would fire the outlet on the next
+    // tick, so the clock is not restarted and the card keeps saying so.
+    return { active: true };
+  }
+
+  return {
+    active: true,
+    countdownDuration: remaining,
+    countdownRemaining: remaining,
+    countdownStartedAt: new Date(nowMs),
+  };
+};
+
+/**
  * What a timer is actually doing, in the words to put on the card.
  *
  * A countdown does not simply stop at zero. It reaches zero on the phone,
@@ -152,15 +230,30 @@ export const getLiveCountdownDisplay = (item, nowMs = Date.now()) => {
  */
 export const describeTimerState = (item, nowMs = Date.now()) => {
   if (item?.type !== 'countdown') {
+    // A paused schedule can be switched back on, so canRun is true. It read
+    // false, and the card takes canRun as "may the user work this control" -
+    // which would have disabled the only way to re-enable it.
     return item?.active
       ? { label: 'Active', tone: 'running', canRun: true }
-      : { label: 'Paused', tone: 'paused', canRun: false };
+      : { label: 'Paused', tone: 'paused', canRun: true };
   }
 
   const remaining = countdownSecondsRemaining(item, nowMs);
 
   if (!item?.active) {
-    return { label: 'Finished · ran once', tone: 'done', canRun: false };
+    // Two different things reach this branch and they used to read the same.
+    // A timer the backend has run is spent: re-arming it would fire the outlet
+    // on the next tick, so the control is closed. A timer the user paused still
+    // has time on it and must be resumable.
+    if (hasAlreadyFired(item) || remaining === null || remaining <= 0) {
+      return { label: 'Finished · ran once', tone: 'done', canRun: false };
+    }
+
+    return {
+      label: `Paused · ${formatDuration(remaining)} left`,
+      tone: 'paused',
+      canRun: true,
+    };
   }
 
   if (remaining !== null && remaining <= 0) {

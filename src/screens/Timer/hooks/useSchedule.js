@@ -8,6 +8,7 @@ import {
   UNREACHABLE_READ_RESULT,
   UNCONFIRMED_GRACE_MS,
 } from '../../../utils/connectivity';
+import { toggleTimerFields } from '../utils/scheduleHelpers';
 
 export const useSchedule = () => {
   const [userId, setUserId] = useState(null);
@@ -176,11 +177,19 @@ export const useSchedule = () => {
   // Toggle schedule active state
   const toggleSchedule = useCallback(async (scheduleId, active) => {
     setError(null);
-    
+
     try {
       if (!userId) throw new Error('User not authenticated');
 
-      const result = await scheduleService.updateSchedule(userId, scheduleId, { active });
+      // Writing `{ active }` alone stopped the display and not the clock: the
+      // countdown kept being measured from its original countdownStartedAt, so
+      // the paused seconds were spent anyway and the backend switched the
+      // outlet on the next tick after the user resumed. toggleTimerFields
+      // records what was actually left and restarts the clock from it.
+      const current = schedules.find((item) => item?.id === scheduleId);
+      const fields = toggleTimerFields(current, active);
+
+      const result = await scheduleService.updateSchedule(userId, scheduleId, fields);
 
       // Passed through rather than thrown. A pending write has been applied to
       // the local cache and is queued for the server, which is a different
@@ -199,7 +208,7 @@ export const useSchedule = () => {
       console.error('Error toggling schedule:', err);
       return { success: false, error: err.message };
     }
-  }, [userId]);
+  }, [userId, schedules]);
 
   return {
     schedules,

@@ -88,9 +88,17 @@ const TimerCard = ({ item, onDelete, onToggle }) => {
             </Text>
           </Text>
         </View>
+        {/*
+          A spent countdown is the one case where this control does nothing
+          good: switching it back on re-arms a timer with no seconds left, and
+          the backend fires the outlet on its next tick. describeTimerState has
+          always said so through canRun and nothing read it, so the switch sat
+          fully operable under a label reading "Finished".
+        */}
         <Switch
           value={item.active || false}
           onValueChange={handleToggle}
+          disabled={!timerState.canRun}
           trackColor={{ false: COLORS.border, true: COLORS.primaryLight }}
           thumbColor={item.active ? COLORS.primary : COLORS.white}
         />

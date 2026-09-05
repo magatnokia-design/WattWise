@@ -484,6 +484,38 @@ the code over that doc for data flow). Current top-level structure under `users/
   is a **null result**, not a pass. Diagnose a relay with voltage, or with a
   load on it.
 
+- **Pausing something must stop the clock, not just the display.** The Schedule
+  toggle wrote `{ active: false }` and nothing else. `countdownStartedAt` still
+  pointed at the original start, so every paused second was counted as elapsed:
+  a 30 s timer paused with 10 s left resumed at 2 s, and `checkScheduledTimers`
+  - computing remaining from the same field - switched the outlet on its next
+  tick and sent "Your countdown finished". It had not. The user had un-paused it.
+
+  The fix is a field model, not a display patch: `toggleTimerFields`
+  (`scheduleHelpers.js`, copy-rule) records the true remaining at the instant of
+  the tap, and on resume writes `countdownDuration` = that figure with a fresh
+  `countdownStartedAt`. The cron needs no change and no knowledge that pausing
+  exists, because both its inputs are correct again - `countdownClock.js` holds
+  that arithmetic and is now tested. **Change one side and you must change the
+  other in the same commit.**
+
+  Three traps worth keeping:
+  - `toggleScheduleActive` in `scheduleService.js` is **dead code**. The live path
+    is `useSchedule.toggleSchedule` -> `updateSchedule`. Fixing the obvious-looking
+    function would have changed nothing and looked like a fix. Grep for the caller.
+  - `active: false` meant both "paused" and "finished", so a paused timer read
+    "Finished - ran once". `lastTriggered` already told them apart and nothing read
+    it - compare it against `countdownStartedAt`, not against null, or a re-armed
+    timer is called finished forever.
+  - `canRun` was computed and ignored: the `Switch` had no `disabled` prop on
+    either client, so a spent countdown could be re-armed into an outlet switch.
+    Same shape as the `showOfflineState` bug - **grep for the flag before assuming
+    a screen honours it.**
+
+  `checkScheduledTimers` had **no test of any kind** when this shipped, and the
+  one client test covering it asserted the broken behaviour - its fixture had no
+  `lastTriggered`, so it passed for the wrong reason. Reintroducing the bug fails
+  4 tests now; that is the only proof a test is load-bearing.
 - **`Alert.alert` is gone from `src/` and does not come back.** It rendered a dark
   grey slab with cyan text on the test handset - a palette this app contains
   nowhere else - and it cannot carry an icon or mark a destructive action as
