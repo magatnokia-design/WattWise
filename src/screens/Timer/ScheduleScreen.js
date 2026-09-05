@@ -75,8 +75,24 @@ const ScheduleScreen = () => {
    * actually on screen rather than paying for the worst case all the time.
    */
   const [nowMs, setNowMs] = useState(Date.now());
-  const hasLiveCountdown = useMemo(
-    () => schedules.some((item) => item?.active && item?.type === 'countdown'),
+
+  /*
+   * Any ACTIVE timer, not just a countdown.
+   *
+   * This read `item.type === 'countdown'`, and a scheduled timer renders
+   * "Next run in 167:59:48" - to the second - from TimerCard's own unconditional
+   * one-second clock. So with the countdown finished and only a schedule left
+   * running, the screen ticked once a minute while the card ticked once a
+   * second, and the two drifted apart continuously: the banner read 167:59:54
+   * over a card reading 167:59:48.
+   *
+   * Both surfaces show seconds whenever anything is active, so both need the
+   * second. Nothing on screen moves when everything is paused or spent - a
+   * paused countdown is frozen by design and a finished one sits at zero - so
+   * the slow tick still costs nothing in that case.
+   */
+  const hasLiveTimer = useMemo(
+    () => schedules.some((item) => item?.active),
     [schedules]
   );
 
@@ -97,9 +113,9 @@ const ScheduleScreen = () => {
      */
     setNowMs(Date.now());
 
-    const id = setInterval(() => setNowMs(Date.now()), hasLiveCountdown ? 1000 : 60000);
+    const id = setInterval(() => setNowMs(Date.now()), hasLiveTimer ? 1000 : 60000);
     return () => clearInterval(id);
-  }, [hasLiveCountdown]);
+  }, [hasLiveTimer]);
 
   const handleFilterPress = useCallback((filter) => {
     setActiveFilter(filter);
@@ -250,13 +266,17 @@ const ScheduleScreen = () => {
     };
   }, [schedules, nowMs]);
 
+  // One clock for the screen and every card on it. They ran their own intervals
+  // and drifted apart by up to a minute; sharing the instant is the only fix
+  // that cannot come undone, the same reason both read countdownSecondsRemaining.
   const renderItem = useCallback(({ item }) => (
     <TimerCard
       item={item}
+      nowMs={nowMs}
       onDelete={handleDelete}
       onToggle={handleToggle}
     />
-  ), [handleDelete, handleToggle]);
+  ), [handleDelete, handleToggle, nowMs]);
 
   // An unread collection and an empty one are both zero rows here, so the
   // offline case has to be answered before "No Timers Yet" - which would

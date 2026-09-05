@@ -484,6 +484,26 @@ the code over that doc for data flow). Current top-level structure under `users/
   is a **null result**, not a pass. Diagnose a relay with voltage, or with a
   load on it.
 
+- **Two clocks on one screen will drift. Pass one down.** Every value on the
+  Schedule screen is derived from "now", and there were two answers to that:
+  `ScheduleScreen` ticked once a second while a countdown was live and once a
+  minute otherwise, while `TimerCard` kept its own unconditional one-second
+  interval. Whenever the rates differed the banner and the card read different
+  instants and reported different numbers for the same timer - "NEXT UP in
+  00:00:07" over a card at 00:00:00, then "in 167:59:54" over "Next run in
+  167:59:48".
+
+  Two fixes were needed and the first one alone looked sufficient: re-reading
+  the clock when the rate changes only fixes the *transition*. The steady state
+  was still wrong because the rate condition asked whether a **countdown** was
+  live, and a scheduled timer renders `Next run in HH:MM:SS` to the second too.
+  **When a fix is about a rate, check the steady state as well as the change.**
+
+  The durable answer is structural, not a second synchronisation: the screen
+  owns `nowMs` and passes it to every card, so there is nothing left to keep in
+  step. Same reason both surfaces call `countdownSecondsRemaining` rather than
+  each computing it. The web client never had this - `SchedulePage` holds one
+  clock and renders its rows inline.
 - **Pausing something must stop the clock, not just the display.** The Schedule
   toggle wrote `{ active: false }` and nothing else. `countdownStartedAt` still
   pointed at the original start, so every paused second was counted as elapsed:

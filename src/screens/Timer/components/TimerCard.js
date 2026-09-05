@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -17,17 +17,18 @@ import {
   getNextScheduledRunSeconds,
 } from '../utils/scheduleHelpers';
 
-const TimerCard = ({ item, onDelete, onToggle }) => {
+/*
+ * The clock arrives from the screen. It used to be a second one kept here.
+ *
+ * ScheduleScreen ticks once a second while any timer is active and once a
+ * minute otherwise; this card ticked once a second unconditionally. Whenever
+ * the two rates differed the card and the NEXT UP banner above it were reading
+ * different instants, and every value on this screen is derived from "now" - so
+ * they reported different numbers for the same timer and neither was obviously
+ * wrong. Two clocks cannot be kept in step; one clock cannot fall out of it.
+ */
+const TimerCard = ({ item, nowMs, onDelete, onToggle }) => {
   const { width } = useWindowDimensions();
-  const [nowMs, setNowMs] = useState(Date.now());
-
-  useEffect(() => {
-    const intervalId = setInterval(() => {
-      setNowMs(Date.now());
-    }, 1000);
-
-    return () => clearInterval(intervalId);
-  }, []);
 
   const liveCountdownText = useMemo(
     () => getLiveCountdownDisplay(item, nowMs),
