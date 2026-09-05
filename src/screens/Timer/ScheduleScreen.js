@@ -38,8 +38,12 @@ const secondsUntilRun = (item, nowMs) => {
     // writes that field - so on a timer created the other way the banner fell
     // back to the server's once-a-minute countdownRemaining and sat up to a
     // minute behind the card directly below it.
-    const remaining = countdownSecondsRemaining(item, nowMs);
-    return remaining !== null && remaining > 0 ? remaining : null;
+    // Zero is included. A countdown that has reached zero has not stopped being
+    // the next thing that happens - it is waiting on checkScheduledTimers, which
+    // runs once a minute. Excluding it meant the banner said "Nothing scheduled"
+    // for up to sixty seconds while the card below it said "Switching now…", and
+    // the timer nearest to firing was the one NEXT UP would not name.
+    return countdownSecondsRemaining(item, nowMs);
   }
 
   const seconds = getNextScheduledRunSeconds(item?.scheduledTime, item?.days, nowMs);
@@ -77,6 +81,22 @@ const ScheduleScreen = () => {
   );
 
   useEffect(() => {
+    /*
+     * Re-read the clock the moment the rate changes, not just on the next tick.
+     *
+     * Switching a paused countdown back on flips hasLiveCountdown, which tears
+     * down the 60-second interval and starts a one-second one - but `nowMs` kept
+     * whatever the last slow tick left, up to a minute in the past. The banner
+     * computes from that stale instant and so reports MORE time left than there
+     * is, while the card underneath keeps its own always-one-second clock and
+     * reports the truth.
+     *
+     * That is the "NEXT UP in 00:00:07" sitting directly above a card reading
+     * 00:00:00, on a screen holding one timer. The two never disagreed about the
+     * arithmetic - they disagreed about what time it was.
+     */
+    setNowMs(Date.now());
+
     const id = setInterval(() => setNowMs(Date.now()), hasLiveCountdown ? 1000 : 60000);
     return () => clearInterval(id);
   }, [hasLiveCountdown]);
@@ -292,7 +312,12 @@ const ScheduleScreen = () => {
               <Text style={styles.nextUpValue}>
                 {nextUp.outlet} turns {nextUp.action}
               </Text>
-              <Text style={styles.nextUpTime}>in {formatDuration(nextUp.seconds)}</Text>
+              {/* "in 00:00:00" is not a waiting message. The card says
+                  "Switching now…" in this window and the banner must not
+                  contradict it with a countdown that has stopped moving. */}
+              <Text style={styles.nextUpTime}>
+                {nextUp.seconds <= 0 ? 'Switching now…' : `in ${formatDuration(nextUp.seconds)}`}
+              </Text>
             </>
           ) : (
             <>
