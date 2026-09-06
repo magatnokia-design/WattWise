@@ -10,6 +10,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../../constants/colors';
+import { EMERGENCY_CONTACTS, EMERGENCY_GUIDANCE } from '../../constants/emergency';
 import SafetyStatusCard from './components/SafetyStatusCard';
 import ThresholdCard from './components/ThresholdCard';
 import ProtectionSettings from './components/ProtectionSettings';
@@ -136,6 +137,29 @@ const PowerSafetyScreen = ({ navigation }) => {
           </>
         )}
 
+        {/*
+          Emergency numbers. Rendered as plain text on purpose - there is no
+          press handler and no tel: link anywhere in this block. A mis-tap that
+          calls the fire service is worse than typing the digits, and this
+          screen is reached by people browsing settings, not only by people in
+          trouble. Selectable, so they can still be copied.
+        */}
+        <View style={styles.emergencyCard}>
+          <View style={styles.emergencyHead}>
+            <Ionicons name="call-outline" size={15} color={COLORS.text} />
+            <Text style={styles.emergencyTitle}>In an emergency</Text>
+          </View>
+
+          <Text style={styles.emergencyLead}>{EMERGENCY_GUIDANCE}</Text>
+
+          {EMERGENCY_CONTACTS.map((contact) => (
+            <View key={contact.number} style={styles.emergencyRow}>
+              <Text style={styles.emergencyLabel}>{contact.label}</Text>
+              <Text style={styles.emergencyNumber} selectable>{contact.number}</Text>
+            </View>
+          ))}
+        </View>
+
         {/* Info Footer */}
         <View style={styles.infoFooter}>
           <Ionicons name="information-circle" size={16} color={COLORS.textLight} />
@@ -205,6 +229,50 @@ const styles = StyleSheet.create({
   pendingText: {
     fontSize: 13,
     color: COLORS.textLight,
+  },
+  emergencyCard: {
+    backgroundColor: COLORS.white,
+    padding: 16,
+    marginHorizontal: 20,
+    marginTop: 20,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  emergencyHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 6,
+  },
+  emergencyTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.text,
+  },
+  emergencyLead: {
+    fontSize: 12,
+    lineHeight: 17,
+    color: COLORS.textLight,
+    marginBottom: 12,
+  },
+  emergencyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 7,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+  },
+  emergencyLabel: {
+    fontSize: 12,
+    color: COLORS.textLight,
+  },
+  emergencyNumber: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: COLORS.text,
+    letterSpacing: 0.5,
   },
   infoFooter: {
     flexDirection: 'row',
