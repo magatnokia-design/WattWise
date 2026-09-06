@@ -174,13 +174,33 @@ sharing only GND. The optocouplers exist precisely so coil current need never
 touch the ESP32's rail. Add 470–1000 µF across 5 V at the relay module if a
 long lead is unavoidable.
 
-### Proven, 6 Sep 2026
+### Proven, 6 Sep 2026 — this is the supply now
 
-With mains connected and a 54 W electric fan on outlet 1, the router's
-association uptime climbed straight through a **switch-off under load** — the
-worst arc this build produces, because a motor's back-EMF is the nastiest case.
-No reset, no dropout. That is the test that matters; steady running is the easy
-half.
+Three tests, in increasing order of what they prove.
+
+1. **Switch-off under load.** A 54 W electric fan on outlet 1, switched off from
+   the app — the worst arc this build produces, because a motor's back-EMF is
+   the nastiest case. The router's association uptime climbed straight through
+   it: 4 minutes, then 7, no reset.
+2. **Both outlets loaded.** Fan plus a laptop charger, 73.2 W combined.
+3. **An hour and a half continuous.** Router uptime reached **1 h 25 min**
+   without resetting once, through repeated switching and two live loads.
+
+The metering agreed with itself throughout, which is the second thing this
+proves:
+
+```
+54.4 W + 18.8 W  = 73.2 W       matches "drawing now"
+0.079 + 0.018    = 0.097 kWh    matches "energy today"
+73.2 W x P10.18  = P0.75 /hr    matches "running cost"
+0.097 x P10.18   = P0.99        matches "cost today"
+```
+
+Accumulation tracked measured power too: 0.086 kWh over 75 minutes is an
+average of 68.8 W, which sits where it should between one load and two.
+
+**Steady running is the easy half — the switching is the test.** Do not accept
+a supply on an idle bench.
 
 ---
 
