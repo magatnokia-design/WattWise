@@ -315,8 +315,9 @@
     <div class="step-n">1</div>
     <div class="step-body">
       <h2>Power on the Hub</h2>
-      <p class="small">Plug in the supplied USB-C adapter and wait about ten
-      seconds. The setup network appears on its own — no button to press.</p>
+      <p class="small">Plug the Hub into a wall socket and wait about ten
+      seconds. It powers itself from the mains — there is no separate adapter.
+      The setup network appears on its own; no button to press.</p>
     </div>
   </div>
 
@@ -463,8 +464,8 @@
       </tr>
       <tr>
         <td>Moving to a new router</td>
-        <td>Hold <strong>BOOT</strong> for 5 seconds. Wi-Fi is cleared; pairing
-        is not affected.</td>
+        <td>Full procedure on page 7. <strong>Unplug from the wall first</strong>
+        — that page explains why.</td>
       </tr>
       <tr>
         <td>App shows the Hub offline</td>
@@ -473,18 +474,119 @@
       </tr>
       <tr>
         <td>Relays click but readings stay 0</td>
-        <td>Use the supplied 3 A adapter — a weak supply browns the Hub out
-        while switching. If the adapter is correct, a very small load can also
-        read zero, because the meter has a minimum it can see.</td>
+        <td>A very small load can read zero — the meter has a minimum it can
+        see. Try something drawing more than about 5&nbsp;W.</td>
+      </tr>
+      <tr>
+        <td>An outlet stays on after switching it off</td>
+        <td>The app raises <strong>“Outlet is not switching off”</strong> on its
+        own. Treat that outlet as live: <strong>unplug the appliance at the
+        wall.</strong> The Hub cannot cut it, and the safety cut-off cannot
+        protect it either. Have it checked before using that socket again.</td>
       </tr>
     </tbody>
   </table>
 
   <div class="grow-fill"></div>
 
-  <p class="small">Firmware <code>relay-cloud-dualpzem-1.3.3</code></p>
+  <p class="small">Firmware <code>relay-cloud-dualpzem-1.5.1</code></p>
 
   <div class="folio"><span>Troubleshooting</span><span>6</span></div>
+</section>
+
+<!-- ============ 7 · CHANGING THE WI-FI ============ -->
+<section class="page">
+  <p class="kicker">Moving house, or a new router</p>
+  <h2>Change the Wi-Fi network</h2>
+
+  <div class="note warn">
+    <span class="label">Unplug from the wall first — this is not optional</span>
+    <p><strong>Never do this with the Hub plugged into a mains socket.</strong>
+    Power it from a <strong>USB-A 5&nbsp;V 3&nbsp;A adapter</strong> instead,
+    into the Hub's USB port. That runs the electronics only and leaves both
+    outlets completely dead while you work.</p>
+    <p class="small">Why: for a fraction of a second during every restart, the
+    control lines sit undriven and the switching board reads that as
+    <em>on</em>. With mains connected, that briefly energises an outlet while
+    your hands are on the unit. On USB there is no mains behind the contacts,
+    so it cannot happen.</p>
+  </div>
+
+  <div class="step">
+    <div class="step-n">1</div>
+    <div class="step-body">
+      <h2>Unplug it from the wall</h2>
+      <p class="small">Unplug anything from the two outlets as well, then take
+      the Hub's own plug out of the socket. Wait five seconds.</p>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-n">2</div>
+    <div class="step-body">
+      <h2>Power it from USB only</h2>
+      <p class="small">Connect a USB-A 5&nbsp;V 3&nbsp;A adapter to the Hub's
+      USB port. Wait about ten seconds for it to start. A phone charger of that
+      rating is fine; a laptop USB port is not — it cannot supply enough.</p>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-n">3</div>
+    <div class="step-body">
+      <h2>Hold the BOOT button for 5 seconds</h2>
+      <p class="small">Press and <strong>keep holding</strong>. A quick tap does
+      nothing — that is deliberate, so the button cannot wipe your settings by
+      accident. After five seconds the Hub clears its Wi-Fi and restarts.</p>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-n">4</div>
+    <div class="step-body">
+      <h2>Set up the new network</h2>
+      <p class="small">The setup network reappears within about ten seconds.
+      Follow <strong>Part 1</strong> from step 2 — join it, pick the new router,
+      enter the password, save.</p>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-n">5</div>
+    <div class="step-body">
+      <h2>Return it to the wall</h2>
+      <p class="small">Once the app shows the Hub reporting, unplug the USB
+      adapter and plug the Hub back into its wall socket.</p>
+    </div>
+  </div>
+
+  <div class="note">
+    <span class="label">Your pairing is not affected</span>
+    <p>This clears the Wi-Fi settings and nothing else. The Hub stays paired to
+    your account, so there is <strong>no need to scan the code on page 5
+    again</strong>. Your history, budgets and timers are untouched — they live
+    in your account, not on the unit.</p>
+  </div>
+
+  <table>
+    <thead><tr><th>What you see</th><th>What to do</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>No setup network after holding BOOT</td>
+        <td>You probably let go early. Hold a full five seconds — count it
+        out — and watch for the Hub to restart.</td>
+      </tr>
+      <tr>
+        <td>Setup network appears then vanishes</td>
+        <td>It closes after 10 minutes on its own. Power-cycle the USB adapter
+        and start again from step 3.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="grow-fill"></div>
+
+  <div class="folio"><span>Change the Wi-Fi network</span><span>7</span></div>
 </section>
 
 </div>
