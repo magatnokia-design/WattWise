@@ -114,6 +114,111 @@ that way.
 
 ---
 
+## Powering the Hub
+
+**Supply: an isolated Hi-Link mains module, 5 V 2 A** (fitted 6 Sep 2026). It
+replaced a 5 V 3 A USB adapter, and the swap fixed a fault that three weeks of
+software debugging could not.
+
+### Amps were never the problem. The path was.
+
+The old arrangement fed 5 V into the ESP32's USB pin and then distributed it to
+the relay board and both PZEMs **across breadboard power rails**. Every rail
+contact is a spring clip worth tens of milliohms, and they age. A relay coil
+pulling ~80 mA through several of them, at the moment the radio transmits,
+drops real voltage **at the point of load** while the adapter's own terminals
+still read a healthy 5 V.
+
+That is why a bigger adapter never helped, and it produced three symptoms that
+looked unrelated:
+
+| Symptom | Actually |
+|---|---|
+| Relays twitching when mains was connected | ESP32 browning out, resetting, pins floating |
+| ESP32 dropping offline | Wi-Fi TX is the highest-current event; it fails first |
+| A PZEM's power LED dim | The rail sagging, visible because LEDs are sensitive near threshold |
+
+The twitch loop is worth understanding: a reset floats the GPIOs, an active-LOW
+board reads floating as ON, the coil energises, the rail sags further, and it
+resets again. See the comment in `setup()` — the pre-`setup()` float cannot be
+fixed in software because no software is running yet.
+
+### The rule that follows
+
+**Power goes through terminal blocks. Breadboard carries signals only.**
+
+Do not put 5 V or GND distribution back on breadboard rails, however tidy it
+looks. That is rebuilding the failure mode. Screw terminals or lever connectors
+are one solid low-resistance joint instead of several ageing spring clips, and
+they survive being carried to a defence.
+
+Prefer short leads (10 cm is plenty) and keep the AC wiring physically away
+from the low-voltage side; cross at right angles if they must cross.
+
+### Current budget, for when someone proposes a different supply
+
+| State | Draw |
+|---|---|
+| Idle, relays released | ~180 mA |
+| One coil energised during a Wi-Fi TX burst | ~490 mA |
+| Both coils + TX burst | ~570 mA |
+
+Against 2 A that is under 30%. **Do not size a replacement from a product photo
+— read the label on the part actually fitted.** A 3 W HLK-PM01 (0.6 A) looks
+identical to the 10 W module and would be marginal at the worst case above.
+
+### Optional, if the coils ever misbehave again
+
+Cut the relay board's `VCC-JD` jumper and feed `JD-VCC` from its own 5 V,
+sharing only GND. The optocouplers exist precisely so coil current need never
+touch the ESP32's rail. Add 470–1000 µF across 5 V at the relay module if a
+long lead is unavoidable.
+
+### Proven, 6 Sep 2026
+
+With mains connected and a 54 W electric fan on outlet 1, the router's
+association uptime climbed straight through a **switch-off under load** — the
+worst arc this build produces, because a motor's back-EMF is the nastiest case.
+No reset, no dropout. That is the test that matters; steady running is the easy
+half.
+
+---
+
+## Rebuilding the Hub
+
+For a move to a new board, new connectors, or a fresh bench. The electronics do
+not change, so **no firmware change and no re-flash** — provided every wire
+lands on the same GPIO it was on. Same pins, same firmware. Only moving a relay
+input, moving a PZEM UART pair, or un-crossing the PZEM loom would need code.
+
+**Before anything moves:**
+
+1. **Photograph the whole loom.** Every angle. This is the cheapest insurance
+   in the project.
+2. **Tape and label the PZEMs** — see §2. They are identical and unmarked, and
+   once four wires are loose the mapping exists nowhere else. Write the
+   *socket*: "socket 1" on PZEM 2, "socket 2" on PZEM 1.
+3. **Unplug from the wall.** Not switched off in the app — unplugged.
+
+**Then:**
+
+4. Move power to terminal blocks first, so the rail is solid before anything
+   depends on it.
+5. Move signal wires one at a time, checking each against §"The map".
+6. Leave the PZEM loom crossed as it is.
+
+**A note on breadboard size:** an ESP32 DevKit is wide. A 30-pin board needs 15
+columns per side and a 38-pin board needs 19, so a 170-tie-point mini board
+(17 columns) fits the former only, and barely. Count the pins before buying.
+With terminal blocks for power and female-to-male jumpers onto the header pins,
+a breadboard may not be needed at all — fewer contacts in the path is the
+direction to move.
+
+Verify with the section below, in that order. Step 3 there is the one that
+matters: **an outlet switched off must read 0 V**, not merely 0 W.
+
+---
+
 ## Replacing a relay module
 
 Plug and play. **No firmware change, no re-flash, no reconfiguration.**
