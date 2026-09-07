@@ -9,6 +9,45 @@ const MIN_TOKEN_LENGTH = 8;
 const clean = (value) => String(value ?? '').trim().slice(0, MAX_FIELD_LENGTH);
 
 /**
+ * What is written to the account a device is taken away from.
+ *
+ * Every field in `DEVICE_LOOKUP_FIELDS` must be nulled here. That list is what
+ * `resolveUserByDeviceId` searches when `devices/{deviceId}` is missing, and it
+ * throws `409 Ambiguous device assignment` the moment two user documents answer
+ * to the same deviceId. A detach that misses one field arms that failure and
+ * leaves no trace until something else deletes the device document - at which
+ * point the Hub stops authenticating and no amount of re-pairing fixes it,
+ * because re-pairing does not touch the accounts that were never cleared.
+ *
+ * This previously merged `{ active: false, unlinkedAt }` into `device`, which
+ * left `device.deviceId` in place: a merge writes the keys it is given and
+ * leaves the rest of the map alone. The flat `deviceId` was cleared and the
+ * nested one was not, so every past owner stayed matchable. It also kept
+ * `esp32Linked` true in Settings, which is the same bug seen from the app.
+ *
+ * `active: false` and `unlinkedAt` stay, because the account should be able to
+ * show that a Hub left it rather than that one was never there.
+ */
+const buildDetachedOwnerFields = (unlinkedAt) => ({
+  deviceId: null,
+  deviceToken: null,
+  previousDeviceToken: null,
+  previousDeviceTokenValidUntilMs: null,
+  device: {
+    deviceId: null,
+    token: null,
+    previousToken: null,
+    previousTokenValidUntilMs: null,
+    active: false,
+    unlinkedAt,
+  },
+  // Legacy shape. Nulled even on accounts that never had it, so the rule stays
+  // "every lookup field is cleared" rather than "every lookup field we expect
+  // to be set is cleared" - the second is the one that rots.
+  esp32: { deviceId: null },
+});
+
+/**
  * Binds an ESP32 to the calling account, including taking it over from another
  * account.
  *
@@ -103,11 +142,10 @@ async function linkDeviceToAccount(request) {
     // a stale pointer there is recoverable while a failed link is not.
     if (outcome.isTransfer && outcome.previousOwnerId) {
       try {
-        await db.doc(`users/${outcome.previousOwnerId}`).set({
-          deviceId: null,
-          deviceToken: null,
-          device: { active: false, unlinkedAt: admin.firestore.FieldValue.serverTimestamp() },
-        }, { merge: true });
+        await db.doc(`users/${outcome.previousOwnerId}`).set(
+          buildDetachedOwnerFields(admin.firestore.FieldValue.serverTimestamp()),
+          { merge: true }
+        );
 
         // The losing side gets the entry that matters most: their Hub left the
         // account and they did not do it. Deliberately no mention of who took
@@ -149,4 +187,4 @@ async function linkDeviceToAccount(request) {
   }
 }
 
-module.exports = { linkDeviceToAccount };
+module.exports = { linkDeviceToAccount, buildDetachedOwnerFields };

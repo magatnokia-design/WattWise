@@ -101,6 +101,17 @@ const getRegisteredDeviceTokens = (userData = {}, resolvedDevice = {}, nowMs = D
   return tokens;
 };
 
+/**
+ * Every place a user document may name the Hub it owns.
+ *
+ * Exported because it is half of a contract: whatever detaches a device from an
+ * account has to clear all of these, or a later fallback lookup finds the old
+ * owner alongside the new one and can no longer tell which is right. See
+ * `buildDetachedOwnerFields` in http/linkDeviceToAccount.js, and the test that
+ * holds the two sides together.
+ */
+const DEVICE_LOOKUP_FIELDS = ['deviceId', 'device.deviceId', 'esp32.deviceId'];
+
 const resolveUserByDeviceId = async (db, deviceId) => {
   const deviceRef = db.doc(`devices/${deviceId}`);
   const deviceDoc = await deviceRef.get();
@@ -121,10 +132,9 @@ const resolveUserByDeviceId = async (db, deviceId) => {
     }
   }
 
-  const lookupFields = ['deviceId', 'device.deviceId', 'esp32.deviceId'];
   let matchedUserDoc = null;
 
-  for (const fieldPath of lookupFields) {
+  for (const fieldPath of DEVICE_LOOKUP_FIELDS) {
     const snapshot = await db
       .collection('users')
       .where(fieldPath, '==', deviceId)
@@ -249,6 +259,7 @@ const enforceMetricsRateAndReplayGuards = async ({
 
 module.exports = {
   DeviceRequestError,
+  DEVICE_LOOKUP_FIELDS,
   MAX_TIMESTAMP_SKEW_MS,
   parseIncomingTimestampMs,
   assertFreshTimestamp,
