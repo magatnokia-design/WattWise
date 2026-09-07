@@ -12,6 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { COLORS } from '../../constants/colors';
 import { SIZES, FONTS } from '../../constants/theme';
+import { describeRelayFault } from '../../constants/relayFault';
 import NotificationPanel from '../Notifications/components/NotificationPanel';
 import { useNotifications } from '../Notifications/hooks/useNotifications';
 import AppDialog from '../../components/common/AppDialog';
@@ -437,18 +438,15 @@ export const DashboardScreen = ({ navigation }) => {
           so plainly instead of pointing at a screen.
         */}
         {[
-          { number: 1, stuck: outlet1RelayStuck },
-          { number: 2, stuck: outlet2RelayStuck },
+          { number: 1, stuck: outlet1RelayStuck, fresh: outlet1HasReading },
+          { number: 2, stuck: outlet2RelayStuck, fresh: outlet2HasReading },
         ].filter((item) => item.stuck).map((item) => (
           <View key={`relay-stuck-${item.number}`} style={styles.relayFaultNotice}>
             <Text style={styles.relayFaultTitle}>
               ⚠️ Outlet {item.number} is not switching off
             </Text>
             <Text style={styles.relayFaultBody}>
-              It was told to switch off and current is still flowing. The relay may be
-              stuck closed, so the safety cut-off cannot protect this outlet either.
-              Unplug the appliance at the wall and have the wiring checked before using
-              it again.
+              {describeRelayFault(item.fresh)}
             </Text>
           </View>
         ))}
