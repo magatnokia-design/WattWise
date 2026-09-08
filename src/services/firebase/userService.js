@@ -3,13 +3,15 @@ import {
   getDoc,
   setDoc,
   updateDoc,
-  deleteDoc,
+  deleteField,
+  serverTimestamp,
   arrayUnion,
   arrayRemove,
 } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from './config';
 import { normalizeSupplyRates, hasSupplyRates } from '../../utils/billing';
+import { buildReleasedDeviceFields, RELEASE_REASONS } from '../../utils/deviceRelease';
 
 const DEFAULT_USER_PREFERENCES = {
   electricityRate: 0,
@@ -432,8 +434,15 @@ export const userService = {
         lastLogin: new Date(),
       }, { merge: true });
 
+      // Released, not deleted - see utils/deviceRelease.js. The account is
+      // moving to different hardware, so the old unit becomes unowned rather
+      // than unclaimed, and nobody can squat its identifier in the meantime.
       if (previousDeviceId && previousDeviceId !== deviceId) {
-        await deleteDoc(doc(db, 'devices', previousDeviceId));
+        await setDoc(
+          doc(db, 'devices', previousDeviceId),
+          buildReleasedDeviceFields(deleteField(), serverTimestamp(), RELEASE_REASONS.REPLACED),
+          { merge: true }
+        );
       }
 
       return { success: true };
@@ -494,8 +503,15 @@ export const userService = {
         lastLogin: new Date(),
       }, { merge: true });
 
+      // Released, not deleted. Deleting left the identifier claimable by any
+      // signed-in account that guessed it, because the `create` rule cannot
+      // check a device token. See utils/deviceRelease.js.
       if (currentDeviceId) {
-        await deleteDoc(doc(db, 'devices', currentDeviceId));
+        await setDoc(
+          doc(db, 'devices', currentDeviceId),
+          buildReleasedDeviceFields(deleteField(), serverTimestamp(), RELEASE_REASONS.UNLINKED),
+          { merge: true }
+        );
       }
 
       return { success: true };
