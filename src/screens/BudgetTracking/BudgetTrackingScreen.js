@@ -15,8 +15,10 @@ import SpendingBreakdown from './components/SpendingBreakdown';
 import AlertThresholds from './components/AlertThresholds';
 import ProjectedCost from './components/ProjectedCost';
 import SetBudgetModal from './components/SetBudgetModal';
+import RangeUsageCard from './components/RangeUsageCard';
 import { OfflineState } from '../../components/common/OfflineNotice';
 import useBudgetTracking from './hooks/useBudgetTracking';
+import useRangeUsage from './hooks/useRangeUsage';
 import { useOfflineRetry } from '../../hooks/useOfflineRetry';
 
 const BudgetTrackingScreen = ({ navigation }) => {
@@ -40,6 +42,8 @@ const BudgetTrackingScreen = ({ navigation }) => {
   // rather than `onRefresh` below, so the pull-to-refresh spinner does not
   // flash every ten seconds while nothing is happening.
   useOfflineRetry(showOfflineState, handleRefresh);
+
+  const rangeUsage = useRangeUsage();
 
   const [refreshing, setRefreshing] = useState(false);
   const [showBudgetModal, setShowBudgetModal] = useState(false);
@@ -104,6 +108,18 @@ const BudgetTrackingScreen = ({ navigation }) => {
           percentageUsed={percentageUsed}
           remainingBudget={remainingBudget}
           onSetBudget={() => setShowBudgetModal(true)}
+        />
+
+        {/* Any two dates: what was used and what it cost. Right under the
+            budget, because that is the question it helps answer. */}
+        <RangeUsageCard
+          range={rangeUsage.range}
+          setRange={rangeUsage.setRange}
+          summary={rangeUsage.summary}
+          status={rangeUsage.status}
+          message={rangeUsage.message}
+          onRetry={rangeUsage.reload}
+          monthlyBudget={monthlyBudget}
         />
 
         {/* Alert Thresholds */}
