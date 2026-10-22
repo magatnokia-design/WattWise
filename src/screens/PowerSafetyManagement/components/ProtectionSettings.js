@@ -6,66 +6,101 @@ import AppDialog from '../../../components/common/AppDialog';
 
 const MAX_POWER_W = 500;
 
+const toFields = (thresholds) => ({
+  voltageMin: String(thresholds?.voltage?.min ?? 190),
+  voltageMax: String(thresholds?.voltage?.max ?? 260),
+  currentMax: String(thresholds?.current?.max ?? 10),
+  powerMax: String(thresholds?.power?.max ?? MAX_POWER_W),
+});
+
+const Field = ({ label, value, onChangeText }) => (
+  <View style={styles.inputGroup}>
+    <Text style={styles.inputLabel}>{label}</Text>
+    <TextInput
+      style={styles.input}
+      value={value}
+      onChangeText={onChangeText}
+      keyboardType="decimal-pad"
+      maxLength={6}
+    />
+  </View>
+);
+
+/**
+ * Auto cut-off and the limits, in one compact card (Oct 2026).
+ */
 const ProtectionSettings = ({ enabled, onToggle, thresholds, onSaveThresholds }) => {
   const [isEditing, setIsEditing] = useState(false);
-  const [voltageMin, setVoltageMin] = useState(String(thresholds?.voltage?.min ?? 190));
-  const [voltageMax, setVoltageMax] = useState(String(thresholds?.voltage?.max ?? 260));
-  const [currentMax, setCurrentMax] = useState(String(thresholds?.current?.max ?? 10));
-  const [powerMax, setPowerMax] = useState(String(thresholds?.power?.max ?? 500));
+  const [fields, setFields] = useState(() => toFields(thresholds));
+  const [saving, setSaving] = useState(false);
+  const [toggling, setToggling] = useState(false);
   const [dialog, setDialog] = useState(null);
 
+  // Only while not editing. The Hub rewrites the safety document every 15 s,
+  // and each snapshot hands down a new thresholds object - so syncing
+  // unconditionally wiped whatever the user was typing, mid-edit.
   useEffect(() => {
-    setVoltageMin(String(thresholds?.voltage?.min ?? 190));
-    setVoltageMax(String(thresholds?.voltage?.max ?? 260));
-    setCurrentMax(String(thresholds?.current?.max ?? 10));
-    setPowerMax(String(thresholds?.power?.max ?? 500));
-  }, [thresholds]);
+    if (!isEditing) setFields(toFields(thresholds));
+  }, [thresholds, isEditing]);
+
+  const setField = (key) => (value) => setFields((prev) => ({ ...prev, [key]: value }));
+
+  // The switch reported nothing before: a failed write left it snapped back
+  // with no word as to why, and a queued one looked identical to a sent one.
+  const handleToggle = async (value) => {
+    if (!onToggle || toggling) return;
+    setToggling(true);
+    const result = await onToggle(value);
+    setToggling(false);
+
+    if (result?.pending) {
+      setDialog({
+        icon: '📡',
+        tone: 'warning',
+        title: 'Saved here, not sent yet',
+        message: `Auto cut-off will be ${value ? 'on' : 'off'} once you are back online. Keep Dagitab open until then.`,
+      });
+    } else if (result && !result.success) {
+      setDialog({
+        icon: '⚠️',
+        tone: 'danger',
+        title: 'Auto cut-off did not change',
+        message: result.error || 'It kept its previous setting. Please try again.',
+      });
+    }
+  };
 
   const handleSaveThresholds = async () => {
-    const rawPowerMax = Number(powerMax);
-    const cappedPowerMax = Number.isFinite(rawPowerMax)
-      ? Math.min(rawPowerMax, MAX_POWER_W)
-      : NaN;
+    if (saving) return;
+    const voltageMin = Number(fields.voltageMin);
+    const voltageMax = Number(fields.voltageMax);
+    const currentMax = Number(fields.currentMax);
+    const rawPowerMax = Number(fields.powerMax);
+    const values = [voltageMin, voltageMax, currentMax, rawPowerMax];
 
-    const nextThresholds = {
-      voltage: {
-        min: Number(voltageMin),
-        max: Number(voltageMax),
-      },
-      current: {
-        max: Number(currentMax),
-      },
-      power: {
-        max: cappedPowerMax,
-      },
-    };
-
-    if (
-      Number.isNaN(nextThresholds.voltage.min)
-      || Number.isNaN(nextThresholds.voltage.max)
-      || Number.isNaN(nextThresholds.current.max)
-      || Number.isNaN(nextThresholds.power.max)
-    ) {
+    if (values.some((value) => !Number.isFinite(value))) {
       setDialog({
         icon: '⚠️',
         tone: 'danger',
         title: 'Those are not numbers',
-        message: 'Every threshold has to be a number. Check the fields and try again.',
+        message: 'Every limit has to be a number. Check the fields and try again.',
       });
       return;
     }
 
-    if (rawPowerMax > MAX_POWER_W) {
+    // Number('') is 0, and a 0 A or 0 W ceiling would cut power the moment
+    // anything was plugged in. These used to be accepted.
+    if (values.some((value) => value <= 0)) {
       setDialog({
-        icon: '🛡️',
-        tone: 'warning',
-        title: 'Power limit capped',
-        message: `The maximum this hardware will enforce is ${MAX_POWER_W} W per outlet, so that is what was saved.`,
+        icon: '⚠️',
+        tone: 'danger',
+        title: 'Limits must be above zero',
+        message: 'A limit of zero would switch an outlet off as soon as anything is plugged in.',
       });
-      setPowerMax(String(MAX_POWER_W));
+      return;
     }
 
-    if (nextThresholds.voltage.min >= nextThresholds.voltage.max) {
+    if (voltageMin >= voltageMax) {
       setDialog({
         icon: '⚠️',
         tone: 'danger',
@@ -75,17 +110,25 @@ const ProtectionSettings = ({ enabled, onToggle, thresholds, onSaveThresholds })
       return;
     }
 
+    const capped = rawPowerMax > MAX_POWER_W;
+    const nextThresholds = {
+      voltage: { min: voltageMin, max: voltageMax },
+      current: { max: currentMax },
+      power: { max: Math.min(rawPowerMax, MAX_POWER_W) },
+    };
+
     if (!onSaveThresholds) {
       setIsEditing(false);
       return;
     }
 
+    setSaving(true);
     const result = await onSaveThresholds(nextThresholds);
+    setSaving(false);
 
     // The Hub enforces its own 500 W ceiling in firmware, with no cloud call in
     // the path, so an unsent change never leaves the outlets unprotected - it
-    // only leaves them on the *previous* limits. Worth saying, because "not
-    // saved" on a safety screen reads as "not protected".
+    // only leaves them on the *previous* limits.
     if (result?.pending) {
       setDialog({
         icon: '📡',
@@ -101,136 +144,90 @@ const ProtectionSettings = ({ enabled, onToggle, thresholds, onSaveThresholds })
       setDialog({
         icon: '⚠️',
         tone: 'danger',
-        title: 'The thresholds were not saved',
+        title: 'The limits were not saved',
         message: result?.error || 'The previous limits are still in force. Please try again.',
       });
       return;
     }
 
+    // Said after the save rather than before it. It used to be raised first
+    // and then overwritten by any later message, or shown for a save that
+    // went on to fail.
+    if (capped) {
+      setDialog({
+        icon: '🛡️',
+        tone: 'warning',
+        title: 'Power limit capped',
+        message: `The most this hardware will enforce is ${MAX_POWER_W} W per outlet, so that is what was saved.`,
+      });
+    }
     setIsEditing(false);
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.sectionTitle}>Protection Settings</Text>
-
-      {/* Auto Cut-off Toggle */}
-      <View style={styles.settingCard}>
-        <View style={styles.settingRow}>
-          <View style={styles.settingInfo}>
-            <View style={styles.iconLabel}>
-              <Ionicons name="shield-checkmark" size={20} color={COLORS.primary} />
-              <Text style={styles.settingTitle}>Auto Cut-off</Text>
-            </View>
-            <Text style={styles.settingDescription}>
-              Automatically cut power when limits are exceeded
-            </Text>
-          </View>
-          <Switch
-            value={enabled}
-            onValueChange={onToggle}
-            trackColor={{ false: COLORS.border, true: COLORS.primaryLight }}
-            thumbColor={enabled ? COLORS.primary : COLORS.textLight}
-          />
-        </View>
+    <View style={styles.card}>
+      <View style={styles.row}>
+        <Ionicons name="shield-checkmark" size={18} color={COLORS.primary} />
+        <Text style={styles.rowTitle}>Auto cut-off</Text>
+        <Switch
+          value={enabled}
+          onValueChange={handleToggle}
+          disabled={toggling}
+          trackColor={{ false: COLORS.border, true: COLORS.primaryLight }}
+          thumbColor={enabled ? COLORS.primary : COLORS.textLight}
+        />
       </View>
 
-      {/* Threshold Summary */}
-      <View style={styles.settingCard}>
-        <View style={styles.thresholdHeader}>
-          <Text style={styles.settingTitle}>Safety Thresholds</Text>
-          <TouchableOpacity style={styles.editButton} onPress={() => setIsEditing((value) => !value)}>
-            <Ionicons name="create-outline" size={18} color={COLORS.primary} />
-            <Text style={styles.editText}>{isEditing ? 'Close' : 'Edit'}</Text>
+      <View style={styles.separator} />
+
+      <View style={styles.row}>
+        <Ionicons name="speedometer-outline" size={18} color={COLORS.primary} />
+        <Text style={styles.rowTitle}>Limits</Text>
+        <TouchableOpacity
+          style={styles.editButton}
+          onPress={() => setIsEditing((value) => !value)}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          accessibilityRole="button"
+        >
+          <Ionicons name={isEditing ? 'close' : 'create-outline'} size={16} color={COLORS.primary} />
+          <Text style={styles.editText}>{isEditing ? 'Cancel' : 'Edit'}</Text>
+        </TouchableOpacity>
+      </View>
+
+      {isEditing ? (
+        <View style={styles.form}>
+          <View style={styles.inputRow}>
+            <Field label="Min volts" value={fields.voltageMin} onChangeText={setField('voltageMin')} />
+            <Field label="Max volts" value={fields.voltageMax} onChangeText={setField('voltageMax')} />
+          </View>
+          <View style={styles.inputRow}>
+            <Field label="Max amps" value={fields.currentMax} onChangeText={setField('currentMax')} />
+            <Field label={`Max watts (≤${MAX_POWER_W})`} value={fields.powerMax} onChangeText={setField('powerMax')} />
+          </View>
+          <TouchableOpacity
+            style={[styles.saveButton, saving && styles.saveButtonBusy]}
+            onPress={handleSaveThresholds}
+            disabled={saving}
+          >
+            <Text style={styles.saveButtonText}>{saving ? 'Saving…' : 'Save limits'}</Text>
           </TouchableOpacity>
         </View>
-
-        {isEditing ? (
-          <View style={styles.thresholdList}>
-            <View style={styles.inputRow}>
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Voltage Min (V)</Text>
-                <TextInput
-                  style={styles.input}
-                  value={voltageMin}
-                  onChangeText={setVoltageMin}
-                  keyboardType="decimal-pad"
-                />
-              </View>
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Voltage Max (V)</Text>
-                <TextInput
-                  style={styles.input}
-                  value={voltageMax}
-                  onChangeText={setVoltageMax}
-                  keyboardType="decimal-pad"
-                />
-              </View>
-            </View>
-
-            <View style={styles.inputRow}>
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Current Max (A)</Text>
-                <TextInput
-                  style={styles.input}
-                  value={currentMax}
-                  onChangeText={setCurrentMax}
-                  keyboardType="decimal-pad"
-                />
-              </View>
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Power Max (W, cap 500)</Text>
-                <TextInput
-                  style={styles.input}
-                  value={powerMax}
-                  onChangeText={setPowerMax}
-                  keyboardType="decimal-pad"
-                />
-              </View>
-            </View>
-
-            <TouchableOpacity style={styles.saveButton} onPress={handleSaveThresholds}>
-              <Text style={styles.saveButtonText}>Save Thresholds</Text>
-            </TouchableOpacity>
+      ) : (
+        <View style={styles.chips}>
+          <View style={styles.chip}>
+            <Text style={styles.chipLabel}>Voltage</Text>
+            <Text style={styles.chipValue}>{thresholds.voltage.min}–{thresholds.voltage.max} V</Text>
           </View>
-        ) : (
-          <View style={styles.thresholdList}>
-            <View style={styles.thresholdItem}>
-              <Text style={styles.thresholdName}>Voltage Range</Text>
-              <Text style={styles.thresholdRange}>
-                {thresholds.voltage.min}V - {thresholds.voltage.max}V
-              </Text>
-            </View>
-
-            <View style={styles.thresholdItem}>
-              <Text style={styles.thresholdName}>Max Current</Text>
-              <Text style={styles.thresholdRange}>
-                {thresholds.current.max}A
-              </Text>
-            </View>
-
-            <View style={styles.thresholdItem}>
-              <Text style={styles.thresholdName}>Max Power</Text>
-              <Text style={styles.thresholdRange}>
-                {thresholds.power.max}W
-              </Text>
-            </View>
-
-            {/* The threshold that binds while both outlets are individually
-                legal, and the only one the screen never mentioned. 400 W + 400 W
-                trips it with neither outlet anywhere near its own limit, so a
-                user reading 500 and 1000 has no way to predict the warning they
-                will get. It warns; it does not cut. */}
-            <Text style={styles.limitsNote}>
-              The firmware enforces 500 W per outlet and 1000 W combined whatever
-              is set here. Between those, a combined draw over{' '}
-              <Text style={styles.limitsNoteStrong}>800 W</Text> raises a warning
-              without cutting power — 400 W on each outlet is enough to reach it,
-              with neither one over its own limit.
-            </Text>
+          <View style={styles.chip}>
+            <Text style={styles.chipLabel}>Current</Text>
+            <Text style={styles.chipValue}>{thresholds.current.max} A</Text>
           </View>
-        )}
-      </View>
+          <View style={styles.chip}>
+            <Text style={styles.chipLabel}>Power</Text>
+            <Text style={styles.chipValue}>{thresholds.power.max} W</Text>
+          </View>
+        </View>
+      )}
 
       {dialog ? (
         <AppDialog
@@ -244,54 +241,30 @@ const ProtectionSettings = ({ enabled, onToggle, thresholds, onSaveThresholds })
 };
 
 const styles = StyleSheet.create({
-  container: {
-    marginTop: 20,
-    paddingHorizontal: 20,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: COLORS.text,
-    marginBottom: 12,
-  },
-  settingCard: {
+  card: {
     backgroundColor: COLORS.white,
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
     borderWidth: 1,
     borderColor: COLORS.border,
   },
-  settingRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  settingInfo: {
-    flex: 1,
-    marginRight: 12,
-  },
-  iconLabel: {
+  row: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginBottom: 6,
+    minHeight: 36,
   },
-  settingTitle: {
-    fontSize: 16,
+  rowTitle: {
+    flex: 1,
+    fontSize: 15,
     fontWeight: '600',
     color: COLORS.text,
   },
-  settingDescription: {
-    fontSize: 13,
-    color: COLORS.textLight,
-    lineHeight: 18,
-  },
-  thresholdHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
+  separator: {
+    height: 1,
+    backgroundColor: COLORS.border,
+    marginVertical: 6,
   },
   editButton: {
     flexDirection: 'row',
@@ -299,39 +272,37 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   editText: {
-    fontSize: 14,
+    fontSize: 13,
     color: COLORS.primary,
-    fontWeight: '500',
-  },
-  thresholdList: {
-    gap: 12,
-  },
-  thresholdItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-  },
-  thresholdName: {
-    fontSize: 14,
-    color: COLORS.text,
-  },
-  thresholdRange: {
-    fontSize: 14,
     fontWeight: '600',
-    color: COLORS.primary,
   },
-  limitsNote: {
-    marginTop: 12,
-    fontSize: 12.5,
-    lineHeight: 18,
+  chips: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 6,
+    marginBottom: 4,
+  },
+  chip: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 7,
+    borderRadius: 10,
+    backgroundColor: COLORS.background,
+  },
+  chipLabel: {
+    fontSize: 10.5,
     color: COLORS.textLight,
   },
-  limitsNoteStrong: {
+  chipValue: {
+    fontSize: 13,
     fontWeight: '700',
-    color: COLORS.textDark,
+    color: COLORS.text,
+    marginTop: 1,
+  },
+  form: {
+    gap: 10,
+    marginTop: 6,
+    marginBottom: 4,
   },
   inputRow: {
     flexDirection: 'row',
@@ -341,32 +312,34 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   inputLabel: {
-    fontSize: 12,
+    fontSize: 11,
     color: COLORS.textLight,
-    marginBottom: 6,
+    marginBottom: 4,
   },
   input: {
     borderWidth: 1,
     borderColor: COLORS.border,
-    borderRadius: 10,
+    borderRadius: 8,
     paddingHorizontal: 10,
-    paddingVertical: 8,
+    paddingVertical: 6,
     fontSize: 14,
     color: COLORS.text,
     backgroundColor: COLORS.background,
   },
   saveButton: {
-    marginTop: 12,
     alignSelf: 'flex-start',
     backgroundColor: COLORS.primary,
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 8,
   },
+  saveButtonBusy: {
+    opacity: 0.6,
+  },
   saveButtonText: {
     color: COLORS.white,
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: '700',
   },
 });
 

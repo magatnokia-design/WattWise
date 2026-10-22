@@ -116,6 +116,26 @@ const getTimestampMs = (value) => {
   return Number.isNaN(parsed) ? 0 : parsed;
 };
 
+/**
+ * The account's alert history, newest first, in the shape the screen lists.
+ * Shared by the one-off read and the live listener, so an alert raised while
+ * the screen is open appears without a pull-to-refresh.
+ */
+export const mapAlertHistory = (alerts, limitCount = 50) => (
+  [...(Array.isArray(alerts) ? alerts : [])]
+    .sort((a, b) => getTimestampMs(b.timestamp) - getTimestampMs(a.timestamp))
+    .slice(0, limitCount)
+    .map((alert, index) => ({
+      ...alert,
+      id: alert.id || `alert_${getTimestampMs(alert.timestamp)}_${index}`,
+      type: alert.type || 'warning',
+      title: alert.title || 'Safety Alert',
+      message: alert.message || 'Safety threshold reached.',
+      outlet: alert.outlet || null,
+      timestamp: alert.timestamp || new Date(),
+    }))
+);
+
 export const safetyService = {
   // Get power safety data
   getPowerSafety: async (userId) => {
@@ -129,8 +149,13 @@ export const safetyService = {
         const rawPowerMax = getRawPowerMax(rawData);
 
         if (Number.isFinite(rawPowerMax) && rawPowerMax > MAX_POWER_W) {
+          // A nested object, not a 'thresholds.power.max' key. setDoc does not
+          // read dots as a path - that wrote a literal top-level field named
+          // "thresholds.power.max", left the real limit untouched, and so
+          // repeated the same useless write on every load. merge: true merges
+          // nested maps, so voltage and current are kept.
           await setDoc(safetyRef, {
-            'thresholds.power.max': MAX_POWER_W,
+            thresholds: { power: { max: MAX_POWER_W } },
             lastUpdated: new Date(),
           }, { merge: true });
         }
@@ -182,25 +207,19 @@ export const safetyService = {
   },
 
   // Backward-compatible alert history getter used by hooks
-  getAlertHistory: async (userId, limitCount = 10) => {
+  getAlertHistory: async (userId, limitCount = 50) => {
     try {
       const safetyResult = await safetyService.getPowerSafety(userId);
       if (!safetyResult.success) return safetyResult;
 
-      const alerts = [...(safetyResult.data.alerts || [])]
-        .sort((a, b) => getTimestampMs(b.timestamp) - getTimestampMs(a.timestamp))
-        .slice(0, limitCount)
-        .map((alert, index) => ({
-          id: alert.id || `alert_${index}`,
-          type: alert.type || 'warning',
-          title: alert.title || 'Safety Alert',
-          message: alert.message || 'Safety threshold reached.',
-          outlet: alert.outlet || null,
-          timestamp: alert.timestamp || new Date(),
-          ...alert,
-        }));
-
-      return { success: true, data: alerts };
+      // The defaults now come after the spread. They came before it, so an
+      // alert stored with `title: null` or `id: ''` overwrote its own
+      // fallback and rendered blank - and two blank ids collide as list keys.
+      return {
+        success: true,
+        data: mapAlertHistory(safetyResult.data.alerts, limitCount),
+        safety: safetyResult.data,
+      };
     } catch (error) {
       console.error('Error getting alert history:', error);
       return { success: false, error: error.message };

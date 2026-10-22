@@ -15,38 +15,7 @@ import AddTimerModal from './components/AddTimerModal';
 import AppDialog from '../../components/common/AppDialog';
 import { useSchedule } from './hooks/useSchedule';
 import { OfflineState } from '../../components/common/OfflineNotice';
-import {
-  countdownSecondsRemaining,
-  getNextScheduledRunSeconds,
-} from './utils/scheduleHelpers';
 
-
-/**
- * Seconds until a timer fires, or null if it never will.
- *
- * Both timer types are reduced to the same number so one list can be ordered by
- * "what happens next" regardless of how each timer was configured.
- */
-const secondsUntilRun = (item, nowMs) => {
-  if (!item?.active) return null;
-
-  if (item.type === 'countdown') {
-    // The same function the card uses. This used to be a second implementation
-    // that read countdownDuration first, and only one of the two creation paths
-    // writes that field - so on a timer created the other way the banner fell
-    // back to the server's once-a-minute countdownRemaining and sat up to a
-    // minute behind the card directly below it.
-    // Zero is included. A countdown that has reached zero has not stopped being
-    // the next thing that happens - it is waiting on checkScheduledTimers, which
-    // runs once a minute. Excluding it meant the banner said "Nothing scheduled"
-    // for up to sixty seconds while the card below it said "Switching now…", and
-    // the timer nearest to firing was the one NEXT UP would not name.
-    return countdownSecondsRemaining(item, nowMs);
-  }
-
-  const seconds = getNextScheduledRunSeconds(item?.scheduledTime, item?.days, nowMs);
-  return Number.isFinite(seconds) ? seconds : null;
-};
 
 const ScheduleScreen = ({ navigation }) => {
   const [modalVisible, setModalVisible] = useState(false);
@@ -212,23 +181,10 @@ const ScheduleScreen = ({ navigation }) => {
     }
   }, [toggleSchedule]);
 
-  // No outlet filter (removed Oct 2026 - two outlets do not need one).
-  const sortedSchedules = useMemo(() => {
-    const base = schedules;
-
-    // Soonest first, paused timers last. A schedule list is read to find out
-    // what happens next, so chronological order is the useful order - the
-    // previous list kept whatever order Firestore returned.
-    return [...base].sort((a, b) => {
-      const aNext = secondsUntilRun(a, nowMs);
-      const bNext = secondsUntilRun(b, nowMs);
-
-      if (aNext === null && bNext === null) return 0;
-      if (aNext === null) return 1;
-      if (bNext === null) return -1;
-      return aNext - bNext;
-    });
-  }, [schedules, nowMs]);
+  // Fixed order: newest first, as Firestore returns them (orderBy createdAt).
+  // The list used to re-sort every second by "runs soonest" with paused timers
+  // last, so pausing one moved it under the user's finger and the next tap hit
+  // the other timer. A list you tap must not rearrange itself (Oct 2026).
 
   // One clock for the screen and every card on it. They ran their own intervals
   // and drifted apart by up to a minute; sharing the instant is the only fix
@@ -302,7 +258,7 @@ const ScheduleScreen = ({ navigation }) => {
 
       {/* Timer List */}
       <FlatList
-        data={sortedSchedules}
+        data={schedules}
         keyExtractor={(item, index) => item.id || index.toString()}
         renderItem={renderItem}
         ListEmptyComponent={renderEmpty}

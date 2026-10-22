@@ -18,6 +18,7 @@ import ApplianceSuggestion from '../Dashboard/components/ApplianceSuggestion';
 import { useOutletControl } from '../Dashboard/hooks/useOutletControl';
 import { resolveOutletBadge } from '../Dashboard/utils/outletBadge';
 import LinkHubCard from './components/LinkHubCard';
+import SafetyStatusPill from '../PowerSafetyManagement/components/SafetyStatusPill';
 import { formatApplianceName, toMetricNumber } from './utils/outletLabels';
 
 /**
@@ -188,7 +189,6 @@ const OutletsScreen = ({ navigation }) => {
         hasReading,
         isLoading: isLoadingOutlets,
         identityState: suggestion.identityState,
-        recognised: suggestion.recognised,
         unsupported: suggestion.unsupported,
         unsupportedReason: suggestion.unsupportedReason,
         measuredPowerW: suggestion.measuredPowerW,
@@ -282,9 +282,9 @@ const OutletsScreen = ({ navigation }) => {
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.header}>
-          <View>
-            <Text style={styles.title}>Outlets</Text>
-          </View>
+          {/* Power safety at a glance in place of an "Outlets" title, which
+              the raised tab already says (Oct 2026). Opens Power Safety. */}
+          <SafetyStatusPill onPress={() => navigation.navigate('PowerSafety')} />
           <TouchableOpacity
             style={styles.scheduleButton}
             onPress={() => navigation.navigate('Schedule')}
@@ -358,11 +358,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-  },
-  title: {
-    fontSize: 26,
-    fontWeight: '700',
-    color: COLORS.text,
   },
   scheduleButton: {
     flexDirection: 'row',

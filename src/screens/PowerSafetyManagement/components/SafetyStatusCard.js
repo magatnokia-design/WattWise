@@ -2,44 +2,61 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../../../constants/colors';
-import { getSafetyStageConfig } from '../utils/safetyHelpers';
+import { getSafetyStageConfig, SAFETY_STAGES } from '../utils/safetyHelpers';
+import SafetyPulse from './SafetyPulse';
 
+/**
+ * Current status, compact (Oct 2026): the stage on one line and a four-step
+ * bar beneath it, each step lit in its own colour - green, amber, orange, red.
+ * The icon pulses for Warning, Limit and Cut-off (SafetyPulse).
+ */
 const SafetyStatusCard = ({ stage, readingsAreStale = false }) => {
   const config = getSafetyStageConfig(stage, readingsAreStale);
   // While readings are stale the stage is not a current fact, so the bar shows
   // no segment rather than lighting the one that was true before the hardware
   // went quiet.
-  const gradedStage = config.stale ? null : stage;
+  const gradedStage = config.stale ? null : (stage || 'normal');
 
   return (
     <View style={[styles.container, { backgroundColor: config.bgColor }]}>
       <View style={styles.content}>
-        <View style={[styles.iconContainer, { backgroundColor: config.color }]}>
-          <Ionicons name={config.icon} size={32} color={COLORS.white} />
-        </View>
-        
+        <SafetyPulse
+          color={config.color}
+          pulseMs={config.pulseMs}
+          stageKey={`${gradedStage}`}
+          radius={20}
+          spread={{ x: 1.6, y: 1.6 }}
+        >
+          <View style={[styles.iconContainer, { backgroundColor: config.color }]}>
+            <Ionicons name={config.icon} size={22} color={COLORS.white} />
+          </View>
+        </SafetyPulse>
+
         <View style={styles.textContainer}>
-          <Text style={styles.label}>Current Status</Text>
-          <Text style={[styles.status, { color: config.color }]}>
-            {config.label}
-          </Text>
-          <Text style={styles.description}>{config.description}</Text>
+          <Text style={styles.label}>Current status</Text>
+          <Text style={[styles.status, { color: config.textColor }]}>{config.label}</Text>
         </View>
       </View>
 
-      {/* Status Indicator Bar */}
       <View style={styles.indicatorBar}>
-        <View style={[styles.indicator, gradedStage === 'normal' && styles.indicatorActive]} />
-        <View style={[styles.indicator, gradedStage === 'warning' && styles.indicatorActive]} />
-        <View style={[styles.indicator, gradedStage === 'limit' && styles.indicatorActive]} />
-        <View style={[styles.indicator, gradedStage === 'cutoff' && styles.indicatorActive]} />
-      </View>
-      
-      <View style={styles.labelContainer}>
-        <Text style={styles.indicatorLabel}>Normal</Text>
-        <Text style={styles.indicatorLabel}>Warning</Text>
-        <Text style={styles.indicatorLabel}>Limit</Text>
-        <Text style={styles.indicatorLabel}>Cut-off</Text>
+        {SAFETY_STAGES.map((item) => (
+          <View key={item.key} style={styles.step}>
+            <View
+              style={[
+                styles.indicator,
+                gradedStage === item.key && { backgroundColor: item.color },
+              ]}
+            />
+            <Text
+              style={[
+                styles.indicatorLabel,
+                gradedStage === item.key && { color: COLORS.text, fontWeight: '700' },
+              ]}
+            >
+              {item.label}
+            </Text>
+          </View>
+        ))}
       </View>
     </View>
   );
@@ -47,21 +64,21 @@ const SafetyStatusCard = ({ stage, readingsAreStale = false }) => {
 
 const styles = StyleSheet.create({
   container: {
-    margin: 20,
-    padding: 20,
+    marginHorizontal: 16,
+    marginTop: 4,
+    padding: 14,
     borderRadius: 16,
-    backgroundColor: COLORS.white,
   },
   content: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 16,
-    marginBottom: 20,
+    gap: 12,
+    marginBottom: 12,
   },
   iconContainer: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -71,39 +88,28 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 12,
     color: COLORS.textLight,
-    marginBottom: 4,
   },
   status: {
-    fontSize: 24,
+    fontSize: 19,
     fontWeight: '700',
-    marginBottom: 4,
-  },
-  description: {
-    fontSize: 13,
-    color: COLORS.textLight,
-    lineHeight: 18,
   },
   indicatorBar: {
     flexDirection: 'row',
-    gap: 8,
-    marginBottom: 8,
+    gap: 6,
+  },
+  step: {
+    flex: 1,
+    gap: 4,
   },
   indicator: {
-    flex: 1,
-    height: 6,
+    height: 5,
     borderRadius: 3,
-    backgroundColor: COLORS.border,
-  },
-  indicatorActive: {
-    backgroundColor: COLORS.primary,
-  },
-  labelContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    backgroundColor: 'rgba(7, 27, 44, 0.1)',
   },
   indicatorLabel: {
     fontSize: 10,
     color: COLORS.textLight,
+    textAlign: 'center',
   },
 });
 

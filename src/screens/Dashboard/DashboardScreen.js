@@ -261,7 +261,8 @@ export const DashboardScreen = ({ navigation }) => {
               system was safe during an active cutoff - with the cutoff's own
               push notification on screen directly above it, and the Power
               Safety screen one tap away reading "Cut-off Active". */}
-          <View style={[styles.safetyBadge, { backgroundColor: safetyConfig.color }]}>
+          {/* textColor: the darker shade. White on the amber `color` is 2.1:1. */}
+          <View style={[styles.safetyBadge, { backgroundColor: safetyConfig.textColor || safetyConfig.color }]}>
             <Text style={styles.safetyBadgeText}>{safetyConfig.label}</Text>
           </View>
         </TouchableOpacity>

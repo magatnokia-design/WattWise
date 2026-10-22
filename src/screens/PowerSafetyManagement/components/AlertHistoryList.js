@@ -1,57 +1,86 @@
-import React from 'react';
-import { View, Text, StyleSheet, FlatList } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../../../constants/colors';
 import { getAlertIcon, formatAlertTime } from '../utils/safetyHelpers';
 
-const AlertHistoryList = ({ alerts }) => {
-  const renderAlertItem = ({ item }) => {
-    const icon = getAlertIcon(item.type);
+// The three most recent first; each "Show more" adds this many (Oct 2026).
+const FIRST_PAGE = 3;
+const PAGE = 5;
 
-    return (
-      <View style={styles.alertItem}>
-        <View style={[styles.iconContainer, { backgroundColor: icon.bg }]}>
-          <Ionicons name={icon.name} size={20} color={icon.color} />
-        </View>
+const formatOutlet = (outlet) => {
+  if (outlet === null || outlet === undefined || outlet === '') return null;
+  const text = String(outlet);
+  return /^\d+$/.test(text) ? `Outlet ${text}` : text;
+};
 
-        <View style={styles.alertContent}>
-          <Text style={styles.alertTitle}>{item.title}</Text>
-          <Text style={styles.alertMessage}>{item.message}</Text>
+const AlertRow = ({ item }) => {
+  const icon = getAlertIcon(item.type);
+  const outlet = formatOutlet(item.outlet);
+
+  return (
+    <View style={styles.alertItem}>
+      <View style={[styles.iconContainer, { backgroundColor: icon.bg }]}>
+        <Ionicons name={icon.name} size={16} color={icon.color} />
+      </View>
+      <View style={styles.alertContent}>
+        <View style={styles.titleRow}>
+          <Text style={styles.alertTitle} numberOfLines={1}>{item.title}</Text>
           <Text style={styles.alertTime}>{formatAlertTime(item.timestamp)}</Text>
         </View>
-
-        {item.outlet && (
-          <View style={styles.outletBadge}>
-            <Text style={styles.outletText}>{item.outlet}</Text>
-          </View>
-        )}
+        <Text style={styles.alertMessage} numberOfLines={2}>
+          {outlet ? `${outlet} · ` : ''}{item.message}
+        </Text>
       </View>
-    );
-  };
-
-  const renderEmptyState = () => (
-    <View style={styles.emptyState}>
-      <Ionicons name="shield-checkmark-outline" size={64} color={COLORS.border} />
-      <Text style={styles.emptyTitle}>No Safety Alerts</Text>
-      <Text style={styles.emptyText}>
-        All systems operating within safe parameters
-      </Text>
     </View>
   );
+};
+
+/**
+ * Plain rows rather than a FlatList: a non-scrolling FlatList inside the
+ * screen's ScrollView renders every row anyway and only adds a nested
+ * VirtualizedList warning.
+ */
+const AlertHistoryList = ({ alerts }) => {
+  const [shown, setShown] = useState(FIRST_PAGE);
+
+  if (alerts.length === 0) {
+    return (
+      <View style={[styles.container, styles.emptyState]}>
+        <Ionicons name="shield-checkmark-outline" size={20} color={COLORS.primary} />
+        <Text style={styles.emptyText}>No safety alerts yet</Text>
+      </View>
+    );
+  }
+
+  const visible = alerts.slice(0, shown);
+  const remaining = alerts.length - visible.length;
 
   return (
     <View style={styles.container}>
-      {alerts.length === 0 ? (
-        renderEmptyState()
-      ) : (
-        <FlatList
-          data={alerts}
-          renderItem={renderAlertItem}
-          keyExtractor={(item) => item.id}
-          scrollEnabled={false}
-          ItemSeparatorComponent={() => <View style={styles.separator} />}
-        />
-      )}
+      {visible.map((item, index) => (
+        <View key={item.id || index}>
+          {index > 0 ? <View style={styles.separator} /> : null}
+          <AlertRow item={item} />
+        </View>
+      ))}
+
+      {remaining > 0 || shown > FIRST_PAGE ? (
+        <TouchableOpacity
+          style={styles.moreButton}
+          onPress={() => setShown(remaining > 0 ? shown + PAGE : FIRST_PAGE)}
+          accessibilityRole="button"
+        >
+          <Text style={styles.moreText}>
+            {remaining > 0 ? `Show more (${remaining})` : 'Show less'}
+          </Text>
+          <Ionicons
+            name={remaining > 0 ? 'chevron-down' : 'chevron-up'}
+            size={14}
+            color={COLORS.primary}
+          />
+        </TouchableOpacity>
+      ) : null}
     </View>
   );
 };
@@ -59,71 +88,79 @@ const AlertHistoryList = ({ alerts }) => {
 const styles = StyleSheet.create({
   container: {
     backgroundColor: COLORS.white,
-    borderRadius: 12,
-    padding: 16,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
     borderWidth: 1,
     borderColor: COLORS.border,
   },
   alertItem: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 12,
+    gap: 10,
+    paddingVertical: 4,
   },
   iconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
     justifyContent: 'center',
     alignItems: 'center',
   },
   alertContent: {
     flex: 1,
   },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   alertTitle: {
-    fontSize: 14,
+    flex: 1,
+    fontSize: 13.5,
     fontWeight: '600',
     color: COLORS.text,
-    marginBottom: 4,
-  },
-  alertMessage: {
-    fontSize: 13,
-    color: COLORS.textLight,
-    lineHeight: 18,
-    marginBottom: 4,
   },
   alertTime: {
     fontSize: 11,
     color: COLORS.textLight,
   },
-  outletBadge: {
-    backgroundColor: COLORS.background,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
+  alertMessage: {
+    fontSize: 12,
+    color: COLORS.textLight,
+    lineHeight: 16,
+    marginTop: 1,
   },
-  outletText: {
-    fontSize: 11,
+  separator: {
+    height: 1,
+    backgroundColor: COLORS.border,
+    marginVertical: 6,
+  },
+  moreButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    marginTop: 8,
+    paddingVertical: 6,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+  },
+  moreText: {
+    fontSize: 13,
     fontWeight: '600',
     color: COLORS.primary,
   },
-  separator: {
-    height: 12,
-  },
   emptyState: {
+    flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 40,
-  },
-  emptyTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: COLORS.text,
-    marginTop: 16,
-    marginBottom: 8,
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 16,
   },
   emptyText: {
     fontSize: 13,
     color: COLORS.textLight,
-    textAlign: 'center',
   },
 });
 

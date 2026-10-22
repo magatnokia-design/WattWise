@@ -5,6 +5,9 @@ import {
   getStatusColor,
   getSafetyStageConfig,
   getWorstStatus,
+  areReadingsStale,
+  READINGS_STALE_AFTER_MS,
+  SAFETY_STAGES,
 } from '../src/screens/PowerSafetyManagement/utils/safetyHelpers.js';
 
 // The owner's configured band, and the readings their mains actually produces.
@@ -102,4 +105,33 @@ test('all clear stays normal', () => {
 test('worst-of with nothing to grade is normal rather than undefined', () => {
   assert.equal(getWorstStatus().label, 'Normal');
   assert.equal(getWorstStatus(null, undefined).label, 'Normal');
+});
+
+/*
+ * Staleness was judged only when a snapshot arrived, and a Hub that goes quiet
+ * sends no snapshot - so the last verdict stayed on screen for good. It is now
+ * a function of the clock, asked again on a timer.
+ */
+test('readings go stale with the clock, with no new snapshot needed', () => {
+  const written = 1_000_000;
+  assert.equal(areReadingsStale(written, written + 1000), false);
+  assert.equal(areReadingsStale(written, written + READINGS_STALE_AFTER_MS - 1), false);
+  assert.equal(areReadingsStale(written, written + READINGS_STALE_AFTER_MS), true);
+  assert.equal(areReadingsStale(0, written), true, 'never written is stale');
+  assert.equal(areReadingsStale(undefined, written), true);
+});
+
+test('only stages that need attention animate, faster as they get worse', () => {
+  assert.equal(getSafetyStageConfig('normal').pulseMs, null);
+  assert.equal(getSafetyStageConfig('cutoff', true).pulseMs, null, 'stale never pulses');
+  const warning = getSafetyStageConfig('warning').pulseMs;
+  const limit = getSafetyStageConfig('limit').pulseMs;
+  const cutoff = getSafetyStageConfig('cutoff').pulseMs;
+  assert.ok(warning > limit && limit > cutoff);
+});
+
+test('each stage has its own colour', () => {
+  const colours = SAFETY_STAGES.map((stage) => stage.color);
+  assert.deepEqual(SAFETY_STAGES.map((stage) => stage.key), ['normal', 'warning', 'limit', 'cutoff']);
+  assert.equal(new Set(colours).size, 4);
 });

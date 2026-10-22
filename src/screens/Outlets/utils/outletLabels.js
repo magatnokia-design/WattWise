@@ -20,7 +20,6 @@ export const formatApplianceName = (
     hasReading,
     isLoading,
     identityState,
-    recognised,
     unsupported,
     unsupportedReason,
     measuredPowerW,
@@ -57,10 +56,9 @@ export const formatApplianceName = (
   // notice - so say it, rather than quietly showing a name known to be wrong.
   if (identityState === 'changed') return `Not ${normalized}`;
 
-  // Matched against this account's own saved signature rather than a generic
-  // wattage range: Dagitab knows this appliance, not just its name. The web
-  // client marks it the same way, so both say the same thing about the same run.
-  if (recognised) return `${normalized} · recognised`;
+  // Just the name. A " · recognised" suffix used to mark a match against the
+  // account's own saved signature; it was removed on request (Oct 2026) - the
+  // appliance's name is what the user wants to read here.
 
   return normalized;
 };

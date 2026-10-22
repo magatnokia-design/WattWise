@@ -8,7 +8,7 @@
 // through the same call (registerApplianceProfile) that names the outlet AND
 // saves this appliance's measured power pattern under that name, so the next
 // run of the same appliance is matched to the user's own signature and shown
-// as "Printer · recognised". Typing the name once is how Dagitab learns it.
+// as "Printer". Typing the name once is how Dagitab learns it.
 //
 // The ranked list of 3-4 alternatives was removed on request. Doubt is still
 // stated: a match the detector is unsure of reads "Not sure · closest:" in

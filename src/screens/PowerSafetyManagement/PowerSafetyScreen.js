@@ -10,7 +10,6 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../../constants/colors';
-import { EMERGENCY_CONTACTS, EMERGENCY_GUIDANCE } from '../../constants/emergency';
 import SafetyStatusCard from './components/SafetyStatusCard';
 import ThresholdCard from './components/ThresholdCard';
 import ProtectionSettings from './components/ProtectionSettings';
@@ -19,6 +18,9 @@ import { OfflineState } from '../../components/common/OfflineNotice';
 import usePowerSafety from './hooks/usePowerSafety';
 import { useOfflineRetry } from '../../hooks/useOfflineRetry';
 
+// Compact since Oct 2026: current status, outlet status, protection settings
+// and alert history only. The emergency-numbers card and the explanatory
+// paragraphs were removed on request.
 const PowerSafetyScreen = ({ navigation }) => {
   const {
     safetyStage,
@@ -49,22 +51,26 @@ const PowerSafetyScreen = ({ navigation }) => {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity
           onPress={() => navigation.goBack()}
           style={styles.backButton}
+          accessibilityRole="button"
+          accessibilityLabel="Back"
         >
           <Ionicons name="arrow-back" size={24} color={COLORS.text} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Power Safety</Text>
-        <View style={styles.placeholder} />
+        <View style={styles.headerTitles}>
+          <Text style={styles.headerTitle}>Power Safety</Text>
+          <Text style={styles.headerSub}>Limits and cut-off for your outlets</Text>
+        </View>
       </View>
 
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -77,7 +83,7 @@ const PowerSafetyScreen = ({ navigation }) => {
         {/* Nothing below here may be drawn from placeholder values. Both the
             limits and the alert history are claims about this account, and
             until a read returns, the hook is holding its own defaults - which
-            on this screen would read as "your ceiling is 2000 W" and "you have
+            on this screen would read as "your ceiling is 500 W" and "you have
             never had an alert". */}
         {showOfflineState ? (
           <View style={styles.section}>
@@ -87,86 +93,52 @@ const PowerSafetyScreen = ({ navigation }) => {
               onRetry={onRefresh}
             />
           </View>
-        ) : (
+        ) : settingsLoaded ? (
           <>
-            {/* Current Safety Stage */}
+            {/* Not drawn before the read: "Normal" from the hook's placeholder
+                stage is a verdict nobody has read. */}
             <SafetyStatusCard stage={safetyStage} readingsAreStale={readingsAreStale} />
 
-            {settingsLoaded ? (
-              <>
-                {/* Outlet Status Cards */}
-                <View style={styles.section}>
-                  <Text style={styles.sectionTitle}>Outlet Status</Text>
-                  <View style={styles.outletContainer}>
-                    <ThresholdCard
-                      outletName="Outlet 1"
-                      status={outlet1Status}
-                      thresholds={thresholds}
-                      isStale={readingsAreStale}
-                    />
-                    <ThresholdCard
-                      outletName="Outlet 2"
-                      status={outlet2Status}
-                      thresholds={thresholds}
-                      isStale={readingsAreStale}
-                    />
-                  </View>
-                </View>
-
-                {/* Protection Settings */}
-                <ProtectionSettings
-                  enabled={protectionEnabled}
-                  onToggle={handleToggleProtection}
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Outlet status</Text>
+              <View style={styles.stack}>
+                <ThresholdCard
+                  outletName="Outlet 1"
+                  status={outlet1Status}
                   thresholds={thresholds}
-                  onSaveThresholds={handleSaveThresholds}
+                  isStale={readingsAreStale}
                 />
-
-                {/* Alert History */}
-                <View style={styles.section}>
-                  <Text style={styles.sectionTitle}>Alert History</Text>
-                  <AlertHistoryList alerts={alertHistory} />
-                </View>
-              </>
-            ) : (
-              <View style={styles.section}>
-                <View style={styles.pending}>
-                  <Text style={styles.pendingText}>Reading your safety settings…</Text>
-                </View>
+                <ThresholdCard
+                  outletName="Outlet 2"
+                  status={outlet2Status}
+                  thresholds={thresholds}
+                  isStale={readingsAreStale}
+                />
               </View>
-            )}
-          </>
-        )}
-
-        {/*
-          Emergency numbers. Rendered as plain text on purpose - there is no
-          press handler and no tel: link anywhere in this block. A mis-tap that
-          calls the fire service is worse than typing the digits, and this
-          screen is reached by people browsing settings, not only by people in
-          trouble. Selectable, so they can still be copied.
-        */}
-        <View style={styles.emergencyCard}>
-          <View style={styles.emergencyHead}>
-            <Ionicons name="call-outline" size={15} color={COLORS.text} />
-            <Text style={styles.emergencyTitle}>In an emergency</Text>
-          </View>
-
-          <Text style={styles.emergencyLead}>{EMERGENCY_GUIDANCE}</Text>
-
-          {EMERGENCY_CONTACTS.map((contact) => (
-            <View key={contact.number} style={styles.emergencyRow}>
-              <Text style={styles.emergencyLabel}>{contact.label}</Text>
-              <Text style={styles.emergencyNumber} selectable>{contact.number}</Text>
             </View>
-          ))}
-        </View>
 
-        {/* Info Footer */}
-        <View style={styles.infoFooter}>
-          <Ionicons name="information-circle" size={16} color={COLORS.textLight} />
-          <Text style={styles.infoText}>
-            Protection system monitors voltage, current, and power levels to ensure safe operation
-          </Text>
-        </View>
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Protection settings</Text>
+              <ProtectionSettings
+                enabled={protectionEnabled}
+                onToggle={handleToggleProtection}
+                thresholds={thresholds}
+                onSaveThresholds={handleSaveThresholds}
+              />
+            </View>
+
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Alert history</Text>
+              <AlertHistoryList alerts={alertHistory} />
+            </View>
+          </>
+        ) : (
+          <View style={styles.section}>
+            <View style={styles.pending}>
+              <Text style={styles.pendingText}>Reading your safety settings…</Text>
+            </View>
+          </View>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -180,23 +152,26 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    backgroundColor: COLORS.white,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 12,
   },
   backButton: {
     padding: 4,
+    marginRight: 8,
+  },
+  headerTitles: {
+    flex: 1,
   },
   headerTitle: {
-    fontSize: 20,
+    fontSize: 24,
     fontWeight: '700',
     color: COLORS.text,
   },
-  placeholder: {
-    width: 32,
+  headerSub: {
+    fontSize: 13,
+    color: COLORS.textLight,
+    marginTop: 2,
   },
   scrollView: {
     flex: 1,
@@ -206,17 +181,17 @@ const styles = StyleSheet.create({
     paddingBottom: 32,
   },
   section: {
-    marginTop: 20,
-    paddingHorizontal: 20,
+    marginTop: 16,
+    paddingHorizontal: 16,
   },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
+    fontSize: 15,
+    fontWeight: '700',
     color: COLORS.text,
-    marginBottom: 12,
+    marginBottom: 8,
   },
-  outletContainer: {
-    gap: 12,
+  stack: {
+    gap: 8,
   },
   pending: {
     backgroundColor: COLORS.white,
@@ -229,66 +204,6 @@ const styles = StyleSheet.create({
   pendingText: {
     fontSize: 13,
     color: COLORS.textLight,
-  },
-  emergencyCard: {
-    backgroundColor: COLORS.white,
-    padding: 16,
-    marginHorizontal: 20,
-    marginTop: 20,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  emergencyHead: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 6,
-  },
-  emergencyTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: COLORS.text,
-  },
-  emergencyLead: {
-    fontSize: 12,
-    lineHeight: 17,
-    color: COLORS.textLight,
-    marginBottom: 12,
-  },
-  emergencyRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 7,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.border,
-  },
-  emergencyLabel: {
-    fontSize: 12,
-    color: COLORS.textLight,
-  },
-  emergencyNumber: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: COLORS.text,
-    letterSpacing: 0.5,
-  },
-  infoFooter: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    backgroundColor: COLORS.white,
-    padding: 16,
-    marginHorizontal: 20,
-    marginVertical: 20,
-    borderRadius: 12,
-    gap: 8,
-  },
-  infoText: {
-    flex: 1,
-    fontSize: 12,
-    color: COLORS.textLight,
-    lineHeight: 18,
   },
 });
 

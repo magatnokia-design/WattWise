@@ -1,30 +1,29 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { safetyService } from '../../../services/firebase';
+import { mapAlertHistory } from '../../../services/firebase/safetyService';
 import { auth } from '../../../services/firebase/config';
 import { useLoadOutcome } from '../../../hooks/useLoadTracker';
+import { areReadingsStale } from '../utils/safetyHelpers';
 
-// Two of the backend's 15s reading-write intervals, plus room for a slow
-// round trip. Long enough that a healthy device is never called stale between
-// writes, short enough that an unplugged one is obvious within a minute.
-const READINGS_STALE_AFTER_MS = 40000;
+// How often staleness is re-asked against the clock. See areReadingsStale.
+const STALE_CHECK_MS = 5000;
+
+const EMPTY_STATUS = { voltage: 0, current: 0, power: 0 };
 
 const usePowerSafety = () => {
   const [userId, setUserId] = useState(null);
-  const [readingsAreStale, setReadingsAreStale] = useState(true);
+  // Read through a ref by fetchSafetyData. With userId as a dependency, the
+  // auth effect below re-ran the moment it set userId: it unsubscribed and
+  // resubscribed everything and fetched a second time on every visit.
+  const userIdRef = useRef(null);
+  const [lastReadingWriteMs, setLastReadingWriteMs] = useState(0);
+  const [nowMs, setNowMs] = useState(() => Date.now());
   const [safetyStage, setSafetyStage] = useState('normal');
-  const [outlet1Status, setOutlet1Status] = useState({
-    voltage: 0,
-    current: 0,
-    power: 0,
-  });
-  const [outlet2Status, setOutlet2Status] = useState({
-    voltage: 0,
-    current: 0,
-    power: 0,
-  });
-  // Placeholders only - thresholdsKnown tracks whether a read has landed and
-  // nothing renders these as the user own limits. Kept in step with
+  const [outlet1Status, setOutlet1Status] = useState(EMPTY_STATUS);
+  const [outlet2Status, setOutlet2Status] = useState(EMPTY_STATUS);
+  // Placeholders only - settingsLoaded tracks whether a read has landed and
+  // nothing renders these as the user's own limits. Kept in step with
   // powerSafety.js regardless, so a frame drawn before the read cannot flash a
   // limit the backend does not enforce. 2000 W was four times the ceiling the
   // firmware actually permits.
@@ -43,21 +42,12 @@ const usePowerSafety = () => {
   const load = useLoadOutcome();
 
   const applySafetyData = useCallback((safetyData) => {
-    // Readings are only meaningful if the hardware wrote them recently.
-    // Without this the last values received sat on screen indefinitely, so an
-    // ESP32 that had been unplugged for hours still showed 242.7 V and a
-    // "Safe" verdict - the screen asserting the state of a device it had not
-    // heard from. Worse in the other direction: 0.0 V is below every voltage
-    // minimum, so a disconnected device could be graded Critical.
-    //
-    // updateOutletMetrics writes these at most every 15s
-    // (READING_WRITE_INTERVAL_MS), so the threshold has to clear two intervals
-    // to avoid calling a healthy device stale between writes. It still notices
-    // an unplugged one inside a minute.
-    const lastWriteMs = Number(safetyData.lastReadingWriteMs || 0);
-    const stale = !(lastWriteMs > 0 && Date.now() - lastWriteMs < READINGS_STALE_AFTER_MS);
-
-    setReadingsAreStale(stale);
+    if (!safetyData) return;
+    // Readings are only meaningful if the hardware wrote them recently. The
+    // write time is kept and graded against a ticking clock (below), because
+    // a Hub that goes quiet sends no further snapshot to re-grade on.
+    setLastReadingWriteMs(Number(safetyData.lastReadingWriteMs || 0));
+    setNowMs(Date.now());
     setSafetyStage(safetyData.currentStage);
     setOutlet1Status({
       voltage: safetyData.outlet1?.voltage || 0,
@@ -69,41 +59,41 @@ const usePowerSafety = () => {
       current: safetyData.outlet2?.current || 0,
       power: safetyData.outlet2?.power || 0,
     });
-    setThresholds(safetyData.thresholds);
-    setProtectionEnabled(safetyData.protectionEnabled);
+    if (safetyData.thresholds) setThresholds(safetyData.thresholds);
+    setProtectionEnabled(safetyData.protectionEnabled !== false);
+    // Live: an alert raised while this screen is open used to wait for a
+    // pull-to-refresh, because only the one-off read filled the list.
+    setAlertHistory(mapAlertHistory(safetyData.alerts));
 
     // The thresholds above now came from the account. Until this is true they
-    // are this hook's own initial values - 200-250 V, 10 A, 2000 W, protection
-    // on - which are not the user's settings and must not be drawn as if they
-    // were. On a safety screen that misreading is the whole point: 2000 W is
-    // four times the limit this hardware actually enforces.
+    // are this hook's own initial values, which are not the user's settings
+    // and must not be drawn as if they were.
     setSettingsLoaded(true);
   }, []);
 
-  // Fetch safety data
+  useEffect(() => {
+    const id = setInterval(() => setNowMs(Date.now()), STALE_CHECK_MS);
+    return () => clearInterval(id);
+  }, []);
+
+  // One read. This used to read the same document twice in a row - once for
+  // the settings, once more inside getAlertHistory.
   const fetchSafetyData = useCallback(async (targetUserId = null) => {
-    const resolvedUserId = targetUserId || userId;
+    const resolvedUserId = targetUserId || userIdRef.current;
     if (!resolvedUserId) {
       setLoading(false);
       return;
     }
 
     setLoading(true);
-    
     try {
-      const result = await safetyService.getSafetyData(resolvedUserId);
-
+      const result = await safetyService.getAlertHistory(resolvedUserId);
       if (result.success) {
-        applySafetyData(result.data);
-      }
-
-      // Fetch alert history
-      const alertsResult = await safetyService.getAlertHistory(resolvedUserId, 10);
-      if (alertsResult.success) {
-        setAlertHistory(alertsResult.data);
+        applySafetyData(result.safety);
+        setAlertHistory(result.data);
         load.succeeded();
       } else {
-        load.failed(alertsResult);
+        load.failed(result);
       }
     } catch (error) {
       console.error('Error fetching safety data:', error);
@@ -111,7 +101,7 @@ const usePowerSafety = () => {
     } finally {
       setLoading(false);
     }
-  }, [applySafetyData, userId, load.succeeded, load.failed]);
+  }, [applySafetyData, load.succeeded, load.failed]);
 
   // Load safety data with real-time listener once auth resolves.
   useEffect(() => {
@@ -119,6 +109,7 @@ const usePowerSafety = () => {
 
     const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
       const nextUserId = user?.uid || null;
+      userIdRef.current = nextUserId;
       setUserId(nextUserId);
 
       if (unsubscribeSafety) {
@@ -128,8 +119,8 @@ const usePowerSafety = () => {
 
       if (!nextUserId) {
         setSafetyStage('normal');
-        setOutlet1Status({ voltage: 0, current: 0, power: 0 });
-        setOutlet2Status({ voltage: 0, current: 0, power: 0 });
+        setOutlet1Status(EMPTY_STATUS);
+        setOutlet2Status(EMPTY_STATUS);
         setAlertHistory([]);
         setSettingsLoaded(false);
         setLoading(false);
@@ -213,7 +204,7 @@ const usePowerSafety = () => {
     showEmptyState: load.showEmptyState,
     showOfflineState: load.showOfflineState,
     safetyStage,
-    readingsAreStale,
+    readingsAreStale: areReadingsStale(lastReadingWriteMs, nowMs),
     outlet1Status,
     outlet2Status,
     thresholds,

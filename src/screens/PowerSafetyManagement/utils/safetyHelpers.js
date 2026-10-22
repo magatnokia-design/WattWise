@@ -1,6 +1,28 @@
 import { COLORS } from '../../../constants/colors';
 import { formatRelativeTime } from '../../../utils/datetime';
 
+// Two of the backend's 15 s reading-write intervals plus room for a slow round
+// trip. Long enough that a healthy Hub is never called stale between writes,
+// short enough that an unplugged one shows within a minute.
+export const READINGS_STALE_AFTER_MS = 40000;
+
+/**
+ * Whether the safety readings are too old to grade.
+ *
+ * Has to be asked against the clock, not only when a snapshot arrives: a Hub
+ * that goes quiet sends no further snapshot, so a check made on arrival alone
+ * kept the last verdict on screen indefinitely - "Normal" from a device that
+ * had stopped reporting. Callers re-ask it on a timer.
+ *
+ * @param {number} lastReadingWriteMs power_safety/settings.lastReadingWriteMs
+ * @param {number} [nowMs]
+ * @returns {boolean}
+ */
+export const areReadingsStale = (lastReadingWriteMs, nowMs = Date.now()) => {
+  const last = Number(lastReadingWriteMs || 0);
+  return !(last > 0 && nowMs - last < READINGS_STALE_AFTER_MS);
+};
+
 /**
  * @param {string} stage Last stage the backend graded.
  * @param {boolean} [readingsAreStale] Whether the hardware has stopped
@@ -11,15 +33,24 @@ import { formatRelativeTime } from '../../../utils/datetime';
  *   ESP32 to report", and this banner "All systems operating within safe
  *   parameters" - three admissions of ignorance and one assertion of safety, on
  *   the single element a user reads to decide whether anything is wrong.
+ *
+ * Each stage has its own colour (Oct 2026): green, amber, orange, red. `color`
+ * fills icons and bars; `textColor` is a darker shade of the same hue, because
+ * amber and orange on their own pale grounds are too faint to read as text.
+ * `pulseMs` drives the alert animation - faster the more serious the stage,
+ * and null where nothing needs attention.
  */
 export const getSafetyStageConfig = (stage, readingsAreStale = false) => {
   if (readingsAreStale) {
     return {
       label: 'No readings',
+      short: 'No reading',
       description: 'The Dagitab Hub has stopped reporting, so nothing can be graded right now',
       icon: 'help-circle',
       color: COLORS.textLight,
-      bgColor: '#F9FAFB',
+      textColor: COLORS.textLight,
+      bgColor: '#F3F4F6',
+      pulseMs: null,
       // No stage is asserted, so no segment on the bar lights up.
       stale: true,
     };
@@ -28,36 +59,55 @@ export const getSafetyStageConfig = (stage, readingsAreStale = false) => {
   const configs = {
     normal: {
       label: 'Normal',
+      short: 'Safe',
       description: 'All systems operating within safe parameters',
       icon: 'shield-checkmark',
       color: COLORS.success,
+      textColor: COLORS.success,
       bgColor: '#ECF8EF',
+      pulseMs: null,
     },
     warning: {
       label: 'Warning',
-      description: 'Parameters approaching safety limits',
+      short: 'Warning',
+      description: 'Getting close to your limits',
       icon: 'warning',
       color: '#F59E0B',
+      textColor: '#B45309',
       bgColor: '#FFFBEB',
+      pulseMs: 1400,
     },
     limit: {
       label: 'Limit Reached',
-      description: 'One or more parameters at maximum safe level',
-      icon: 'alert',
+      short: 'Limit',
+      description: 'At your limit - power will be cut if it goes higher',
+      icon: 'alert-circle',
       color: '#F97316',
+      textColor: '#C2410C',
       bgColor: '#FFF7ED',
+      pulseMs: 1000,
     },
     cutoff: {
       label: 'Cut-off Active',
-      description: 'Power automatically disconnected for safety',
+      short: 'Cut-off',
+      description: 'Power was switched off to keep you safe',
       icon: 'flash-off',
       color: COLORS.error,
+      textColor: '#B91C1C',
       bgColor: '#FEF2F2',
+      pulseMs: 650,
     },
   };
 
   return configs[stage] || configs.normal;
 };
+
+/** The four stages in order, with the colour each lights its bar segment in. */
+export const SAFETY_STAGES = ['normal', 'warning', 'limit', 'cutoff'].map((key) => ({
+  key,
+  label: { normal: 'Normal', warning: 'Warning', limit: 'Limit', cutoff: 'Cut-off' }[key],
+  color: getSafetyStageConfig(key).color,
+}));
 
 // The ratios evaluateSafety grades by, duplicated here for the same reason
 // billing.js is: the chips render directly beneath the banner the backend
