@@ -1,15 +1,27 @@
-// Auto-detection suggestion for one outlet.
+// Auto-detection suggestion for one outlet - compact (Oct 2026).
 //
 // Detection is suggestion-first: nothing is renamed until the user confirms.
-// When several appliances draw the same wattage the detector cannot separate
-// them on measurements alone, so it ranks them and the user picks - that choice
-// is then learned, and the same appliance is recognised outright next time.
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+// The card offers ONE name, the closest match, and lets the user type the real
+// one instead. The capstone panel's case: a 60 W printer and a 60 W electric fan
+// draw the same power, and no wattage catalogue can tell them apart - but the
+// user standing next to it can. Whatever they confirm, offered or typed, goes
+// through the same call (registerApplianceProfile) that names the outlet AND
+// saves this appliance's measured power pattern under that name, so the next
+// run of the same appliance is matched to the user's own signature and shown
+// as "Printer · recognised". Typing the name once is how Dagitab learns it.
+//
+// The ranked list of 3-4 alternatives was removed on request. Doubt is still
+// stated: a match the detector is unsure of reads "Not sure · closest:" in
+// amber rather than "Looks like", because asserting a coin flip as a finding
+// is the failure this card exists to avoid (see CLAUDE.md on identification).
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../../../constants/colors';
-import { FONTS } from '../../../constants/theme';
-import { resolveSuggestionTrust, describeUncertainty } from '../utils/loadStability';
+import { resolveSuggestionTrust } from '../utils/loadStability';
+
+// registerApplianceProfile trims names to this length.
+const MAX_NAME_LENGTH = 40;
 
 const toMetricNumber = (value) => {
   const parsed = Number(value);
@@ -19,59 +31,39 @@ const toMetricNumber = (value) => {
 const formatRuntimeLabel = (seconds) => {
   const total = Math.max(0, Math.round(toMetricNumber(seconds)));
   if (total < 60) return `${total}s`;
-
   const minutes = Math.floor(total / 60);
   if (minutes < 60) return `${minutes}m`;
-
   const hours = Math.floor(minutes / 60);
   const remainder = minutes % 60;
   return remainder > 0 ? `${hours}h ${remainder}m` : `${hours}h`;
 };
 
-const formatHeadline = (suggestion) => {
-  if (!suggestion?.name) return '';
-
-  return typeof suggestion.confidencePercent === 'number'
-    ? `Suggested: ${suggestion.name} (${suggestion.confidencePercent}%)`
-    : `Suggested: ${suggestion.name}`;
-};
-
 const formatWhy = (suggestion) => {
   const details = [];
-
   if (typeof suggestion?.meanPowerW === 'number') {
-    details.push(`Avg power ${toMetricNumber(suggestion.meanPowerW).toFixed(1)} W`);
+    details.push(`Average ${toMetricNumber(suggestion.meanPowerW).toFixed(1)} W`);
   }
-
-  const runtimeLabel = formatRuntimeLabel(suggestion?.runtimeSeconds);
-  if (runtimeLabel) {
-    details.push(`Runtime ${runtimeLabel}`);
-  }
-
+  const runtime = formatRuntimeLabel(suggestion?.runtimeSeconds);
+  if (runtime) details.push(`running ${runtime}`);
   if (typeof suggestion?.confidencePercent === 'number') {
-    details.push(`Confidence ${suggestion.confidencePercent}%`);
+    details.push(`${suggestion.confidencePercent}% match`);
   }
-
-  if (typeof suggestion?.sampleCount === 'number') {
-    details.push(`Samples ${Math.max(0, Math.round(suggestion.sampleCount))}`);
-  }
-
   return details.length > 0
-    ? details.join(' • ')
-    : 'Based on recent live power telemetry.';
+    ? `${details.join(' · ')}. Appliances with the same wattage look alike — type the real name if this is wrong.`
+    : 'Based on recent live power readings.';
 };
 
 /**
- * Amber rather than the suggestion's green: when both are on screen this is the
- * caveat on that offer, and it belongs with the "Not <name>" line it explains
- * rather than with the thing it is qualifying. Matches the web client.
+ * The run blends two appliances when one is swapped for another on a live
+ * outlet, so the suggestion is for neither. Shown even when there is no
+ * suggestion to offer - that is when the user is most stuck.
  */
 const StaleRunNotice = () => (
   <View style={styles.staleNotice}>
     <Ionicons name="refresh-outline" size={14} color="#B45309" />
     <Text style={styles.staleText}>
       Different appliance detected. Switch this outlet off and on to measure it on
-      its own — otherwise this reading still includes the last one.
+      its own.
     </Text>
   </View>
 );
@@ -83,34 +75,15 @@ const ApplianceSuggestion = ({
   onToggleWhy,
   onChoose,
 }) => {
-  // Swapping an appliance while the outlet stays on does not restart the
-  // measurement, so the run keeps averaging the appliance that has gone with the
-  // one that arrived. Observed: a lamp replaced by a fan reported "about 16.3 W"
-  // on an outlet drawing 56 W, and the blend inflated the spread from 0.5 to
-  // 17.3 - which is a Speaker's signature, so that is what it suggested.
-  //
-  // The measurements are stale rather than wrong, and the user cannot tell the
-  // difference from the outside. Until the detector restarts a run on a sustained
-  // level shift, say plainly what clears it.
-  //
-  // Deliberately NOT inside the suggestion block, and not behind `showBadge`.
-  // A blended run can score past the scope ceiling and come back unsupported, so
-  // there is no name to offer and `suggestionPending` is false - and gating the
-  // hint on the badge hid it in precisely the case the user is most stuck, with a
-  // contradicted name, no suggestion, and nothing explaining either. Verified:
-  // a 20 W load swapped for a 300 W one gives state 'changed' with
-  // suggestionPending false. Caught by the web repo, which shipped it this way
-  // and was right to override the instruction I sent.
+  const [typedName, setTypedName] = useState('');
   const suggestionIsStale = suggestion?.identityState === 'changed';
 
   if (!suggestion?.showBadge) {
-    // The hint still has to render on its own.
     return suggestionIsStale ? <StaleRunNotice /> : null;
   }
 
-  // Whether the top match is a finding or a guess. An iPhone on its charge taper
-  // scored Monitor 50 / Speaker 45 / Electric Fan 39 / Laptop Charger 37 - four
-  // profiles inside thirteen points - and the card asserted the first of them.
+  // Whether the top match is a finding or a guess (an iPhone on its charge
+  // taper scored four profiles inside thirteen points).
   const trust = resolveSuggestionTrust({
     confidencePercent: suggestion.confidencePercent,
     candidates: suggestion.candidates,
@@ -120,255 +93,179 @@ const ApplianceSuggestion = ({
     stdDevPowerW: suggestion.stdDevPowerW,
   });
 
-  // The leader is filtered out only when it has already been offered above.
-  // Where nothing was offered it belongs in the list like everything else - it
-  // is a candidate, not a verdict.
-  //
-  // Filtering it unconditionally meant the phone offered three choices where the
-  // web offered four, and the one it withheld was the highest scoring. Measured
-  // on the same run, 16 Aug 2026: the unsure card listed Monitor 42 / Electric
-  // Fan 38 / Laptop Charger 35 and silently dropped Speaker 53 - so the option
-  // the detector rated best was the one option the user could not pick.
-  const alternatives = (suggestion.candidates || []).filter(
-    (candidate) => !trust.trusted || candidate.name !== suggestion.name
-  );
+  // The closest match. When the detector is unsure, the leader is still the
+  // best single guess - it is offered as "closest", not as a verdict.
+  const closest = suggestion.name || suggestion.candidates?.[0]?.name || '';
+  const typed = typedName.replace(/\s+/g, ' ').trim();
 
-  // Show the choices immediately rather than making the user open "Why" to
-  // discover the suggestion was a coin flip.
-  const showPickerInline = !trust.trusted && alternatives.length > 0;
+  const saveTyped = () => {
+    if (!typed || disabled) return;
+    onChoose(typed.slice(0, MAX_NAME_LENGTH));
+    setTypedName('');
+  };
 
   return (
-    <>
+    <View style={styles.wrap}>
       {suggestionIsStale ? <StaleRunNotice /> : null}
 
-      <View style={[styles.row, !trust.trusted && styles.rowUnsure]}>
-        <Text style={styles.headline}>
-          {trust.trusted ? formatHeadline(suggestion) : 'Dagitab is not sure what this is'}
-        </Text>
-        <View style={styles.actions}>
+      {closest ? (
+        <View style={[styles.row, !trust.trusted && styles.rowUnsure]}>
+          <Text style={styles.headline} numberOfLines={1}>
+            <Text style={styles.lead}>{trust.trusted ? 'Looks like ' : 'Not sure · closest: '}</Text>
+            <Text style={styles.name}>{closest}</Text>
+          </Text>
           <TouchableOpacity
-            style={[styles.metaButton, expanded && styles.metaButtonActive]}
             onPress={onToggleWhy}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            accessibilityRole="button"
+            accessibilityLabel="Why this suggestion"
           >
-            <Ionicons name="information-circle-outline" size={14} color={COLORS.primary} />
-            <Text style={styles.metaText}>Why</Text>
+            <Ionicons
+              name={expanded ? 'information-circle' : 'information-circle-outline'}
+              size={18}
+              color={COLORS.primary}
+            />
           </TouchableOpacity>
-          {/* No primary button under a stated doubt. Offering "Accept" beneath
-              "Dagitab is not sure" contradicts itself; the names below are all
-              equally on offer, so the user picks one rather than confirming a
-              guess the card has just disowned. */}
-          {trust.trusted ? (
-            <TouchableOpacity
-              style={[styles.action, disabled && styles.actionDisabled]}
-              onPress={() => onChoose(suggestion.name)}
-              disabled={disabled}
-            >
-              <Text style={styles.actionText}>Accept</Text>
-            </TouchableOpacity>
-          ) : null}
+          <TouchableOpacity
+            style={[styles.use, disabled && styles.disabled]}
+            onPress={() => onChoose(closest)}
+            disabled={disabled}
+            accessibilityRole="button"
+            accessibilityLabel={`Use ${closest}`}
+          >
+            <Text style={styles.useText}>Use</Text>
+          </TouchableOpacity>
         </View>
+      ) : null}
+
+      {expanded ? <Text style={styles.why}>{formatWhy(suggestion)}</Text> : null}
+
+      <View style={styles.typeRow}>
+        <TextInput
+          style={styles.input}
+          value={typedName}
+          onChangeText={setTypedName}
+          placeholder="Or type the real name, e.g. Printer"
+          placeholderTextColor={COLORS.textLight}
+          maxLength={MAX_NAME_LENGTH}
+          returnKeyType="done"
+          onSubmitEditing={saveTyped}
+          editable={!disabled}
+          autoCapitalize="words"
+          accessibilityLabel="Appliance name"
+        />
+        <TouchableOpacity
+          style={[styles.save, (!typed || disabled) && styles.disabled]}
+          onPress={saveTyped}
+          disabled={!typed || disabled}
+          accessibilityRole="button"
+          accessibilityLabel="Save appliance name"
+        >
+          <Text style={styles.saveText}>Save</Text>
+        </TouchableOpacity>
       </View>
-
-      {!trust.trusted ? (
-        <View style={styles.ambiguousNotice}>
-          <Ionicons name="help-circle-outline" size={14} color={COLORS.textDark} />
-          <Text style={styles.ambiguousText}>
-            {describeUncertainty({
-              varying: trust.varying,
-              swingW: trust.swingW,
-              meanPowerW: suggestion.meanPowerW,
-            })}
-          </Text>
-        </View>
-      ) : null}
-
-      {showPickerInline ? (
-        <View style={styles.ambiguousNotice}>
-          <Ionicons name="pricetag-outline" size={14} color={COLORS.textLight} />
-          <Text style={styles.ambiguousText}>
-            Not one of these? Pick the closest anyway, then rename it under
-            Settings. Dagitab saves how <Text style={styles.emphasis}>this</Text>{' '}
-            appliance draws power, not the name it started from.
-          </Text>
-        </View>
-      ) : null}
-
-      {(showPickerInline || expanded) && alternatives.length > 0 ? (
-        <View style={styles.chipRow}>
-          {alternatives.map((candidate) => (
-            <TouchableOpacity
-              key={candidate.name}
-              style={[styles.chip, disabled && styles.actionDisabled]}
-              onPress={() => onChoose(candidate.name)}
-              disabled={disabled}
-            >
-              <Text style={styles.chipText}>{candidate.name}</Text>
-              {typeof candidate.confidencePercent === 'number' ? (
-                <Text style={styles.chipMeta}>{candidate.confidencePercent}%</Text>
-              ) : null}
-            </TouchableOpacity>
-          ))}
-        </View>
-      ) : null}
-
-      {expanded ? (
-        <View style={styles.detailCard}>
-          <Text style={styles.detailTitle}>Why this suggestion?</Text>
-          <Text style={styles.detailText}>{formatWhy(suggestion)}</Text>
-        </View>
-      ) : null}
-    </>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
+  wrap: {
+    gap: 6,
+  },
   row: {
-    marginTop: -4,
-    marginBottom: 8,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: COLORS.primary + '12',
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: COLORS.primary + '40',
-    paddingHorizontal: 10,
-    paddingVertical: 8,
     gap: 8,
+    paddingLeft: 10,
+    paddingRight: 4,
+    paddingVertical: 4,
+    borderRadius: 10,
+    backgroundColor: '#ECF8EF',
+    borderWidth: 1,
+    borderColor: '#B4E5C2',
+  },
+  // Amber: the card is stating a doubt, so it must not read as an offer.
+  rowUnsure: {
+    backgroundColor: '#FFFBEB',
+    borderColor: '#FDE68A',
   },
   headline: {
     flex: 1,
-    ...FONTS.small,
-    color: COLORS.textDark,
-    fontWeight: '600',
+    fontSize: 13,
   },
-  actions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
+  lead: {
+    color: COLORS.textLight,
   },
-  metaButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: COLORS.primary + '55',
-    backgroundColor: COLORS.white,
-  },
-  metaButtonActive: {
-    backgroundColor: COLORS.primary + '14',
-    borderColor: COLORS.primary,
-  },
-  metaText: {
-    ...FONTS.small,
-    color: COLORS.primary,
+  name: {
+    color: COLORS.text,
     fontWeight: '700',
   },
-  action: {
-    paddingHorizontal: 12,
+  use: {
+    paddingHorizontal: 14,
     paddingVertical: 6,
-    borderRadius: 999,
+    borderRadius: 8,
     backgroundColor: COLORS.primary,
   },
-  actionDisabled: {
-    opacity: 0.55,
-  },
-  actionText: {
-    ...FONTS.small,
+  useText: {
     color: COLORS.white,
     fontWeight: '700',
+    fontSize: 13,
+  },
+  why: {
+    fontSize: 12,
+    lineHeight: 17,
+    color: COLORS.textLight,
+    paddingHorizontal: 2,
+  },
+  typeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  input: {
+    flex: 1,
+    height: 36,
+    paddingHorizontal: 10,
+    paddingVertical: 0,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.background,
+    fontSize: 13,
+    color: COLORS.text,
+  },
+  save: {
+    height: 36,
+    paddingHorizontal: 14,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: COLORS.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  saveText: {
+    color: COLORS.primary,
+    fontWeight: '700',
+    fontSize: 13,
+  },
+  disabled: {
+    opacity: 0.45,
   },
   staleNotice: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 6,
-    marginBottom: 8,
-    paddingVertical: 8,
+    paddingVertical: 6,
     paddingHorizontal: 10,
     borderRadius: 10,
-    // Amber, matching the safety "warning" tone already used across the app and
-    // the web client's treatment of this same notice.
     backgroundColor: '#FFFBEB',
     borderWidth: 1,
     borderColor: '#FDE68A',
   },
   staleText: {
     flex: 1,
-    ...FONTS.small,
+    fontSize: 12,
     color: '#B45309',
-  },
-  ambiguousNotice: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: -2,
-    marginBottom: 6,
-    paddingHorizontal: 2,
-  },
-  ambiguousText: {
-    flex: 1,
-    ...FONTS.small,
-    color: COLORS.textLight,
-  },
-  emphasis: {
-    fontStyle: 'italic',
-    fontWeight: '600',
-  },
-  // Amber rather than the confident green: the card is stating a doubt, and the
-  // container should not read as an offer while the text says otherwise.
-  rowUnsure: {
-    backgroundColor: '#FFFBEB',
-    borderColor: '#FDE68A',
-  },
-  chipRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-    marginBottom: 8,
-  },
-  chip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    backgroundColor: COLORS.white,
-  },
-  chipText: {
-    ...FONTS.small,
-    color: COLORS.textDark,
-    fontWeight: '600',
-  },
-  chipMeta: {
-    ...FONTS.small,
-    color: COLORS.textLight,
-  },
-  detailCard: {
-    marginTop: -2,
-    marginBottom: 8,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    backgroundColor: COLORS.background,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-  },
-  detailTitle: {
-    ...FONTS.small,
-    color: COLORS.textDark,
-    fontWeight: '700',
-    marginBottom: 4,
-  },
-  detailText: {
-    ...FONTS.small,
-    color: COLORS.textLight,
-    lineHeight: 16,
   },
 });
 

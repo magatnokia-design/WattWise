@@ -205,8 +205,6 @@ const OutletsScreen = ({ navigation }) => {
     };
   });
 
-  const onCount = outlets.filter((o) => o.isOn === true).length;
-
   const handleConfirmToggle = async () => {
     const { outlet } = controlModal;
     const current = outlet === 1 ? outlet1Status : outlet2Status;
@@ -276,15 +274,16 @@ const OutletsScreen = ({ navigation }) => {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+        // The appliance-name field lives in the cards: let Save register on
+        // the first tap instead of only dismissing the keyboard.
+        keyboardShouldPersistTaps="handled"
+      >
         <View style={styles.header}>
           <View>
             <Text style={styles.title}>Outlets</Text>
-            <Text style={styles.subtitle}>
-              {outletsUnreachable || hasNeverReported
-                ? 'Your two smart outlets'
-                : `${onCount} of 2 on`}
-            </Text>
           </View>
           <TouchableOpacity
             style={styles.scheduleButton}
@@ -364,11 +363,6 @@ const styles = StyleSheet.create({
     fontSize: 26,
     fontWeight: '700',
     color: COLORS.text,
-  },
-  subtitle: {
-    marginTop: 2,
-    fontSize: 14,
-    color: COLORS.textLight,
   },
   scheduleButton: {
     flexDirection: 'row',

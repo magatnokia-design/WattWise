@@ -163,8 +163,12 @@ infrastructure exists only under `functions/`.
 
   It gets reported as unsure anyway, by a different route, and this note used to deny that.
   A load that fits four profiles about equally leaves the top candidates within
-  `AMBIGUOUS_MARGIN` of each other, and the run comes back `ambiguous: true` - the clients then
-  say the load cannot be named and ask the user to pick. So the escape hatch is the *margin
+  `AMBIGUOUS_MARGIN` of each other, and the run comes back `ambiguous: true` - the phone then
+  offers the single closest match as "Not sure · closest: …" (amber, not "Looks like") beside a
+  field to type the real name. Since Oct 2026 the phone shows one suggestion, not a ranked list
+  (capstone panel: a 60 W printer and a 60 W fan are indistinguishable by wattage); a typed name
+  goes through the same `registerApplianceProfile` call as a picked one, so it is learned as the
+  user's own signature and recognised next time. So the escape hatch is the *margin
   between candidates*, not the spread of the run. (`unsupported: true` is the separate, harsher
   path for a load outside the catalogue entirely, i.e. `effectiveScore > MAX_ACCEPTABLE_SCORE`.)
 
