@@ -21,7 +21,6 @@ import { formatCurrency } from '../BudgetTracking/utils/budgetHelpers';
 import LiveUsagePanel from './components/LiveUsagePanel';
 import UsageBarChart from './components/UsageBarChart';
 import BillBreakdown from './components/BillBreakdown';
-import { RateNotice } from '../../components/common/RateNotice';
 import { WebAppNotice } from '../../components/common/WebAppNotice';
 import { WEB_APP_LINKS } from '../../constants/webApp';
 import { useDismissibleNotice } from '../../hooks/useDismissibleNotice';
@@ -130,10 +129,7 @@ export const AnalyticsScreen = ({ navigation }) => {
   const [fallbackDaily, setFallbackDaily] = useState(null);
   const [rateProfileId, setRateProfileId] = useState(null);
   const [supplyRates, setSupplyRates] = useState(null);
-  const [hasSupplyRates, setHasSupplyRates] = useState(true);
-  const rateNotice = useDismissibleNotice('rate-notice');
   const webNotice = useDismissibleNotice('analytics-web-app');
-  const showRateNotice = !hasSupplyRates && rateNotice.visible;
 
   // The analytics fetch lives inside its effect rather than in a callback, so
   // this is what re-runs it: bumping the tick is the retry. See useOfflineRetry.
@@ -184,7 +180,6 @@ export const AnalyticsScreen = ({ navigation }) => {
       if (!active || !result.success) return;
       setRateProfileId(result.data.rateProfileId || null);
       setSupplyRates(result.data.supplyRates || null);
-      setHasSupplyRates(result.data.hasSupplyRates !== false);
     });
 
     // Live outlet telemetry. This is what makes today's usage appear
@@ -377,16 +372,9 @@ export const AnalyticsScreen = ({ navigation }) => {
           </TouchableOpacity>
         </View>
 
-        {showRateNotice && (
-          <RateNotice
-            style={styles.notice}
-            onPress={() => navigation?.navigate?.('Settings')}
-            onDismiss={rateNotice.dismiss}
-          />
-        )}
-
-        {/* One banner at a time, and the rate warning outranks this. */}
-        {!showRateNotice && webNotice.visible && (
+        {/* The "enter your rate" banner is gone (Oct 2026): the rate is
+            automatic now, read from PELCO III every month. */}
+        {webNotice.visible && (
           <WebAppNotice
             style={styles.notice}
             title="Easier on a bigger screen"

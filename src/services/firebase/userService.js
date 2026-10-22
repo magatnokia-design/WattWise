@@ -12,6 +12,7 @@ import { httpsCallable } from 'firebase/functions';
 import { db, functions } from './config';
 import { normalizeSupplyRates, hasSupplyRates } from '../../utils/billing';
 import { buildReleasedDeviceFields, RELEASE_REASONS } from '../../utils/deviceRelease';
+import { withWriteTimeout } from '../../utils/connectivity';
 
 const DEFAULT_USER_PREFERENCES = {
   electricityRate: 0,
@@ -214,6 +215,10 @@ export const userService = {
           // "set to the defaults" to decide whether to warn the user.
           supplyRates: profile.supplyRates || null,
           hasSupplyRates: hasSupplyRates(profile.supplyRates),
+          // 'auto' (the default, since Oct 2026): Dagitab keeps the rate in
+          // step with PELCO III's posted one. 'manual': the user typed theirs.
+          rateMode: profile.rateMode === 'manual' ? 'manual' : 'auto',
+          ratesSourceMonth: profile.ratesSourceMonth || null,
         },
       };
     } catch (error) {
@@ -289,12 +294,17 @@ export const userService = {
     try {
       const normalized = normalizeSupplyRates(rates);
 
+      // Typing a rate takes the account off the automatic rate, so the daily
+      // job (applyPelcoRates) stops overwriting it. adoptAutomaticRates is the
+      // way back.
       await setDoc(
         doc(db, 'users', userId),
         {
           uid: userId,
           supplyRates: normalized,
           supplyRatesUpdatedAt: new Date(),
+          rateMode: 'manual',
+          ratesSourceMonth: null,
         },
         { merge: true }
       );
@@ -302,6 +312,66 @@ export const userService = {
       return { success: true, data: normalized };
     } catch (error) {
       console.error('Error saving supply rates:', error);
+      return { success: false, error: error.message };
+    }
+  },
+
+  /**
+   * Puts the account on the automatic rate: PELCO III's latest posted
+   * generation rate (pelco_rates/latest, kept current by applyPelcoRates),
+   * with the other Block 1 lines left as they are (Oct 2026: "just use
+   * Dagitab"). Called on every sign-in for accounts not set to 'manual', and by
+   * Settings' "Use the automatic rate".
+   *
+   * @param {object} [options]
+   * @param {boolean} [options.force] Switch a 'manual' account back as well.
+   * @returns {Promise<{success: boolean, changed?: boolean, rate?: object, pending?: boolean, error?: string}>}
+   */
+  adoptAutomaticRates: async (userId, { force = false } = {}) => {
+    if (!userId) return { success: false, error: 'Missing user' };
+
+    try {
+      const userRef = doc(db, 'users', userId);
+      const [profileSnap, latestSnap] = await Promise.all([
+        getDoc(userRef),
+        getDoc(doc(db, 'pelco_rates', 'latest')),
+      ]);
+      const profile = profileSnap.exists() ? profileSnap.data() : {};
+      if (profile.rateMode === 'manual' && !force) return { success: true, changed: false };
+
+      const latest = latestSnap.exists() ? latestSnap.data() : null;
+      const generation = Number(latest?.generation);
+      const current = profile.supplyRates || {};
+
+      // Not posted to Dagitab yet (before the job's first run): mark the account
+      // automatic and let the job fill the rate in.
+      if (!(generation > 0)) {
+        if (profile.rateMode === 'auto') return { success: true, changed: false };
+        return await withWriteTimeout(
+          setDoc(userRef, { rateMode: 'auto' }, { merge: true })
+            .then(() => ({ success: true, changed: true }))
+        );
+      }
+
+      if (
+        profile.rateMode === 'auto'
+        && Number(current.generation) === generation
+        && profile.ratesSourceMonth === latest.billingMonth
+      ) {
+        return { success: true, changed: false, rate: latest };
+      }
+
+      const supplyRates = normalizeSupplyRates({ ...current, generation });
+      return await withWriteTimeout(
+        setDoc(userRef, {
+          supplyRates,
+          supplyRatesUpdatedAt: new Date(),
+          rateMode: 'auto',
+          ratesSourceMonth: latest.billingMonth || null,
+        }, { merge: true }).then(() => ({ success: true, changed: true, rate: latest }))
+      );
+    } catch (error) {
+      console.error('Error adopting the automatic rate:', error);
       return { success: false, error: error.message };
     }
   },

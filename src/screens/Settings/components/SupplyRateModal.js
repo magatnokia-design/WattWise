@@ -55,6 +55,14 @@ const buildInitialValues = (rates, hasSavedRates) => {
 
 const ZERO_RATE = '0.0000';
 
+const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July',
+  'August', 'September', 'October', 'November', 'December'];
+// '2026-09' -> 'September 2026'
+const monthLabel = (key) => {
+  const [year, month] = String(key || '').split('-').map(Number);
+  return year && month ? `${MONTH_NAMES[month - 1]} ${year}` : null;
+};
+
 /**
  * Editor for PELCO III Block 1 (generation & transmission).
  *
@@ -62,7 +70,24 @@ const ZERO_RATE = '0.0000';
  * ERC-approved constants, so exposing them would invite the user to break a
  * figure they cannot legitimately change.
  */
-const SupplyRateModal = ({ visible, currentRates, hasSavedRates = true, onClose, onSave }) => {
+/**
+ * Since Oct 2026 the rate is AUTOMATIC by default: Dagitab uses PELCO III's
+ * official generation rate, read monthly by applyPelcoRates, so nobody has to
+ * find it. This form is for the exception - a bill that shows a different rate
+ * - and saving it puts the account on 'manual' until "Use the automatic rate".
+ */
+const SupplyRateModal = ({
+  visible,
+  currentRates,
+  hasSavedRates = true,
+  rateMode = 'auto',
+  ratesSourceMonth = null,
+  onUseAutomatic,
+  onClose,
+  onSave,
+}) => {
+  const [manualOpen, setManualOpen] = useState(rateMode === 'manual');
+  const [switching, setSwitching] = useState(false);
   const { width } = useWindowDimensions();
   const [values, setValues] = useState(() => buildInitialValues(currentRates, hasSavedRates));
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -71,12 +96,27 @@ const SupplyRateModal = ({ visible, currentRates, hasSavedRates = true, onClose,
 
   useEffect(() => {
     if (visible) {
+      setManualOpen(rateMode === 'manual');
+      setSwitching(false);
       setValues(buildInitialValues(currentRates, hasSavedRates));
       setShowAdvanced(false);
       setSaving(false);
       setError(null);
     }
-  }, [visible, currentRates, hasSavedRates]);
+  }, [visible, currentRates, hasSavedRates, rateMode]);
+
+  const handleUseAutomatic = useCallback(async () => {
+    if (!onUseAutomatic || switching) return;
+    setSwitching(true);
+    setError(null);
+    const result = await onUseAutomatic();
+    setSwitching(false);
+    if (result && result.success === false) {
+      setError(result.error || 'Could not switch to the automatic rate.');
+      return;
+    }
+    onClose?.();
+  }, [onUseAutomatic, onClose, switching]);
 
   const parsedRates = useMemo(() => {
     return SUPPLY_RATE_FIELDS.reduce((rates, field) => {
@@ -192,6 +232,51 @@ const SupplyRateModal = ({ visible, currentRates, hasSavedRates = true, onClose,
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator
             >
+              {!manualOpen ? (
+                <>
+                  <View style={styles.autoCard}>
+                    <View style={styles.autoHead}>
+                      <Ionicons name="checkmark-circle" size={18} color={COLORS.primary} />
+                      <Text style={styles.autoTitle}>Automatic</Text>
+                    </View>
+                    <Text style={styles.autoValue}>
+                      {Number(currentRates?.generation) > 0
+                        ? `₱${Number(currentRates.generation).toFixed(4)}`
+                        : 'Updating…'}
+                      <Text style={styles.autoUnit}> /kWh</Text>
+                    </Text>
+                    <Text style={styles.autoSub}>
+                      {monthLabel(ratesSourceMonth)
+                        ? `PELCO III's official rate · ${monthLabel(ratesSourceMonth)}`
+                        : "PELCO III's official rate"}
+                    </Text>
+                    <Text style={styles.autoNote}>
+                      Dagitab reads it from PELCO III every month - nothing to look up.
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => setManualOpen(true)}
+                    activeOpacity={0.7}
+                    style={styles.manualLink}
+                  >
+                    <Text style={styles.manualLinkText}>Use my own rate instead</Text>
+                  </TouchableOpacity>
+                </>
+              ) : (
+              <>
+              {rateMode === 'manual' ? (
+                <TouchableOpacity
+                  style={styles.backToAuto}
+                  onPress={handleUseAutomatic}
+                  disabled={switching}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="sync" size={16} color={COLORS.primary} />
+                  <Text style={styles.backToAutoText}>
+                    {switching ? 'Switching…' : 'Use the automatic rate'}
+                  </Text>
+                </TouchableOpacity>
+              ) : null}
               <Text style={styles.sectionLabel}>Generation rate</Text>
               <View style={styles.primaryRow}>
                 <TextInput
@@ -254,6 +339,9 @@ const SupplyRateModal = ({ visible, currentRates, hasSavedRates = true, onClose,
                 </Text>
               ) : null}
               {warning ? <Text style={styles.warning}>{warning}</Text> : null}
+              </>
+              )}
+              {!manualOpen && error ? <Text style={styles.error}>{error}</Text> : null}
             </ScrollView>
 
             <View style={styles.actions}>
@@ -262,16 +350,18 @@ const SupplyRateModal = ({ visible, currentRates, hasSavedRates = true, onClose,
                 onPress={onClose}
                 activeOpacity={0.7}
               >
-                <Text style={styles.cancelText}>Cancel</Text>
+                <Text style={styles.cancelText}>{manualOpen ? 'Cancel' : 'Done'}</Text>
               </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.saveButton, (!canSave || saving) && styles.saveButtonDisabled]}
-                onPress={handleSave}
-                disabled={!canSave || saving}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.saveText}>{saving ? 'Saving…' : 'Save rate'}</Text>
-              </TouchableOpacity>
+              {manualOpen ? (
+                <TouchableOpacity
+                  style={[styles.saveButton, (!canSave || saving) && styles.saveButtonDisabled]}
+                  onPress={handleSave}
+                  disabled={!canSave || saving}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.saveText}>{saving ? 'Saving…' : 'Save my rate'}</Text>
+                </TouchableOpacity>
+              ) : null}
             </View>
           </View>
         </KeyboardAvoidingView>
@@ -455,6 +545,67 @@ const styles = StyleSheet.create({
   },
   previewValueStrong: {
     fontSize: 16,
+    fontWeight: '700',
+    color: COLORS.primary,
+  },
+  autoCard: {
+    backgroundColor: '#ECF8EF',
+    borderRadius: 14,
+    padding: 16,
+  },
+  autoHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  autoTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.primary,
+  },
+  autoValue: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: COLORS.text,
+    marginTop: 8,
+  },
+  autoUnit: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.textLight,
+  },
+  autoSub: {
+    fontSize: 13,
+    color: COLORS.text,
+    marginTop: 2,
+  },
+  autoNote: {
+    fontSize: 12,
+    color: COLORS.textLight,
+    marginTop: 8,
+  },
+  manualLink: {
+    alignSelf: 'center',
+    paddingVertical: 14,
+  },
+  manualLinkText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: COLORS.primary,
+  },
+  backToAuto: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 11,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: COLORS.primary,
+    marginBottom: 14,
+  },
+  backToAutoText: {
+    fontSize: 14,
     fontWeight: '700',
     color: COLORS.primary,
   },

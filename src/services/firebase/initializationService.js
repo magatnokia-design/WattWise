@@ -71,6 +71,10 @@ export const initializationService = {
         }
         if (budget.created) repaired.push('budget');
 
+        // Best effort, never fatal: an account the rate cannot reach yet is
+        // still a working account, priced at the defaults until it can.
+        await userService.adoptAutomaticRates(userId).catch(() => null);
+
         if (repaired.length > 0) {
           console.log('Account initialization repaired:', repaired.join(', '));
         }

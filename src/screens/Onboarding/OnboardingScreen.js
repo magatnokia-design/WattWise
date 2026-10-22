@@ -100,8 +100,8 @@ const slides = [
   {
     id: '9',
     icon: 'receipt',
-    title: 'Set Your PELCO III Rate',
-    description: 'Every peso figure in Dagitab is computed on the PELCO III residential tariff.\n\nOne last step: open Settings → Electricity rate and enter the generation rate printed on your bill (or from pelco3.org/rates.php).\n\nUntil you do, costs are estimates based on default rates.',
+    title: 'Rates Are Automatic',
+    description: "Every peso figure in Dagitab is computed on the PELCO III residential tariff.\n\nDagitab reads PELCO III's official rate every month, so there is nothing to look up or type. If your bill ever shows a different rate, you can enter your own in Settings.",
   },
 ];
 

@@ -107,6 +107,7 @@ const SettingsScreen = ({ navigation }) => {
     showOfflineState,
     fetchSettings,
     updateSupplyRates,
+    switchToAutomaticRates,
     updateNotifications,
     updateDeviceSettings,
     clearDeviceSettings,
@@ -180,6 +181,13 @@ const SettingsScreen = ({ navigation }) => {
   // default dressed up as the user's own figure.
   const ratesSet = Boolean(settings.hasSupplyRates && Number(settings.supplyRates?.generation) > 0);
   const generationRate = ratesSet ? Number(settings.supplyRates.generation) : 0;
+  // Automatic (the default since Oct 2026): PELCO III's posted rate, kept
+  // current by applyPelcoRates. Manual: the user typed their own.
+  const ratesAutomatic = settings.rateMode !== 'manual';
+  const RATE_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const rateMonth = /^d{4}-d{2}$/.test(String(settings.ratesSourceMonth || ''))
+    ? `${RATE_MONTHS[Number(settings.ratesSourceMonth.slice(5)) - 1]} ${settings.ratesSourceMonth.slice(0, 4)}`
+    : null;
 
   const handleRatePress = useCallback(() => {
     setRateModalVisible(true);
@@ -566,11 +574,13 @@ const SettingsScreen = ({ navigation }) => {
                 <Text style={styles.rateUnit}> /kWh</Text>
               </Text>
               <Text style={styles.rateSub}>
-                {ratesSet ? 'Generation rate · PELCO III' : 'Not set yet · enter it from your bill'}
+                {ratesAutomatic
+                  ? (ratesSet && rateMonth ? `Automatic · PELCO III ${rateMonth}` : 'Automatic · updating from PELCO III')
+                  : 'Your own rate'}
               </Text>
             </View>
             <View style={styles.ratePill}>
-              <Text style={styles.ratePillText}>{ratesSet ? 'Edit' : 'Set'}</Text>
+              <Text style={styles.ratePillText}>{ratesAutomatic ? 'Auto' : 'Edit'}</Text>
             </View>
           </TouchableOpacity>
           <Separator />
@@ -772,6 +782,9 @@ const SettingsScreen = ({ navigation }) => {
         visible={rateModalVisible}
         currentRates={settings.supplyRates}
         hasSavedRates={ratesSet}
+        rateMode={settings.rateMode}
+        ratesSourceMonth={settings.ratesSourceMonth}
+        onUseAutomatic={switchToAutomaticRates}
         onClose={handleRateClose}
         onSave={handleRateSave}
       />

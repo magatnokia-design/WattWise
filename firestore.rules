@@ -71,6 +71,15 @@ service cloud.firestore {
       allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
     }
     
+    // PELCO III's official generation rate per month, plus 'latest', read
+    // from its posted PDFs by applyPelcoRates (Oct 2026). Public figures, so
+    // any signed-in account may read them - the app shows which month's rate
+    // it is using. Only Cloud Functions write.
+    match /pelco_rates/{month} {
+      allow read: if isAuthenticated();
+      allow write: if false;
+    }
+
     // ===========================
     // USERS COLLECTION
     // ===========================

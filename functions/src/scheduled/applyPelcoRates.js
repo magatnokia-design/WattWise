@@ -27,6 +27,13 @@ const peso = (value) => `PHP ${(Number(value) || 0).toFixed(2)}`;
  * - Only Generation is published; the other Block 1 lines keep the values the
  *   estimate used.
  * - A month that is not posted yet is simply tried again tomorrow.
+ *
+ * It also keeps every account on the AUTOMATIC rate current (Oct 2026: "just
+ * use Dagitab"): the newest posted rate goes to pelco_rates/latest, and each
+ * user whose rateMode is not 'manual' gets it as their Settings generation
+ * rate - which is what live costs, daily costs, budgets and the next
+ * statement's estimate all price with. A user who typed their own rate is
+ * 'manual' and left alone.
  */
 async function applyPelcoRates() {
   const db = admin.firestore();
@@ -59,9 +66,69 @@ async function applyPelcoRates() {
     summary.push({ billingMonth, generation: rate.generation, finalized });
   }
 
-  logger.info('applyPelcoRates done', { summary });
-  return { success: true, summary };
+  const latest = await refreshLatestRate(db, summary);
+  const ratesUpdated = latest ? await syncAutomaticRates(db, latest) : 0;
+
+  logger.info('applyPelcoRates done', { summary, latest, ratesUpdated });
+  return { success: true, summary, latest, ratesUpdated };
 }
+
+/**
+ * pelco_rates/latest: the newest month with a posted rate, never moved back to
+ * an older month.
+ */
+const refreshLatestRate = async (db, summary) => {
+  const latestRef = db.doc('pelco_rates/latest');
+  const current = (await latestRef.get()).data() || null;
+  const newest = summary
+    .filter((entry) => Number(entry.generation) > 0)
+    .sort((a, b) => b.billingMonth.localeCompare(a.billingMonth))[0];
+
+  if (!newest || (current?.billingMonth && current.billingMonth >= newest.billingMonth)) {
+    return current;
+  }
+
+  const monthDoc = (await db.doc(`pelco_rates/${newest.billingMonth}`).get()).data() || {};
+  const latest = {
+    billingMonth: newest.billingMonth,
+    generation: newest.generation,
+    sourceUrl: monthDoc.sourceUrl || null,
+    updatedAtMs: Date.now(),
+  };
+  await latestRef.set(latest);
+  return latest;
+};
+
+/** Brings every automatic account to the latest posted generation rate. */
+const syncAutomaticRates = async (db, latest) => {
+  const generation = Number(latest?.generation);
+  if (!(generation > 0)) return 0;
+
+  const usersSnapshot = await db.collection('users').get();
+  let updated = 0;
+  await Promise.all(usersSnapshot.docs.map(async (userDoc) => {
+    const data = userDoc.data() || {};
+    if (data.rateMode === 'manual') return;
+    if (
+      Number(data.supplyRates?.generation) === generation
+      && data.ratesSourceMonth === latest.billingMonth
+      && data.rateMode === 'auto'
+    ) return;
+
+    try {
+      await userDoc.ref.set({
+        supplyRates: normalizeSupplyRates({ ...(data.supplyRates || {}), generation }),
+        supplyRatesUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        rateMode: 'auto',
+        ratesSourceMonth: latest.billingMonth,
+      }, { merge: true });
+      updated += 1;
+    } catch (error) {
+      logger.error('Automatic rate update failed for user', { userId: userDoc.id, message: error?.message });
+    }
+  }));
+  return updated;
+};
 
 const finalizePendingStatements = async ({ db, billingMonth, rate, todayKey }) => {
   const usersSnapshot = await db.collection('users').get();
@@ -141,4 +208,4 @@ const sendFinalStatement = async ({ userId, billingMonth, invoice }) => {
   });
 };
 
-module.exports = { applyPelcoRates, finalizePendingStatements };
+module.exports = { applyPelcoRates, finalizePendingStatements, refreshLatestRate, syncAutomaticRates };
