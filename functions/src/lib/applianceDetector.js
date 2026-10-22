@@ -42,6 +42,11 @@ const MAX_ACCEPTABLE_SCORE = 0.55;
 // Below this separation between the top two profiles, power alone cannot settle
 // the answer and the user has to pick.
 const AMBIGUOUS_MARGIN = 0.12;
+// Below the lamp profile's upper mean-power edge, a steady low-power fan and
+// lamp have the same observable shape. Keep both choices visible rather than
+// presenting the lamp as a confident identification.
+const LOW_POWER_OVERLAP_MAX_W = 22;
+const LOW_POWER_STEADY_MAX_STD_DEV_W = 2.5;
 
 // Learned ("confirm to learn") signatures recorded from the user's own runs.
 // A saved signature holds measured values rather than the wide ranges the
@@ -103,7 +108,9 @@ const APPLIANCE_PROFILES = [
     // Fixed-speed motor: steady once spun up.
     stdDevPower: [0, 9],
     runtimeSec: [120, 43200],
-    activeRatio: [0.7, 1],
+    // The 15 W active threshold is useful for separating larger loads, but it
+    // must not exclude efficient fans that run below it.
+    activeRatio: [0, 1],
     highRatio: [0, 0.03],
     // Widened with the floor above, and this is the half that actually mattered.
     // lowRatio counts samples under LOW_POWER_THRESHOLD_W (20 W), so a 14 W fan
@@ -809,10 +816,17 @@ const detectApplianceFromRunState = (runState, options = {}) => {
   }
 
   const confidence = toConfidence(top.effectiveScore, margin);
+  const lowPowerSteadyOverlap =
+    features.meanPower <= LOW_POWER_OVERLAP_MAX_W &&
+    features.stdDevPower <= LOW_POWER_STEADY_MAX_STD_DEV_W;
 
   // Candidates the user can pick from when power alone cannot separate them.
   const candidates = ranked
-    .filter((entry, index) => index === 0 || entry.effectiveScore <= top.effectiveScore + 0.2)
+    .filter((entry, index) =>
+      index === 0
+      || entry.effectiveScore <= top.effectiveScore + 0.2
+      || (lowPowerSteadyOverlap && entry.label === 'Electric Fan')
+    )
     .slice(0, 4)
     .map((entry, index) => ({
       name: entry.label,
@@ -828,7 +842,10 @@ const detectApplianceFromRunState = (runState, options = {}) => {
   const isAmbiguous =
     candidates.length > 1 &&
     top.source !== 'learned' &&
-    (confidence - runnerUpConfidence) < AMBIGUOUS_MARGIN;
+    (
+      (confidence - runnerUpConfidence) < AMBIGUOUS_MARGIN
+      || lowPowerSteadyOverlap
+    );
 
   return {
     appliance: top.label,

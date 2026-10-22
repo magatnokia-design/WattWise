@@ -767,6 +767,11 @@ test('an efficient ceiling fan is no longer excluded on wattage alone', () => {
   const fan = APPLIANCE_PROFILES.find((profile) => profile.label === 'Electric Fan');
   assert.ok(14.1 >= fan.meanPower[0], 'inside the meanPower range');
   assert.ok(result, 'the run still resolves to something rather than nothing');
+  assert.equal(result.ambiguous, true, 'a low-power fan/lamp overlap must be presented as uncertain');
+  assert.ok(
+    result.candidates.some((candidate) => candidate.name === 'Electric Fan'),
+    'the fan must remain selectable for demo and user confirmation'
+  );
 });
 
 test('one correction settles the fan-or-lamp question permanently', () => {

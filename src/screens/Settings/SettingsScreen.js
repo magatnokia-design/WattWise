@@ -676,8 +676,9 @@ const SettingsScreen = ({ navigation }) => {
             <View style={styles.namingGuidanceDivider} />
 
             <Text style={styles.namingGuidanceExample}>
-              A 14 W ceiling fan will suggest LED Lamp. Rename it once and it is a
-              ceiling fan every time it comes back.
+              A low-power ceiling fan may overlap with an LED Lamp. Pick the fan
+              when it is offered, then rename it once and it is recognised every
+              time it comes back.
             </Text>
           </View>
         </SectionCard>
