@@ -13,6 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Input } from '../../../components/common/Input';
 import { Button } from '../../../components/common/Button';
 import { Wordmark } from '../../../components/common/Wordmark';
+import { GoogleSignInButton } from '../../../components/common/GoogleSignInButton';
 import AppDialog from '../../../components/common/AppDialog';
 import { authService } from '../../../services/firebase';
 import { COLORS } from '../../../constants/colors';
@@ -198,6 +199,8 @@ const handleLogin = async () => {
               onPress={handleLogin}
               loading={loading}
             />
+
+            <GoogleSignInButton onError={setDialog} disabled={loading} />
 
             <View style={styles.signupContainer}>
               <Text style={styles.signupText}>Don't have an account? </Text>

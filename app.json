@@ -33,7 +33,8 @@
           "color": "#008D43",
           "defaultChannel": "default"
         }
-      ]
+      ],
+      "@react-native-google-signin/google-signin"
     ],
     "android": {
       "allowBackup": false,

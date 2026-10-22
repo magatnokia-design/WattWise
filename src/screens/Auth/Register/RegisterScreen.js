@@ -13,6 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Input } from '../../../components/common/Input';
 import { Button } from '../../../components/common/Button';
 import { Wordmark } from '../../../components/common/Wordmark';
+import { GoogleSignInButton } from '../../../components/common/GoogleSignInButton';
 import AppDialog from '../../../components/common/AppDialog';
 import { authService, initializationService } from '../../../services/firebase';
 import { COLORS } from '../../../constants/colors';
@@ -285,6 +286,10 @@ const handleRegister = async () => {
               loading={loading}
               style={{ marginTop: 8 }}
             />
+
+            {/* Same action as on Login: Google creates the account if the
+                address has none, so there is no separate "sign up" flavour. */}
+            <GoogleSignInButton onError={setDialog} disabled={loading} />
 
             <View style={styles.loginContainer}>
               <Text style={styles.loginText}>Already have an account? </Text>

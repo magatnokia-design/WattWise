@@ -31,7 +31,7 @@ import {
   formatVersion,
   formatCurrency,
 } from './utils/settingsHelpers';
-import { authService } from '../../services/firebase/authService';
+import { authService, hasPasswordSignIn } from '../../services/firebase/authService';
 
 const SectionHeader = ({ title }) => (
   <Text style={styles.sectionHeader}>{title}</Text>
@@ -756,6 +756,7 @@ const SettingsScreen = ({ navigation }) => {
       <DeleteAccountModal
         visible={deleteModalVisible}
         email={settings.email}
+        usesPassword={hasPasswordSignIn(user)}
         onClose={() => setDeleteModalVisible(false)}
         onConfirm={handleDeleteAccount}
       />

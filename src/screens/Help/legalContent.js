@@ -135,7 +135,7 @@ export const PRIVACY_SECTIONS = [
     id: 'collected',
     title: 'What is stored',
     bullets: [
-      'Account details — your email address and display name',
+      'Account details — your email address and display name (from Google, if you sign in with Google)',
       'Energy measurements — voltage, current, power and accumulated energy for each outlet, roughly every 1.5 seconds while your unit is online',
       'Appliance signatures — the power patterns of appliances you confirm',
       'Activity history — outlet switches, daily summaries and monthly statements',
@@ -143,6 +143,16 @@ export const PRIVACY_SECTIONS = [
       'Schedules and safety settings — timers and your power thresholds',
       'Your paired unit\'s device ID',
       'A push notification token, only if you turn notifications on',
+    ],
+  },
+  {
+    id: 'google',
+    title: 'Signing in with Google',
+    body: [
+      'If you choose Continue with Google, Google shares three things with Dagitab: your name, your email address and your profile picture. Dagitab does not ask for, and cannot see, your Gmail, contacts, calendar, Drive or anything else in your Google account.',
+      'Your email address is how you sign in and where your statements and alerts are sent. Your name is used to greet you in the app and in those emails. Firebase keeps the link to your profile picture with your sign-in record, but Dagitab does not show or use it.',
+      'Information from Google is used only to sign you in and for the features described here. It is not sold, not used for advertising, and not shared with anyone beyond the services listed under "Where it is stored". Dagitab\x27s use of information received from Google follows the Google API Services User Data Policy, including its Limited Use requirements.',
+      'You can remove Dagitab\x27s access at any time from your Google Account, under Security → Third-party apps & services. Deleting your Dagitab account from Settings removes everything Dagitab stored.',
     ],
   },
   {

@@ -6,7 +6,10 @@ import {
   reload,
   updateProfile,
   reauthenticateWithCredential,
-  EmailAuthProvider
+  EmailAuthProvider,
+  GoogleAuthProvider,
+  signInWithCredential,
+  getAdditionalUserInfo,
 } from "firebase/auth";
 import { httpsCallable } from 'firebase/functions';
 import { auth, functions } from "./config";
@@ -15,6 +18,11 @@ import {
   getActivePushToken,
   clearActivePushToken,
 } from '../notifications/activePushToken';
+import {
+  pickGoogleAccount,
+  forgetGoogleAccount,
+  GOOGLE_SIGN_IN_CANCELLED,
+} from '../auth/googleSignIn';
 
 const normalizeEmail = (email = '') => String(email).trim().toLowerCase();
 
@@ -26,6 +34,15 @@ const normalizeEmail = (email = '') => String(email).trim().toLowerCase();
  * dead. Sign-out itself is not on this budget - only the cleanup before it.
  */
 const PUSH_CLEANUP_TIMEOUT_MS = 3000;
+
+/**
+ * Whether the account can sign in with a password. A Google-only account has
+ * none, so anything that asks for one - deleting the account - has to confirm
+ * with Google instead. An account can hold both: Firebase keeps one account per
+ * email, so Google sign-in on an existing address lands in that account.
+ */
+export const hasPasswordSignIn = (user) =>
+  Boolean(user?.providerData?.some((profile) => profile?.providerId === 'password'));
 
 const isExpectedAuthError = (code) => [
   'auth/invalid-credential',
@@ -80,6 +97,40 @@ export const authService = {
         console.error('Login error:', error);
       }
       return { success: false, error: error.message, code: error.code };
+    }
+  },
+
+  /**
+   * Continue with Google. Creates the account on first use; useAuth then builds
+   * its Firestore documents through ensureUserInitialized, exactly as for an
+   * account registered with a password, and the address arrives verified, so
+   * the verify-email gate does not apply.
+   *
+   * Firebase keeps one account per email address. Google on an address that
+   * already has a password account signs into that same account - but if that
+   * address was never verified, Firebase drops the password and the account is
+   * Google-only from then on. Its data is untouched.
+   */
+  signInWithGoogle: async () => {
+    try {
+      const { idToken } = await pickGoogleAccount();
+      const credential = GoogleAuthProvider.credential(idToken);
+      const userCredential = await signInWithCredential(auth, credential);
+      return {
+        success: true,
+        user: userCredential.user,
+        // True on the sign-in that created the account, whose Firestore
+        // documents useAuth is still writing in the background.
+        isNewUser: getAdditionalUserInfo(userCredential)?.isNewUser === true,
+      };
+    } catch (error) {
+      if (error?.code === GOOGLE_SIGN_IN_CANCELLED) {
+        return { success: false, cancelled: true };
+      }
+      if (!isExpectedAuthError(error?.code)) {
+        console.error('Google sign-in error:', error);
+      }
+      return { success: false, error: error?.message, code: error?.code };
     }
   },
 
@@ -199,6 +250,7 @@ export const authService = {
       clearActivePushToken();
 
       await signOut(auth);
+      await forgetGoogleAccount();
       return { success: true };
     } catch (error) {
       console.error('Logout error:', error);
@@ -263,6 +315,10 @@ export const authService = {
    * The data is deleted server-side. Doing it here would mean a phone that
    * loses signal partway through leaves measurements owned by a UID that can no
    * longer sign in to remove them.
+   *
+   * A Google-only account has no password, so the same proof is taken from
+   * Google's account picker instead: `password` is ignored and the recent
+   * sign-in Firebase insists on comes from a fresh Google credential.
    */
   deleteAccount: async (password) => {
     try {
@@ -281,20 +337,27 @@ export const authService = {
         };
       }
 
-      if (!password) {
-        return {
-          success: false,
-          error: 'Enter your password to confirm',
-          code: 'auth/missing-password',
-        };
-      }
+      if (hasPasswordSignIn(user)) {
+        if (!password) {
+          return {
+            success: false,
+            error: 'Enter your password to confirm',
+            code: 'auth/missing-password',
+          };
+        }
 
-      // Fails with auth/wrong-password on a bad password, which the caller maps
-      // to a message rather than treating as a delete failure.
-      await reauthenticateWithCredential(
-        user,
-        EmailAuthProvider.credential(email, password)
-      );
+        // Fails with auth/wrong-password on a bad password, which the caller maps
+        // to a message rather than treating as a delete failure.
+        await reauthenticateWithCredential(
+          user,
+          EmailAuthProvider.credential(email, password)
+        );
+      } else {
+        // auth/user-mismatch if they pick a different Google account than the
+        // one signed in - the caller says so rather than deleting anything.
+        const { idToken } = await pickGoogleAccount();
+        await reauthenticateWithCredential(user, GoogleAuthProvider.credential(idToken));
+      }
 
       const callable = httpsCallable(functions, 'deleteAccount');
       const result = await callable({ confirmEmail: email });
@@ -310,6 +373,7 @@ export const authService = {
       } catch {
         // Already signed out by the deletion; nothing to do.
       }
+      await forgetGoogleAccount();
 
       return {
         success: true,
@@ -317,6 +381,10 @@ export const authService = {
         releasedDeviceId: result.data.releasedDeviceId || null,
       };
     } catch (error) {
+      if (error?.code === GOOGLE_SIGN_IN_CANCELLED) {
+        return { success: false, cancelled: true };
+      }
+
       const code = typeof error?.code === 'string'
         ? error.code.replace('functions/', '')
         : error?.code;

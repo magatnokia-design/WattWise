@@ -26,6 +26,10 @@ import { COLORS } from '../../../constants/colors';
  * are about to lose. The typed email cannot be produced by a mis-tap, and the
  * password is what Firebase requires anyway to delete an account - asked for
  * plainly here rather than thrown back as an error afterwards.
+ *
+ * A Google-only account has no password (`usesPassword` false): the field is
+ * hidden and the delete button opens Google's account picker instead, which is
+ * the same proof of a recent sign-in.
  */
 
 // What actually gets removed. Written as user-facing nouns rather than
@@ -39,7 +43,7 @@ const DELETED_ITEMS = [
   ['⏱️', 'Schedules and safety settings', 'Timers, countdowns and your power safety thresholds.'],
 ];
 
-export const DeleteAccountModal = ({ visible, email, onClose, onConfirm }) => {
+export const DeleteAccountModal = ({ visible, email, usesPassword = true, onClose, onConfirm }) => {
   const [step, setStep] = useState(1);
   const [typedEmail, setTypedEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -53,7 +57,7 @@ export const DeleteAccountModal = ({ visible, email, onClose, onConfirm }) => {
     [typedEmail, accountEmail]
   );
 
-  const canDelete = emailMatches && password.length > 0 && !deleting;
+  const canDelete = emailMatches && (!usesPassword || password.length > 0) && !deleting;
 
   const reset = useCallback(() => {
     setStep(1);
@@ -78,6 +82,12 @@ export const DeleteAccountModal = ({ visible, email, onClose, onConfirm }) => {
     setDeleting(false);
 
     if (!result?.success) {
+      // Closing Google's picker is changing your mind, not a failure.
+      if (result?.cancelled) {
+        setError('Nothing was deleted. Choose your Google account to confirm.');
+        return;
+      }
+
       // A wrong password is by far the most likely failure and reads as a bug
       // if reported as "could not delete".
       const wrongPassword =
@@ -87,7 +97,9 @@ export const DeleteAccountModal = ({ visible, email, onClose, onConfirm }) => {
       setError(
         wrongPassword
           ? 'That password is not correct.'
-          : result?.error || 'Could not delete the account. Please try again.'
+          : result?.code === 'auth/user-mismatch'
+            ? 'That is a different Google account. Choose the one you sign in with.'
+            : result?.error || 'Could not delete the account. Please try again.'
       );
       return;
     }
@@ -154,8 +166,9 @@ export const DeleteAccountModal = ({ visible, email, onClose, onConfirm }) => {
             ) : (
               <>
                 <Text style={styles.lead}>
-                  Type your email address and password to confirm. This is the
-                  last step — the account is deleted immediately afterwards.
+                  {usesPassword
+                    ? 'Type your email address and password to confirm. This is the last step — the account is deleted immediately afterwards.'
+                    : 'Type your email address, then choose your Google account to confirm. This is the last step — the account is deleted immediately afterwards.'}
                 </Text>
 
                 {error ? (
@@ -182,20 +195,24 @@ export const DeleteAccountModal = ({ visible, email, onClose, onConfirm }) => {
                   editable={!deleting}
                 />
 
-                <Text style={styles.label}>Password</Text>
-                <TextInput
-                  style={styles.input}
-                  value={password}
-                  onChangeText={(value) => {
-                    setPassword(value);
-                    setError('');
-                  }}
-                  placeholder="Your password"
-                  placeholderTextColor={COLORS.textLight}
-                  secureTextEntry
-                  autoCapitalize="none"
-                  editable={!deleting}
-                />
+                {usesPassword ? (
+                  <>
+                    <Text style={styles.label}>Password</Text>
+                    <TextInput
+                      style={styles.input}
+                      value={password}
+                      onChangeText={(value) => {
+                        setPassword(value);
+                        setError('');
+                      }}
+                      placeholder="Your password"
+                      placeholderTextColor={COLORS.textLight}
+                      secureTextEntry
+                      autoCapitalize="none"
+                      editable={!deleting}
+                    />
+                  </>
+                ) : null}
 
                 <View style={styles.actions}>
                   <TouchableOpacity

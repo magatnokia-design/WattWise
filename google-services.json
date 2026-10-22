@@ -14,6 +14,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "421489842338-du64h36e8jkj977bbu0t8lnvsudr7kr2.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.magat_nokia.WattWise",
+            "certificate_hash": "4a9ebaeb24368586899bae4c1671c78e9b036ff6"
+          }
+        },
+        {
           "client_id": "421489842338-c30e362j45re82uh89313j66d8bth8cr.apps.googleusercontent.com",
           "client_type": 3
         }
