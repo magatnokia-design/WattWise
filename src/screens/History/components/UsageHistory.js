@@ -1,190 +1,142 @@
-import React, { useMemo, useCallback } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  FlatList,
-  ActivityIndicator,
-  useWindowDimensions,
-} from 'react-native';
+import React from 'react';
+import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../../../constants/colors';
-import { formatKwh, formatCost } from '../utils/historyHelpers';
+import { OfflineState } from '../../../components/common/OfflineNotice';
+import { formatCost, formatDayKey } from '../utils/historyHelpers';
 
 const EMPTY_USAGE = [];
 
-const UsageHistoryItem = ({ item }) => {
-  const { width } = useWindowDimensions();
+const kwh = (value) => `${Number(value || 0).toFixed(2)} kWh`;
 
-  return (
-    <View style={[styles.usageItem, { width: width - 32 }]}>
-      <View style={styles.dateContainer}>
-        <Text style={styles.dateDay}>{item.day || '--'}</Text>
-        <Text style={styles.dateMonth}>{item.month || '---'}</Text>
-        {/* Today is measured so far, not a closed day - say so rather than
-            letting a partial total read as a final one. */}
-        {item.isLive ? <Text style={styles.liveTag}>Today</Text> : null}
-      </View>
-      <View style={styles.divider} />
-      <View style={styles.usageInfo}>
-        {/* processDailyRollup stores the appliance name per outlet, so show
-            what was actually plugged in rather than a generic outlet label. */}
-        <View style={styles.usageRow}>
-          <Text style={styles.usageLabel} numberOfLines={1}>
-            {item.outlet1Name || 'Outlet 1'}
-          </Text>
-          <Text style={styles.usageValue}>{formatKwh(item.outlet1Kwh)}</Text>
-        </View>
-        <View style={styles.usageRow}>
-          <Text style={styles.usageLabel} numberOfLines={1}>
-            {item.outlet2Name || 'Outlet 2'}
-          </Text>
-          <Text style={styles.usageValue}>{formatKwh(item.outlet2Kwh)}</Text>
-        </View>
-      </View>
-      <View style={styles.costContainer}>
-        <Text style={styles.costLabel}>Total Cost</Text>
-        <Text style={styles.costValue}>{formatCost(item.totalCost)}</Text>
-        <Text style={styles.totalKwh}>{formatKwh(item.totalKwh)}</Text>
-      </View>
-    </View>
-  );
-};
-
-const UsageHistory = ({ usage = EMPTY_USAGE, loading = false }) => {
-  const renderItem = useCallback(({ item }) => (
-    <UsageHistoryItem item={item} />
-  ), []);
-
-  const renderEmpty = useMemo(() => {
+/**
+ * Daily usage as a compact table (Oct 2026): the date, the day's kWh and
+ * what it cost - nothing else. The per-outlet breakdown lives in the Excel
+ * export, which stays detailed.
+ */
+const UsageHistory = ({ usage = EMPTY_USAGE, loading = false, showOfflineState = false }) => {
+  if (usage.length === 0) {
     if (loading) {
       return (
-        <View style={styles.emptyContainer}>
+        <View style={styles.empty}>
           <ActivityIndicator color={COLORS.primary} />
-          <Text style={styles.emptySub}>Loading usage records...</Text>
+          <Text style={styles.emptySub}>Loading usage…</Text>
         </View>
       );
     }
-
+    if (showOfflineState) {
+      return (
+        <OfflineState
+          compact
+          body="Your usage is safe — the app just needs a connection to load it."
+        />
+      );
+    }
     return (
-      <View style={styles.emptyContainer}>
-        <Text style={styles.emptyIcon}>📊</Text>
-        <Text style={styles.emptyTitle}>No Usage Records Yet</Text>
+      <View style={styles.empty}>
+        <Ionicons name="bar-chart-outline" size={28} color={COLORS.textLight} />
+        <Text style={styles.emptyTitle}>No usage yet</Text>
         <Text style={styles.emptySub}>
           Today&apos;s usage appears here as soon as an outlet starts drawing power.
         </Text>
       </View>
     );
-  }, [loading]);
+  }
 
   return (
-    <FlatList
-      data={usage}
-      keyExtractor={(item, index) => item.date || String(index)}
-      renderItem={renderItem}
-      ListEmptyComponent={renderEmpty}
-      contentContainerStyle={styles.list}
-      showsVerticalScrollIndicator={false}
-      scrollEnabled={false}
-    />
+    <View style={styles.card}>
+      <View style={[styles.row, styles.headRow]}>
+        <Text style={[styles.head, styles.dateCol]}>Date</Text>
+        <Text style={[styles.head, styles.numCol]}>Energy</Text>
+        <Text style={[styles.head, styles.numCol]}>Cost</Text>
+      </View>
+      {usage.map((item, index) => (
+        <View key={item.date || String(index)} style={[styles.row, index > 0 && styles.rowBorder]}>
+          <View style={[styles.dateCol, styles.dateCell]}>
+            <Text style={styles.date}>{formatDayKey(item.date)}</Text>
+            {/* Today is measured so far, not a closed day. */}
+            {item.isLive ? <Text style={styles.liveTag}>So far</Text> : null}
+          </View>
+          <Text style={[styles.value, styles.numCol]}>{kwh(item.totalKwh)}</Text>
+          <Text style={[styles.value, styles.cost, styles.numCol]}>{formatCost(item.totalCost)}</Text>
+        </View>
+      ))}
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  list: {
-    paddingBottom: 16,
-  },
-  usageItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  card: {
     backgroundColor: COLORS.white,
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 10,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: COLORS.border,
-    alignSelf: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 6,
   },
-  dateContainer: {
-    alignItems: 'center',
-    width: 40,
-  },
-  dateDay: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: COLORS.primary,
-  },
-  dateMonth: {
-    fontSize: 11,
-    color: COLORS.textLight,
-    marginTop: 2,
-    textTransform: 'uppercase',
-  },
-  liveTag: {
-    fontSize: 9,
-    fontWeight: '700',
-    color: COLORS.primaryDark,
-    backgroundColor: COLORS.primary + '18',
-    borderRadius: 999,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    marginTop: 4,
-    overflow: 'hidden',
-  },
-  divider: {
-    width: 1,
-    height: '80%',
-    backgroundColor: COLORS.border,
-    marginHorizontal: 12,
-  },
-  usageInfo: {
-    flex: 1,
-  },
-  usageRow: {
+  row: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 6,
-  },
-  usageLabel: {
-    fontSize: 12,
-    color: COLORS.textLight,
-  },
-  usageValue: {
-    fontSize: 12,
-    color: COLORS.text,
-    fontWeight: '500',
-  },
-  costContainer: {
-    alignItems: 'flex-end',
-    marginLeft: 12,
-  },
-  costLabel: {
-    fontSize: 11,
-    color: COLORS.textLight,
-  },
-  costValue: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: COLORS.primary,
-    marginTop: 2,
-  },
-  totalKwh: {
-    fontSize: 11,
-    color: COLORS.textLight,
-    marginTop: 2,
-  },
-  emptyContainer: {
     alignItems: 'center',
-    paddingVertical: 40,
+    paddingVertical: 9,
   },
-  emptyIcon: {
-    fontSize: 40,
-    marginBottom: 12,
+  headRow: {
+    paddingVertical: 6,
   },
-  emptyTitle: {
-    fontSize: 16,
+  rowBorder: {
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+  },
+  head: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: COLORS.textLight,
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  dateCol: {
+    flex: 1.4,
+  },
+  numCol: {
+    flex: 1,
+    textAlign: 'right',
+  },
+  dateCell: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  date: {
+    fontSize: 13.5,
     fontWeight: '600',
     color: COLORS.text,
-    marginBottom: 6,
+  },
+  liveTag: {
+    fontSize: 9.5,
+    fontWeight: '700',
+    color: COLORS.primaryDark,
+    backgroundColor: '#ECF8EF',
+    borderRadius: 999,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    overflow: 'hidden',
+  },
+  value: {
+    fontSize: 13.5,
+    color: COLORS.text,
+  },
+  cost: {
+    fontWeight: '700',
+    color: COLORS.primary,
+  },
+  empty: {
+    alignItems: 'center',
+    paddingVertical: 40,
+    gap: 6,
+  },
+  emptyTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: COLORS.text,
   },
   emptySub: {
     fontSize: 13,

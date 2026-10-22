@@ -7,11 +7,20 @@ import {
   Switch,
   ActivityIndicator,
 } from 'react-native';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { COLORS } from '../../../constants/colors';
 
+/**
+ * One Settings row. `icon` is an Ionicons name (or a MaterialCommunityIcons one
+ * with `iconSet="mci"`, for appliances) (Oct 2026: icons in the logo's
+ * green replaced emoji). Compact - 12 px of vertical padding, a 32 px icon tile.
+ */
 const SettingsRow = ({
   icon,
+  iconSet = 'ion',
   label,
+  // One short line under the label, e.g. what a switch currently means.
+  subtitle,
   value,
   onPress,
   isSwitch,
@@ -28,6 +37,8 @@ const SettingsRow = ({
   // TouchableOpacity computed its own disabled state from whether an onPress
   // existed, so a row could look unavailable and still fire on every tap.
   const isInert = disabled || busy || (!onPress && !isSwitch);
+  const tint = isDestructive ? COLORS.error : COLORS.primary;
+  const Icon = iconSet === 'mci' ? MaterialCommunityIcons : Ionicons;
 
   return (
     <TouchableOpacity
@@ -35,27 +46,27 @@ const SettingsRow = ({
       onPress={onPress}
       activeOpacity={onPress && !isInert ? 0.7 : 1}
       disabled={isInert}
+      accessibilityRole={isSwitch ? 'switch' : onPress ? 'button' : undefined}
     >
-      {/* Left Icon */}
-      <View style={[styles.iconContainer, { backgroundColor: isDestructive ? '#FEF2F2' : COLORS.primary + '15' }]}>
-        <Text style={styles.icon}>{icon}</Text>
+      {icon ? (
+        <View style={[styles.iconContainer, { backgroundColor: isDestructive ? '#FEF2F2' : '#ECF8EF' }]}>
+          <Icon name={icon} size={iconSet === 'mci' ? 18 : 17} color={tint} />
+        </View>
+      ) : null}
+
+      <View style={styles.labelWrap}>
+        <Text style={[styles.label, isDestructive && styles.labelDestructive]} numberOfLines={1}>
+          {label}
+        </Text>
+        {subtitle ? <Text style={styles.subtitle} numberOfLines={1}>{subtitle}</Text> : null}
       </View>
 
-      {/* Label */}
-      <Text style={[styles.label, isDestructive && styles.labelDestructive]}>
-        {label}
-      </Text>
-
-      {/* Right Side */}
       <View style={styles.rightSide}>
         {value ? (
-          <Text style={styles.value}>{value}</Text>
+          <Text style={styles.value} numberOfLines={1}>{value}</Text>
         ) : null}
         {busy ? (
-          <ActivityIndicator
-            size="small"
-            color={isDestructive ? COLORS.error : COLORS.primary}
-          />
+          <ActivityIndicator size="small" color={tint} />
         ) : isSwitch ? (
           <Switch
             value={switchValue || false}
@@ -64,7 +75,7 @@ const SettingsRow = ({
             thumbColor={switchValue ? COLORS.primary : COLORS.white}
           />
         ) : showArrow ? (
-          <Text style={styles.arrow}>›</Text>
+          <Ionicons name="chevron-forward" size={18} color={COLORS.textLight} />
         ) : null}
       </View>
     </TouchableOpacity>
@@ -75,47 +86,48 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 14,
-    paddingHorizontal: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
     backgroundColor: COLORS.white,
   },
   rowDisabled: {
     opacity: 0.5,
   },
   iconContainer: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
+    width: 32,
+    height: 32,
+    borderRadius: 9,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 14,
+    marginRight: 12,
   },
-  icon: {
-    fontSize: 18,
+  labelWrap: {
+    flex: 1,
+  },
+  subtitle: {
+    fontSize: 12,
+    color: COLORS.textLight,
+    marginTop: 1,
   },
   label: {
-    flex: 1,
-    fontSize: 15,
+    fontSize: 14.5,
     color: COLORS.text,
     fontWeight: '500',
   },
   labelDestructive: {
-    color: '#EF4444',
+    color: COLORS.error,
   },
   rightSide: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
+    maxWidth: '55%',
   },
   value: {
-    fontSize: 14,
+    fontSize: 13,
     color: COLORS.textLight,
     fontWeight: '500',
-  },
-  arrow: {
-    fontSize: 22,
-    color: COLORS.textLight,
-    fontWeight: '300',
+    flexShrink: 1,
   },
 });
 

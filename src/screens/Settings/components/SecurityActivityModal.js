@@ -13,7 +13,8 @@ import { securityService } from '../../../services/firebase/securityService';
 import { describeSecurityEvents } from '../../../utils/securityActivity';
 
 /**
- * Recent security activity on the account.
+ * Hub activity: links, transfers and refused tokens ("Security activity"
+ * until Oct 2026 - renamed because everything it reports is about the Hub).
  *
  * Read-only, with no "clear" and no "mark as read". Both would be writes, and
  * the rules forbid every client from writing here on purpose: an actor who
@@ -41,7 +42,7 @@ export const SecurityActivityModal = ({ visible, userId, onClose }) => {
         setLoading(false);
       },
       (err) => {
-        setError(err?.message || 'Could not load security activity');
+        setError(err?.message || 'Could not load Hub activity');
         setLoading(false);
       }
     );
@@ -56,14 +57,14 @@ export const SecurityActivityModal = ({ visible, userId, onClose }) => {
       <View style={styles.overlay}>
         <View style={styles.sheet}>
           <View style={styles.header}>
-            <Text style={styles.title}>Security activity</Text>
+            <Text style={styles.title}>Hub activity</Text>
             <TouchableOpacity onPress={onClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
               <Text style={styles.close}>✕</Text>
             </TouchableOpacity>
           </View>
 
           <Text style={styles.subtitle}>
-            Sign-ins and device changes on your account, kept for 90 days.
+            Links, transfers and refused connections, kept for 90 days.
           </Text>
 
           {loading ? (
@@ -78,8 +79,8 @@ export const SecurityActivityModal = ({ visible, userId, onClose }) => {
             <View style={styles.center}>
               <Text style={styles.emptyTitle}>Nothing to report</Text>
               <Text style={styles.emptyBody}>
-                Nothing unusual has happened on your account. Device changes and
-                refused sign-ins would appear here.
+                Nothing unusual has happened with your Hub. Links, transfers and
+                refused connections would appear here.
               </Text>
             </View>
           ) : (

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../../constants/colors';
 import BudgetProgressCard from './components/BudgetProgressCard';
@@ -19,8 +20,9 @@ import { OfflineState } from '../../components/common/OfflineNotice';
 import useBudgetTracking from './hooks/useBudgetTracking';
 import useRangeUsage from './hooks/useRangeUsage';
 import { useOfflineRetry } from '../../hooks/useOfflineRetry';
+import { Wordmark } from '../../components/common/Wordmark';
 
-const BudgetTrackingScreen = ({ navigation }) => {
+const BudgetTrackingScreen = () => {
   const {
     monthlyBudget,
     currentSpending,
@@ -41,6 +43,19 @@ const BudgetTrackingScreen = ({ navigation }) => {
 
   const rangeUsage = useRangeUsage();
 
+  // A tab stays mounted, so the one read on mount would go stale: spending
+  // moves all day. Re-read on every return to the tab - the first focus is
+  // skipped because the hook has just read on mount. The session cache keeps
+  // the figures on screen while it does, so nothing flashes.
+  const focusedOnce = useRef(false);
+  useFocusEffect(useCallback(() => {
+    if (focusedOnce.current) {
+      handleRefresh();
+      rangeUsage.reload();
+    }
+    focusedOnce.current = true;
+  }, [handleRefresh, rangeUsage.reload]));
+
   const [refreshing, setRefreshing] = useState(false);
   const [showBudgetModal, setShowBudgetModal] = useState(false);
 
@@ -54,21 +69,19 @@ const BudgetTrackingScreen = ({ navigation }) => {
   const remainingBudget = monthlyBudget - currentSpending;
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-      {/* Header */}
+    <SafeAreaView style={styles.container} edges={['top']}>
+      {/* A tab since Oct 2026, the first one, where Home was - so it carries
+          the brand rather than a back button. The notification bell is on
+          Settings. */}
       <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => navigation.goBack()}
-          style={styles.backButton}
-        >
-          <Ionicons name="arrow-back" size={24} color={COLORS.text} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Budget Tracking</Text>
+        <Wordmark height={28} />
         <TouchableOpacity
           onPress={() => setShowBudgetModal(true)}
-          style={styles.editButton}
+          style={styles.iconButton}
+          accessibilityRole="button"
+          accessibilityLabel="Set monthly budget"
         >
-          <Ionicons name="create-outline" size={24} color={COLORS.primary} />
+          <Ionicons name="create-outline" size={20} color={COLORS.primary} />
         </TouchableOpacity>
       </View>
 
@@ -179,22 +192,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 8,
+  },
+  iconButton: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     backgroundColor: COLORS.white,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-  },
-  backButton: {
-    padding: 4,
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: COLORS.text,
-  },
-  editButton: {
-    padding: 4,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   scrollView: {
     flex: 1,

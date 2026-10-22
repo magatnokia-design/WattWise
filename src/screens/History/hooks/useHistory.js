@@ -92,6 +92,10 @@ const mapUsageRecord = (record = {}) => {
 
 const normalizeUsageHistory = (records = []) => records.map(mapUsageRecord);
 
+// A year of daily rows - the longest range the export allows (MAX_RANGE_DAYS).
+// Each row is one small document, so this is one modest read.
+const USAGE_READ_LIMIT = 366;
+
 export const useHistory = () => {
   const [activityLogs, setActivityLogs] = useState([]);
   const [storedUsage, setStoredUsage] = useState([]);
@@ -104,6 +108,10 @@ export const useHistory = () => {
   // same kWh. Same omission the comparison screen had.
   const [supplyRates, setSupplyRates] = useState(null);
   const [loading, setLoading] = useState(false);
+  // Separate from `loading`, which belongs to the activity log. One flag for
+  // both meant the usage read finishing cleared the activity spinner (and the
+  // other way round), so either tab could flash "No Activity Yet" mid-load.
+  const [usageLoading, setUsageLoading] = useState(false);
   const [error, setError] = useState(null);
   const [lastDoc, setLastDoc] = useState(null);
   const [hasMore, setHasMore] = useState(true);
@@ -261,9 +269,11 @@ export const useHistory = () => {
     };
   }, [load.succeeded, load.failed, clearUnconfirmed]);
 
-  // Fetch usage history (daily summaries)
-  const fetchUsageHistory = useCallback(async (startDate, endDate) => {
-    setLoading(true);
+  // Fetch usage history (daily summaries). No range means every day on the
+  // account, newest first, up to a year - the list pages through it on the
+  // phone (Oct 2026), so it is read once rather than 30 days at a time.
+  const fetchUsageHistory = useCallback(async (startDate = null, endDate = null) => {
+    setUsageLoading(true);
     setError(null);
     
     try {
@@ -274,7 +284,7 @@ export const useHistory = () => {
         userId,
         { startDate, endDate },
         null,
-        30
+        USAGE_READ_LIMIT
       );
 
       if (!result.success) {
@@ -291,9 +301,38 @@ export const useHistory = () => {
       load.failed(err);
       console.error('Error fetching usage history:', err);
     } finally {
-      setLoading(false);
+      setUsageLoading(false);
     }
   }, [load.succeeded, load.failed]);
+
+  /**
+   * The rows an export of `startDate`..`endDate` should contain, read fresh
+   * for that range rather than taken from the list - the export picks its own
+   * dates now (Oct 2026), and they need not match what is on screen. Today is
+   * spliced in from live telemetry when the range covers it, the same as the
+   * list. Returns { success, rows } or { success: false, error }.
+   */
+  const fetchUsageForExport = useCallback(async (startDate, endDate) => {
+    const userId = auth.currentUser?.uid;
+    if (!userId) return { success: false, error: 'You are signed out.' };
+
+    const result = await historyService.getDailyUsage(
+      userId,
+      { startDate, endDate },
+      null,
+      USAGE_READ_LIMIT
+    );
+    if (!result.success) {
+      return { success: false, error: result.error || 'The usage could not be read.' };
+    }
+
+    const liveToday = buildLiveTodayEntry(outlets, { rateProfileId, supplyRates });
+    const inRange = !!liveToday && liveToday.date >= startDate && liveToday.date <= endDate;
+    return {
+      success: true,
+      rows: normalizeUsageHistory(withLiveToday(result.data, inRange ? liveToday : null)),
+    };
+  }, [outlets, rateProfileId, supplyRates]);
 
   // Today has no rolled-up document until midnight Manila, so it is assembled
   // from live outlet telemetry and merged in here. Without this the current day
@@ -320,6 +359,7 @@ export const useHistory = () => {
     activityLogs,
     usageHistory,
     loading,
+    usageLoading,
     error,
     hasMore,
     // The screen prices its header total from the range's total energy rather
@@ -334,5 +374,6 @@ export const useHistory = () => {
     fetchActivityLogs,
     subscribeActivityLogs,
     fetchUsageHistory,
+    fetchUsageForExport,
   };
 };

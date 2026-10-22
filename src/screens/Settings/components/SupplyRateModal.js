@@ -12,11 +12,10 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../../../constants/colors';
-import { WEB_APP_LINKS } from '../../../constants/webApp';
 import {
   SUPPLY_RATE_FIELDS,
-  RATE_EFFECTIVE_DATE,
   calculatePelcoIIIBill,
   normalizeSupplyRates,
   sumSupplyRates,
@@ -34,13 +33,27 @@ const toInputValue = (value) => {
   return Number.isFinite(numeric) ? numeric.toFixed(4) : '';
 };
 
-const buildInitialValues = (rates) => {
+/**
+ * The form's starting values. An account that has never saved rates opens
+ * EMPTY (Oct 2026). It used to open filled with the built-in defaults, so the
+ * generation rate read as though the user had already set one - when the row
+ * behind it said "Not set". Blank advanced fields still mean "use the default".
+ */
+const buildInitialValues = (rates, hasSavedRates) => {
+  if (!hasSavedRates) {
+    return SUPPLY_RATE_FIELDS.reduce((values, field) => {
+      values[field.key] = '';
+      return values;
+    }, {});
+  }
   const normalized = normalizeSupplyRates(rates);
   return SUPPLY_RATE_FIELDS.reduce((values, field) => {
     values[field.key] = toInputValue(normalized[field.key]);
     return values;
   }, {});
 };
+
+const ZERO_RATE = '0.0000';
 
 /**
  * Editor for PELCO III Block 1 (generation & transmission).
@@ -49,27 +62,33 @@ const buildInitialValues = (rates) => {
  * ERC-approved constants, so exposing them would invite the user to break a
  * figure they cannot legitimately change.
  */
-const SupplyRateModal = ({ visible, currentRates, onClose, onSave }) => {
+const SupplyRateModal = ({ visible, currentRates, hasSavedRates = true, onClose, onSave }) => {
   const { width } = useWindowDimensions();
-  const [values, setValues] = useState(() => buildInitialValues(currentRates));
+  const [values, setValues] = useState(() => buildInitialValues(currentRates, hasSavedRates));
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
 
   useEffect(() => {
     if (visible) {
-      setValues(buildInitialValues(currentRates));
+      setValues(buildInitialValues(currentRates, hasSavedRates));
       setShowAdvanced(false);
       setSaving(false);
       setError(null);
     }
-  }, [visible, currentRates]);
+  }, [visible, currentRates, hasSavedRates]);
 
   const parsedRates = useMemo(() => {
     return SUPPLY_RATE_FIELDS.reduce((rates, field) => {
       const raw = String(values[field.key] ?? '').trim();
-      // A blank advanced field means "use the default", not zero.
-      rates[field.key] = raw === '' ? field.defaultValue : Number(raw);
+      // A blank advanced field means "use the default", not zero. A blank
+      // generation rate is zero here - the preview must not price a rate the
+      // user has not entered (Save stays disabled until they do).
+      if (raw === '') {
+        rates[field.key] = field.primary ? 0 : field.defaultValue;
+      } else {
+        rates[field.key] = Number(raw);
+      }
       return rates;
     }, {});
   }, [values]);
@@ -110,12 +129,6 @@ const SupplyRateModal = ({ visible, currentRates, onClose, onSave }) => {
     });
   }, []);
 
-  const handleOpenWeb = useCallback(() => {
-    Linking.openURL(WEB_APP_LINKS.settings).catch(() => {
-      setError('Could not open dagitab.site.');
-    });
-  }, []);
-
   const handleSave = useCallback(async () => {
     if (!canSave) {
       const field = SUPPLY_RATE_FIELDS.find((entry) => check.errors[entry.key]);
@@ -149,6 +162,9 @@ const SupplyRateModal = ({ visible, currentRates, onClose, onSave }) => {
     </View>
   );
 
+  const showProblem = error || (values[PRIMARY_FIELD.key] !== '' && check.errors[PRIMARY_FIELD.key]);
+  const warning = !showProblem && check.warnings?.[0];
+
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={styles.overlay}>
@@ -158,12 +174,15 @@ const SupplyRateModal = ({ visible, currentRates, onClose, onSave }) => {
         >
           <View style={[styles.card, { width: Math.min(width - 40, 420) }]}>
             <View style={styles.header}>
+              <View style={styles.headerIcon}>
+                <Ionicons name="flash" size={18} color={COLORS.white} />
+              </View>
               <View style={styles.headerText}>
-                <Text style={styles.title}>Electricity Rates</Text>
+                <Text style={styles.title}>Electricity rate</Text>
                 <Text style={styles.subtitle}>PELCO III residential tariff</Text>
               </View>
-              <TouchableOpacity onPress={onClose} activeOpacity={0.7}>
-                <Text style={styles.close}>✕</Text>
+              <TouchableOpacity onPress={onClose} activeOpacity={0.7} accessibilityLabel="Close">
+                <Ionicons name="close" size={22} color={COLORS.textLight} />
               </TouchableOpacity>
             </View>
 
@@ -173,16 +192,14 @@ const SupplyRateModal = ({ visible, currentRates, onClose, onSave }) => {
               keyboardShouldPersistTaps="handled"
               showsVerticalScrollIndicator
             >
-              <Text style={styles.sectionLabel}>
-                Generation Rate <Text style={styles.required}>*required</Text>
-              </Text>
+              <Text style={styles.sectionLabel}>Generation rate</Text>
               <View style={styles.primaryRow}>
                 <TextInput
                   style={styles.primaryInput}
                   value={values[PRIMARY_FIELD.key]}
                   onChangeText={(text) => handleChange(PRIMARY_FIELD.key, text)}
                   keyboardType="numbers-and-punctuation"
-                  placeholder={toInputValue(PRIMARY_FIELD.defaultValue)}
+                  placeholder={ZERO_RATE}
                   placeholderTextColor={COLORS.textLight}
                 />
                 <Text style={styles.primaryUnit}>₱/kWh</Text>
@@ -193,14 +210,8 @@ const SupplyRateModal = ({ visible, currentRates, onClose, onSave }) => {
                 onPress={handleOpenPelco}
                 activeOpacity={0.7}
               >
-                <Text style={styles.linkIcon}>🔗</Text>
-                <View style={styles.linkTextWrap}>
-                  <Text style={styles.linkTitle}>Get the official rate</Text>
-                  <Text style={styles.linkSub}>
-                    Read this month&apos;s generation rate from your bill, or open
-                    pelco3.org/rates.php
-                  </Text>
-                </View>
+                <Ionicons name="open-outline" size={16} color={COLORS.primary} />
+                <Text style={styles.linkTitle}>Find it on your bill or pelco3.org</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -208,50 +219,41 @@ const SupplyRateModal = ({ visible, currentRates, onClose, onSave }) => {
                 onPress={() => setShowAdvanced((previous) => !previous)}
                 activeOpacity={0.7}
               >
+                <Ionicons
+                  name={showAdvanced ? 'chevron-down' : 'chevron-forward'}
+                  size={16}
+                  color={COLORS.text}
+                />
                 <Text style={styles.advancedToggleText}>
-                  {showAdvanced ? '▾' : '▸'} Advanced ({ADVANCED_FIELDS.length} fields)
+                  Other rates ({ADVANCED_FIELDS.length}) · optional
                 </Text>
               </TouchableOpacity>
 
               {showAdvanced && (
                 <View style={styles.advancedBlock}>
-                  <Text style={styles.advancedHint}>
-                    Leave blank to use the default. Negative values are credits.
-                  </Text>
                   {ADVANCED_FIELDS.map(renderField)}
-
-                  {/* One line, not a banner: this only appears once the user has
-                      opened several decimal fields, which is the point where a
-                      keyboard genuinely helps. Every field still works here. */}
-                  <TouchableOpacity onPress={handleOpenWeb} activeOpacity={0.7}>
-                    <Text style={styles.webHint}>
-                      Lots to type? Enter these on dagitab.site with your bill in
-                      hand →
-                    </Text>
-                  </TouchableOpacity>
                 </View>
               )}
 
               <View style={styles.previewCard}>
                 <View style={styles.previewRow}>
-                  <Text style={styles.previewLabel}>Gen/Trans total</Text>
+                  <Text style={styles.previewLabel}>Generation + transmission</Text>
                   <Text style={styles.previewValue}>₱{genTransTotal.toFixed(4)} /kWh</Text>
                 </View>
-                <View style={styles.previewRow}>
-                  <Text style={styles.previewLabel}>Projected effective</Text>
+                <View style={[styles.previewRow, styles.previewRowLast]}>
+                  <Text style={styles.previewLabel}>All-in, per kWh</Text>
                   <Text style={styles.previewValueStrong}>
                     ₱{projectedEffectiveRate.toFixed(2)} /kWh
                   </Text>
                 </View>
               </View>
 
-              <Text style={styles.footnote}>
-                Distribution and government charges are ERC-approved rates, current
-                as of {RATE_EFFECTIVE_DATE}. Generation and transmission change
-                monthly — update them here from the official PELCO III posting.
-              </Text>
-
-              {error ? <Text style={styles.error}>{error}</Text> : null}
+              {showProblem ? (
+                <Text style={styles.error}>
+                  {error || check.errors[PRIMARY_FIELD.key]}
+                </Text>
+              ) : null}
+              {warning ? <Text style={styles.warning}>{warning}</Text> : null}
             </ScrollView>
 
             <View style={styles.actions}>
@@ -268,7 +270,7 @@ const SupplyRateModal = ({ visible, currentRates, onClose, onSave }) => {
                 disabled={!canSave || saving}
                 activeOpacity={0.8}
               >
-                <Text style={styles.saveText}>{saving ? 'Saving…' : 'Save Rates'}</Text>
+                <Text style={styles.saveText}>{saving ? 'Saving…' : 'Save rate'}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -297,9 +299,18 @@ const styles = StyleSheet.create({
     maxHeight: '78%',
     overflow: 'hidden',
   },
+  headerIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: COLORS.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
   header: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
     paddingTop: 20,
@@ -321,11 +332,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginTop: 2,
   },
-  close: {
-    fontSize: 18,
-    color: COLORS.textLight,
-    paddingHorizontal: 4,
-  },
   body: {
     paddingHorizontal: 20,
     paddingTop: 16,
@@ -340,10 +346,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: COLORS.text,
     marginBottom: 8,
-  },
-  required: {
-    color: COLORS.primary,
-    fontWeight: '600',
   },
   primaryRow: {
     flexDirection: 'row',
@@ -369,34 +371,21 @@ const styles = StyleSheet.create({
   },
   linkCard: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    backgroundColor: COLORS.background,
-    borderRadius: 10,
-    padding: 12,
-    marginTop: 12,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  linkIcon: {
-    fontSize: 16,
-    marginRight: 10,
-  },
-  linkTextWrap: {
-    flex: 1,
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 10,
+    paddingVertical: 4,
   },
   linkTitle: {
     fontSize: 13,
     fontWeight: '600',
     color: COLORS.primary,
   },
-  linkSub: {
-    fontSize: 12,
-    color: COLORS.textLight,
-    marginTop: 2,
-    lineHeight: 17,
-  },
   advancedToggle: {
-    paddingVertical: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 12,
   },
   advancedToggleText: {
     fontSize: 13,
@@ -407,18 +396,6 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: COLORS.border,
     paddingTop: 12,
-  },
-  advancedHint: {
-    fontSize: 11,
-    color: COLORS.textLight,
-    marginBottom: 10,
-  },
-  webHint: {
-    fontSize: 11,
-    color: COLORS.primaryDark,
-    fontWeight: '600',
-    marginTop: 6,
-    lineHeight: 16,
   },
   fieldRow: {
     flexDirection: 'row',
@@ -458,6 +435,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 6,
   },
+  previewRowLast: {
+    marginBottom: 0,
+  },
+  warning: {
+    fontSize: 12,
+    lineHeight: 17,
+    color: '#B45309',
+    marginTop: 10,
+  },
   previewLabel: {
     fontSize: 13,
     color: COLORS.textLight,
@@ -472,17 +458,10 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: COLORS.primary,
   },
-  footnote: {
-    fontSize: 11,
-    color: COLORS.textLight,
-    lineHeight: 16,
-    marginTop: 14,
-    marginBottom: 8,
-  },
   error: {
     fontSize: 12,
     color: COLORS.error,
-    marginBottom: 8,
+    marginTop: 10,
   },
   actions: {
     flexDirection: 'row',

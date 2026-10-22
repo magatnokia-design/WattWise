@@ -83,32 +83,32 @@ test('energy keeps three decimals', () => {
   assert.equal(sheet.C2.v, 0.0884, 'the full value is stored; 3 dp is display only');
 });
 
-test('the header is theme green with bold white text, in the written file', () => {
-  assert.equal(roundTrip([row()]).A1.s.fgColor.rgb, '10B981');
+test('the header is Dagitab green with bold white text, in the written file', () => {
+  assert.equal(roundTrip([row()]).A1.s.fgColor.rgb, '008D43');
 
   const fonts = section(stylesXml([row()]), 'fonts');
   assert.ok(fonts.includes('<b/>'), 'header font must be bold');
   assert.ok(fonts.includes('<color rgb="FFFFFF"/>'), 'header text must be white');
 });
 
-test('the two total columns are marked out in yellow, header and body', () => {
+test('the two total columns are marked out in deep and pale green, header and body', () => {
   const sheet = roundTrip([row()]);
 
-  // Darker green header, yellow body — the same yellow the export button wears.
-  assert.equal(sheet.H1.s.fgColor.rgb, '059669');
-  assert.equal(sheet.I1.s.fgColor.rgb, '059669');
-  assert.equal(sheet.H2.s.fgColor.rgb, 'FEF3C7');
-  assert.equal(sheet.I2.s.fgColor.rgb, 'FEF3C7');
+  // Deep green header, pale green body.
+  assert.equal(sheet.H1.s.fgColor.rgb, '00401F');
+  assert.equal(sheet.I1.s.fgColor.rgb, '00401F');
+  assert.equal(sheet.H2.s.fgColor.rgb, 'E8F6EC');
+  assert.equal(sheet.I2.s.fgColor.rgb, 'E8F6EC');
 
-  // A non-total column must stay unfilled, or the yellow means nothing.
-  assert.notEqual(sheet.C2.s?.fgColor?.rgb, 'FEF3C7');
+  // A non-total column must stay unfilled, or the tint means nothing.
+  assert.notEqual(sheet.C2.s?.fgColor?.rgb, 'E8F6EC');
 });
 
-test('every fill in the file is green, white or yellow', () => {
+test('every fill in the file is a Dagitab green or white', () => {
   // Read from the styles part rather than the cells, so a stray colour cannot
   // hide in a style the reader declines to hand back.
   const fills = section(stylesXml([row(), row({ date: '2026-08-15' })]), 'fills');
-  const allowed = new Set(['10B981', '059669', 'FEF3C7', 'FFFFFF']);
+  const allowed = new Set(['008D43', '00401F', 'E8F6EC', 'FFFFFF']);
 
   const used = [...fills.matchAll(/<fgColor rgb="(?:FF)?([0-9A-F]{6})"/gi)]
     .map((match) => match[1].toUpperCase());

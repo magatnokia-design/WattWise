@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Notifications from 'expo-notifications';
+import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 import { COLORS } from '../../constants/colors';
 import AppDialog from '../../components/common/AppDialog';
@@ -23,14 +24,15 @@ import OutletNameModal from './components/OutletNameModal';
 import DeleteAccountModal from './components/DeleteAccountModal';
 import SecurityActivityModal from './components/SecurityActivityModal';
 import HubStatusCard from './components/HubStatusCard';
+import { Wordmark } from '../../components/common/Wordmark';
+import NotificationPanel from '../Notifications/components/NotificationPanel';
+import { useNotifications } from '../Notifications/hooks/useNotifications';
 import { useAuth } from '../../hooks/useAuth';
 import { securityService } from '../../services/firebase/securityService';
 import { summariseSecurityEvents } from '../../utils/securityActivity';
 import { useSettings } from './hooks/useSettings';
-import {
-  formatVersion,
-  formatCurrency,
-} from './utils/settingsHelpers';
+import { formatVersion } from './utils/settingsHelpers';
+import { applianceIcon } from './utils/applianceIcon';
 import { authService, hasPasswordSignIn } from '../../services/firebase/authService';
 
 const SectionHeader = ({ title }) => (
@@ -62,6 +64,9 @@ const SettingsScreen = ({ navigation }) => {
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
   const [securityModalVisible, setSecurityModalVisible] = useState(false);
   const [securityEvents, setSecurityEvents] = useState([]);
+  // The notification bell lives here since Home was removed (Oct 2026).
+  const [notificationVisible, setNotificationVisible] = useState(false);
+  const { unreadCount } = useNotifications();
   const { user } = useAuth();
 
   /*
@@ -171,9 +176,10 @@ const SettingsScreen = ({ navigation }) => {
 
   // Shows the generation rate specifically, not the Block 1 sum - it is the
   // number printed on the bill, so the user can eyeball that it matches.
-  const generationRateLabel = settings.supplyRates?.generation
-    ? `₱${Number(settings.supplyRates.generation).toFixed(4)}/kWh`
-    : 'Not set';
+  // An account that never saved rates reads ₱0.0000, not the built-in
+  // default dressed up as the user's own figure.
+  const ratesSet = Boolean(settings.hasSupplyRates && Number(settings.supplyRates?.generation) > 0);
+  const generationRate = ratesSet ? Number(settings.supplyRates.generation) : 0;
 
   const handleRatePress = useCallback(() => {
     setRateModalVisible(true);
@@ -446,7 +452,7 @@ const SettingsScreen = ({ navigation }) => {
         setDialog({
           icon: '✅',
           title: 'Device linked',
-          message: `${deviceData.deviceId} is now linked to your account. Readings should appear on the dashboard within a few seconds.`,
+          message: `${deviceData.deviceId} is now linked to your account. Readings should appear on the Outlets tab within a few seconds.`,
           confirmLabel: 'Done',
         });
       }, 400);
@@ -457,10 +463,24 @@ const SettingsScreen = ({ navigation }) => {
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
-      {/* Header */}
+      {/* The Dagitab logo and the notification bell, laid out as the old Home
+          header was - both moved here when Home was removed (Oct 2026). */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Settings</Text>
-        <Text style={styles.headerSub}>Manage your preferences</Text>
+        <Wordmark height={30} />
+        <TouchableOpacity
+          style={styles.bellButton}
+          onPress={() => setNotificationVisible(true)}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : 'Notifications'}
+        >
+          <Ionicons name="notifications-outline" size={21} color={COLORS.text} />
+          {unreadCount > 0 ? (
+            <View style={styles.bellBadge}>
+              <Text style={styles.bellBadgeText}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
+            </View>
+          ) : null}
+        </TouchableOpacity>
       </View>
 
       <ScrollView
@@ -468,176 +488,180 @@ const SettingsScreen = ({ navigation }) => {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Account Section */}
+        {/* Account - compact (Oct 2026): who is signed in, in one block, then
+            the account actions. */}
         <SectionHeader title="Account" />
         <SectionCard>
-          <SettingsRow
-            icon="👤"
-            label="Profile Name"
-            value={settings.profileName || 'User'}
-            showArrow
+          <TouchableOpacity
+            style={styles.profile}
             onPress={handleEditName}
-          />
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel="Edit profile name"
+          >
+            <View style={styles.avatar}>
+              <Text style={styles.avatarText}>
+                {(settings.profileName || settings.email || 'U').trim().charAt(0).toUpperCase()}
+              </Text>
+            </View>
+            <View style={styles.profileText}>
+              <Text style={styles.profileName} numberOfLines={1}>{settings.profileName || 'User'}</Text>
+              <Text style={styles.profileEmail} numberOfLines={1}>{settings.email || '--'}</Text>
+            </View>
+            <Ionicons name="create-outline" size={18} color={COLORS.primary} />
+          </TouchableOpacity>
+          {/* A Google account has no password here to change - the reset email
+              would set up a second sign-in method rather than change one. */}
+          {hasPasswordSignIn(user) ? (
+            <>
+              <Separator />
+              <SettingsRow
+                icon="key-outline"
+                label="Change password"
+                showArrow
+                onPress={handleChangePassword}
+              />
+            </>
+          ) : null}
           <Separator />
+          {/* The only destructive account row. The modal itemises what goes
+              before offering any way forward. */}
           <SettingsRow
-            icon="🔒"
-            label="Change Password"
-            showArrow
-            onPress={handleChangePassword}
-          />
-          <Separator />
-          <SettingsRow
-            icon="📧"
-            label="Email"
-            value={settings.email || '--'}
-          />
-          <Separator />
-          {/* Last in the section, and the only destructive row on this screen.
-              The modal itemises what goes before offering any way forward. */}
-          <SettingsRow
-            icon="🗑️"
-            label="Delete Account"
-            value="Permanent"
+            icon="trash-outline"
+            label="Delete account"
+            isDestructive
             showArrow
             onPress={() => setDeleteModalVisible(true)}
           />
         </SectionCard>
 
-        {/* Energy Settings */}
-        <SectionHeader title="Energy Settings" />
+        {/* Energy - the rate and the statements. Monthly Budget left this
+            section (Oct 2026): Budget is a tab of its own now. */}
+        <SectionHeader title="Energy" />
         <SectionCard>
-          <View style={styles.tariffBanner}>
-            <Text style={styles.tariffBannerTitle}>
-              Billed on the PELCO III residential tariff
-            </Text>
-            <Text style={styles.tariffBannerBody}>
-              Every peso figure in Dagitab — dashboard, analytics and your monthly
-              statement — is computed with PELCO III&apos;s published rate structure.
-              Enter the generation rate from your bill so the estimate matches it.
-            </Text>
-          </View>
-          <SettingsRow
-            icon="⚡"
-            label="Electricity Rates"
-            value={settings.hasSupplyRates ? generationRateLabel : 'Not set'}
-            showArrow
+          <TouchableOpacity
+            style={styles.rateTile}
             onPress={handleRatePress}
-          />
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel="Electricity rate"
+          >
+            <View style={styles.rateIcon}>
+              <Ionicons name="flash" size={18} color={COLORS.white} />
+            </View>
+            <View style={styles.rateText}>
+              <Text style={styles.rateLabel}>Electricity rate</Text>
+              <Text style={[styles.rateValue, !ratesSet && styles.rateValueUnset]}>
+                ₱{generationRate.toFixed(4)}
+                <Text style={styles.rateUnit}> /kWh</Text>
+              </Text>
+              <Text style={styles.rateSub}>
+                {ratesSet ? 'Generation rate · PELCO III' : 'Not set yet · enter it from your bill'}
+              </Text>
+            </View>
+            <View style={styles.ratePill}>
+              <Text style={styles.ratePillText}>{ratesSet ? 'Edit' : 'Set'}</Text>
+            </View>
+          </TouchableOpacity>
           <Separator />
           {/* The only route to finalizeInvoice. A statement is emailed as an
               estimate because PELCO III publishes the month's generation rate
-              only after the period closes, and without this row there was
-              nowhere to enter it - every statement stayed an estimate for ever
-              and the PDF named a control that did not exist. */}
+              only after the period closes. */}
           <SettingsRow
-            icon="🧾"
-            label="Monthly Statements"
+            icon="document-text-outline"
+            label="Monthly statements"
             value="View"
             showArrow
             onPress={() => setStatementsVisible(true)}
           />
-          <Separator />
-          {/* TODO: Budget settings will connect to BudgetTracking screen */}
-          <SettingsRow
-            icon="💰"
-            label="Monthly Budget"
-            value={formatCurrency(settings.monthlyBudget, settings.currency)}
-            showArrow
-            onPress={() => navigation.navigate('BudgetTracking')}
-          />
         </SectionCard>
 
-        {/* Device */}
-        <SectionHeader title="Dagitab Hub" />
-
-        {/* State first, controls after. Device health is what someone opens this
-            section to check, and it used to be a value squeezed onto the right
-            edge of one row among four identical ones.
-
-            Replaced entirely while unreadable: this card's whole job is to
-            report the hub's state, and with nothing read it has no state to
-            report - it would say "Not linked", which is a definite answer to a
+        {/* Dagitab Hub - compact (Oct 2026): the status heads the same card as
+            the actions. Replaced by the offline notice while unreadable: with
+            nothing read it would say "Not linked", a definite answer to a
             question that was never asked. */}
+        <SectionHeader title="Dagitab Hub" />
         {showOfflineState ? (
           <OfflineState
             compact
             title="Can't check your Hub"
             body={
               'Your Hub and its settings are safe — the app just needs a ' +
-              'connection to read them. Check your wi-fi or mobile data, then ' +
-              'pull down to refresh.'
+              'connection to read them. Check your wi-fi or mobile data.'
             }
             onRetry={fetchSettings}
           />
-        ) : (
-          <HubStatusCard settings={settings} />
-        )}
+        ) : null}
         <SectionCard>
+          {!showOfflineState ? (
+            <>
+              <HubStatusCard settings={settings} />
+              <Separator />
+            </>
+          ) : null}
           {/* Pairing is a single action: scan the QR on the unit. Scanning
-              again simply re-pairs, which is why there is no unlink step. */}
+              again simply re-pairs. */}
           <SettingsRow
-            icon="📷"
-            label={settings.esp32Linked ? 'Scan to re-link device' : 'Scan device QR'}
-            value={settings.esp32Linked ? settings.esp32DeviceId : 'Not linked'}
+            icon="qr-code-outline"
+            label={settings.esp32Linked ? 'Re-link with QR code' : 'Scan QR code to link'}
             showArrow
             onPress={handleScanDeviceQR}
           />
           <Separator />
           <SettingsRow
-            icon="⌨️"
+            icon="keypad-outline"
             label="Enter details manually"
             showArrow
             onPress={handleESP32Settings}
           />
           <Separator />
-          {/* Sits under Device rather than Account: everything it can currently
-              report is about a unit — a refused token, a link, a transfer. */}
+          {/* Renamed from "Security activity" (Oct 2026): everything it can
+              report is about the Hub - a refused token, a link, a transfer. */}
           <SettingsRow
-            icon="🛡️"
-            label="Security activity"
+            icon="pulse-outline"
+            label="Hub activity"
             value={summariseSecurityEvents(securityEvents)}
             showArrow
             onPress={() => setSecurityModalVisible(true)}
           />
-          <Separator />
-          <SettingsRow
-            icon="🗑️"
-            label="Remove Device"
-            value={settings.esp32Linked ? settings.esp32DeviceId : 'Nothing linked'}
-            isDestructive
-            showArrow
-            onPress={handleDeviceUnlink}
-            disabled={!settings.esp32Linked}
-          />
+          {settings.esp32Linked ? (
+            <>
+              <Separator />
+              <SettingsRow
+                icon="unlink-outline"
+                label="Remove Hub"
+                isDestructive
+                showArrow
+                onPress={handleDeviceUnlink}
+              />
+            </>
+          ) : null}
         </SectionCard>
 
-        {/* Saved Appliances */}
-        <SectionHeader title="Saved Appliances" />
+        {/* Saved appliances - just the appliances (Oct 2026): the naming
+            guidance paragraphs were removed on request. Each row carries an
+            icon for its kind and the power it was learned at. */}
+        <View style={styles.sectionHeaderRow}>
+          <Text style={styles.sectionHeaderInline}>Saved appliances</Text>
+          {!showOfflineState && savedAppliances.length > 0 ? (
+            <Text style={styles.sectionCount}>{savedAppliances.length}</Text>
+          ) : null}
+        </View>
         <SectionCard>
           {/* Offline first: an unread list is also length 0, and telling an
               owner who has trained four appliances that they have none would
               invite them to start over. */}
           {showOfflineState ? (
-            <View style={styles.emptyAppliances}>
-              <Text style={styles.emptyAppliancesText}>
-                Your saved appliances can&rsquo;t be loaded without a connection.
-                They are still here — check your wi-fi or mobile data and pull
-                down to refresh.
-              </Text>
-            </View>
+            <Text style={styles.emptyAppliancesText}>Can&rsquo;t load these without a connection.</Text>
           ) : savedAppliances.length === 0 ? (
-            <View style={styles.emptyAppliances}>
-              <Text style={styles.emptyAppliancesText}>
-                No saved appliances yet. Confirm an appliance name on the Dashboard
-                while it is running and Dagitab will learn its power signature.
-              </Text>
-            </View>
+            <Text style={styles.emptyAppliancesText}>None yet — name one on the Outlets tab.</Text>
           ) : (
             savedAppliances.map((appliance, index) => (
               <React.Fragment key={appliance.label}>
                 {index > 0 && <Separator />}
                 <SettingsRow
-                  icon="🔖"
+                  icon={applianceIcon(appliance.label)}
+                  iconSet="mci"
                   label={appliance.label}
                   value={formatApplianceSignature(appliance)}
                   showArrow
@@ -646,105 +670,69 @@ const SettingsScreen = ({ navigation }) => {
               </React.Fragment>
             ))
           )}
-
-          {/* Written as an instruction, and placed where the choice is being
-              reconsidered rather than after it. The owner plugged in a ceiling
-              fan, was offered LED Lamp, scanned for "Ceiling Fan", did not find
-              it, and stopped to ask whether picking LED Lamp was allowed. It
-              was - he did the right thing on instinct - but nothing on screen
-              said so, and hesitating there is the difference between naming an
-              appliance and abandoning the flow. */}
-          <View style={styles.namingGuidance}>
-            <View style={styles.namingGuidanceHeader}>
-              <Text style={styles.namingGuidanceIcon}>💡</Text>
-              <Text style={styles.namingGuidanceTitle}>Not seeing your appliance?</Text>
-            </View>
-
-            {/* The instruction gets its own line. It was previously the middle
-                sentence of a five-line paragraph, which is where the one piece
-                of text the reader had to act on is least likely to be read. */}
-            <Text style={styles.namingGuidanceAction}>
-              Pick whichever is closest, then rename it.
-            </Text>
-
-            <Text style={styles.namingGuidanceText}>
-              These eight names are all Dagitab can guess from wattage alone. The
-              signature it saves is measured from your appliance, so the name it
-              started from stops mattering.
-            </Text>
-
-            <View style={styles.namingGuidanceDivider} />
-
-            <Text style={styles.namingGuidanceExample}>
-              A low-power ceiling fan may overlap with an LED Lamp. Pick the fan
-              when it is offered, then rename it once and it is recognised every
-              time it comes back.
-            </Text>
-          </View>
         </SectionCard>
 
-        {/* Preferences */}
-        <SectionHeader title="Preferences" />
+        {/* Notifications - the switch says what it currently means, and the
+            icon follows it. */}
+        <SectionHeader title="Notifications" />
         <SectionCard>
           <SettingsRow
-            icon="🔔"
-            label="Notifications"
+            icon={settings.notifications ? 'notifications' : 'notifications-off-outline'}
+            label="Push notifications"
+            subtitle={settings.notifications ? 'Safety, budget and Hub alerts' : 'Off — no alerts on this phone'}
             isSwitch
             switchValue={settings.notifications}
             onSwitchChange={handleNotificationsToggle}
           />
         </SectionCard>
 
-        {/* About */}
+        {/* About - compact (Oct 2026): three tiles in one row. The version
+            is in the footer, once. */}
         <SectionHeader title="About" />
-        <SectionCard>
-          <SettingsRow
-            icon="ℹ️"
-            label="About Dagitab"
-            showArrow
-            onPress={handleAbout}
-          />
-          <Separator />
-          <SettingsRow
-            icon="❓"
-            label="Help Center"
-            showArrow
-            onPress={handleHelp}
-          />
-          <Separator />
-          <SettingsRow
-            icon="📄"
-            label="Privacy Policy"
-            showArrow
-            onPress={handlePrivacy}
-          />
-          <Separator />
-          <SettingsRow
-            icon="🏷️"
-            label="Version"
-            value={formatVersion()}
-          />
-        </SectionCard>
+        <View style={styles.aboutRow}>
+          {[
+            { icon: 'information-circle-outline', label: 'About', onPress: handleAbout },
+            { icon: 'help-buoy-outline', label: 'Help', onPress: handleHelp },
+            { icon: 'shield-checkmark-outline', label: 'Privacy', onPress: handlePrivacy },
+          ].map((item) => (
+            <TouchableOpacity
+              key={item.label}
+              style={styles.aboutTile}
+              onPress={item.onPress}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+            >
+              <View style={styles.aboutIcon}>
+                <Ionicons name={item.icon} size={20} color={COLORS.primary} />
+              </View>
+              <Text style={styles.aboutLabel}>{item.label}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
 
-        {/* Logout */}
-        <SectionHeader title="" />
-        <SectionCard>
-          <SettingsRow
-            icon="🚪"
-            label={isSigningOut ? 'Signing out…' : 'Logout'}
-            isDestructive
-            busy={isSigningOut}
-            onPress={handleLogout}
-          />
-        </SectionCard>
+        <View style={styles.signOut}>
+          <SectionCard>
+            <SettingsRow
+              icon="log-out-outline"
+              label={isSigningOut ? 'Signing out…' : 'Sign out'}
+              isDestructive
+              busy={isSigningOut}
+              onPress={handleLogout}
+            />
+          </SectionCard>
+        </View>
 
         <View style={styles.footer}>
-          {loading ? <Text style={styles.footerSub}>Syncing settings...</Text> : null}
+          {loading ? <Text style={styles.footerSub}>Syncing settings…</Text> : null}
           {!loading && error ? <Text style={styles.errorText}>{error}</Text> : null}
           <Text style={styles.footerText}>Dagitab {formatVersion()}</Text>
-          <Text style={styles.footerSub}>Smart Energy Monitoring</Text>
         </View>
       </ScrollView>
+
+      <NotificationPanel
+        visible={notificationVisible}
+        onClose={() => setNotificationVisible(false)}
+      />
 
       <ProfileNameModal
         visible={nameModalVisible}
@@ -771,6 +759,7 @@ const SettingsScreen = ({ navigation }) => {
       <SupplyRateModal
         visible={rateModalVisible}
         currentRates={settings.supplyRates}
+        hasSavedRates={ratesSet}
         onClose={handleRateClose}
         onSave={handleRateSave}
       />
@@ -784,8 +773,6 @@ const SettingsScreen = ({ navigation }) => {
 
       <ESP32DeviceModal
         visible={deviceModalVisible}
-        currentDeviceId={settings.esp32DeviceId}
-        currentDeviceToken={settings.esp32DeviceToken}
         onClose={handleDeviceModalClose}
         onSave={handleDeviceSave}
       />
@@ -824,102 +811,197 @@ const SettingsScreen = ({ navigation }) => {
 };
 
 const styles = StyleSheet.create({
-  tariffBanner: {
-    backgroundColor: COLORS.background,
-    borderRadius: 10,
-    padding: 14,
-    marginBottom: 4,
-  },
-  tariffBannerTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: COLORS.primary,
-    marginBottom: 4,
-  },
-  tariffBannerBody: {
-    fontSize: 12,
-    color: COLORS.textLight,
-    lineHeight: 17,
-  },
   safeArea: {
     flex: 1,
     backgroundColor: COLORS.background,
   },
-  emptyAppliances: {
-    paddingHorizontal: 16,
-    paddingVertical: 18,
-  },
   emptyAppliancesText: {
     fontSize: 13,
-    lineHeight: 19,
     color: COLORS.textLight,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+  },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 6,
+  },
+  sectionHeaderInline: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.textLight,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+  },
+  sectionCount: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: COLORS.primary,
+    backgroundColor: '#ECF8EF',
+    borderRadius: 999,
+    paddingHorizontal: 7,
+    paddingVertical: 1,
+    overflow: 'hidden',
+  },
+  aboutRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginHorizontal: 16,
+  },
+  aboutTile: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 12,
+    borderRadius: 14,
+    backgroundColor: COLORS.white,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  aboutIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#ECF8EF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  aboutLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: COLORS.text,
+  },
+  signOut: {
+    marginTop: 16,
   },
   // Its own tinted block rather than a bare paragraph flush against the list.
   // Sitting inside the card with the same padding as the rows above it, this
   // read as one more list entry that happened to be long; the border and the
   // green tint mark it as help about the list rather than part of it.
-  namingGuidance: {
-    marginHorizontal: 12,
-    marginTop: 4,
-    marginBottom: 12,
-    padding: 14,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: COLORS.primary + '33',
-    backgroundColor: COLORS.primary + '0D',
-  },
-  namingGuidanceHeader: {
+  header: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 7,
-    marginBottom: 8,
-  },
-  namingGuidanceIcon: {
-    fontSize: 14,
-  },
-  namingGuidanceTitle: {
-    flex: 1,
-    fontSize: 13.5,
-    fontWeight: '700',
-    color: COLORS.textDark,
-  },
-  namingGuidanceAction: {
-    fontSize: 14,
-    lineHeight: 20,
-    fontWeight: '700',
-    color: COLORS.primary,
-    marginBottom: 6,
-  },
-  namingGuidanceText: {
-    fontSize: 12.5,
-    lineHeight: 18,
-    color: COLORS.textLight,
-  },
-  namingGuidanceDivider: {
-    height: 1,
-    backgroundColor: COLORS.primary + '26',
-    marginVertical: 10,
-  },
-  namingGuidanceExample: {
-    fontSize: 12,
-    lineHeight: 17,
-    color: COLORS.textLight,
-    fontStyle: 'italic',
-  },
-  header: {
+    justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingTop: 8,
-    paddingBottom: 12,
+    paddingBottom: 4,
   },
-  headerTitle: {
-    fontSize: 24,
+  bellButton: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: COLORS.white,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bellBadge: {
+    position: 'absolute',
+    top: 3,
+    right: 3,
+    minWidth: 18,
+    height: 18,
+    paddingHorizontal: 4,
+    borderRadius: 9,
+    backgroundColor: COLORS.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: COLORS.white,
+  },
+  bellBadgeText: {
+    color: COLORS.white,
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  profile: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  avatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: COLORS.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarText: {
+    color: COLORS.white,
+    fontSize: 17,
+    fontWeight: '700',
+  },
+  profileText: {
+    flex: 1,
+  },
+  profileName: {
+    fontSize: 15.5,
     fontWeight: '700',
     color: COLORS.text,
   },
-  headerSub: {
-    fontSize: 13,
+  profileEmail: {
+    fontSize: 12.5,
     color: COLORS.textLight,
-    marginTop: 2,
+    marginTop: 1,
+  },
+  rateTile: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+  },
+  rateIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: COLORS.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rateText: {
+    flex: 1,
+  },
+  rateLabel: {
+    fontSize: 12,
+    color: COLORS.textLight,
+  },
+  rateValue: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: COLORS.text,
+    marginTop: 1,
+  },
+  rateValueUnset: {
+    color: COLORS.textLight,
+  },
+  rateUnit: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.textLight,
+  },
+  rateSub: {
+    fontSize: 11.5,
+    color: COLORS.textLight,
+    marginTop: 1,
+  },
+  ratePill: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: '#ECF8EF',
+  },
+  ratePillText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.primary,
   },
   scrollView: {
     flex: 1,
@@ -934,8 +1016,8 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.8,
     paddingHorizontal: 16,
-    paddingTop: 20,
-    paddingBottom: 8,
+    paddingTop: 16,
+    paddingBottom: 6,
   },
   sectionCard: {
     backgroundColor: COLORS.white,
@@ -948,7 +1030,7 @@ const styles = StyleSheet.create({
   separator: {
     height: 1,
     backgroundColor: COLORS.border,
-    marginLeft: 66,
+    marginLeft: 58,
   },
   footer: {
     alignItems: 'center',

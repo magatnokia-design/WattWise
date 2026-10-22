@@ -4,7 +4,6 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { DashboardScreen } from '../screens/Dashboard/DashboardScreen';
 import { AnalyticsScreen } from '../screens/Analytics/AnalyticsScreen';
 import HistoryScreen from '../screens/History/HistoryScreen';
 import ScheduleScreen from '../screens/Timer/ScheduleScreen';
@@ -21,7 +20,12 @@ const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
 
 /**
- * Bottom bar: Home · Analytics · [Outlets] · History · Settings.
+ * Bottom bar: Budget · Analytics · [Outlets] · History · Settings.
+ *
+ * Home was removed (Oct 2026). Its parts moved: the notification bell and the
+ * set-your-rates prompt to Budget, which took its place; Compare Usage to
+ * Analytics; the stuck-relay warning and the Hub setup card to Outlets. The
+ * app now opens on Outlets.
  *
  * Outlets is the raised centre button (Oct 2026: "stand out in the middle,
  * like GCash"). Five slots put it exactly in the middle, so Schedule left the
@@ -68,6 +72,7 @@ const MainTabs = () => {
 
   return (
     <Tab.Navigator
+      initialRouteName="Outlets"
       screenOptions={{
         headerShown: false,
         tabBarStyle: {
@@ -86,11 +91,13 @@ const MainTabs = () => {
         tabBarShowLabel: false,
       }}
     >
+      {/* Named BudgetTracking, not Budget, so every existing
+          navigate('BudgetTracking') (Settings) lands on this tab. */}
       <Tab.Screen
-        name="Dashboard"
-        component={DashboardScreen}
+        name="BudgetTracking"
+        component={BudgetTrackingScreen}
         options={{
-          tabBarIcon: ({ focused }) => <TabIcon icon="home" label="Home" focused={focused} />,
+          tabBarIcon: ({ focused }) => <TabIcon icon="wallet" label="Budget" focused={focused} />,
         }}
       />
       <Tab.Screen
@@ -134,11 +141,6 @@ export const MainNavigator = () => {
       <Stack.Screen
         name="PowerSafety"
         component={PowerSafetyScreen}
-        options={{ headerShown: false }}
-      />
-      <Stack.Screen
-        name="BudgetTracking"
-        component={BudgetTrackingScreen}
         options={{ headerShown: false }}
       />
       <Stack.Screen

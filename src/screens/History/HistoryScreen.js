@@ -1,197 +1,112 @@
-import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { COLORS } from '../../constants/colors';
 import ActivityLog from './components/ActivityLog';
 import UsageHistory from './components/UsageHistory';
-import DateRangeModal from './components/DateRangeModal';
+import Pager from './components/Pager';
 import { useHistory } from './hooks/useHistory';
 import ExportUsageCard from './components/ExportUsageCard';
 import { useAuth } from '../../hooks/useAuth';
-import { calculatePelcoIIIBill } from '../../utils/billing';
-import {
-  DATE_RANGE_PRESETS,
-  resolveDateRange,
-  filterByDateRange,
-  formatCost,
-} from './utils/historyHelpers';
+import { HISTORY_PAGE_SIZE, paginate } from './utils/historyHelpers';
 
 const TABS = ['Activity', 'Usage'];
-const ACTIVITY_PAGE_SIZE = 20;
 
-const FilterChip = ({ label, active, onPress }) => (
-  <TouchableOpacity
-    style={[styles.filterChip, active && styles.filterChipActive]}
-    onPress={onPress}
-    activeOpacity={0.7}
-  >
-    <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>
-      {label}
-    </Text>
-  </TouchableOpacity>
-);
-
+/**
+ * History, compact (Oct 2026): Activity and Usage, ten rows a page.
+ *
+ * Removed on request: the Records / kWh total / Total cost tiles, the
+ * All / Outlet 1 / Outlet 2 filter, and the date filter. Usage shows only the
+ * date, energy and cost; Export to Excel picks its own dates and keeps the
+ * detail.
+ */
 const HistoryScreen = () => {
-  const { width } = useWindowDimensions();
-    const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const [activeTab, setActiveTab] = useState(0);
-  const [activeFilter, setActiveFilter] = useState('All');
-  const [activeRangeId, setActiveRangeId] = useState('all');
-  const [dateModalVisible, setDateModalVisible] = useState(false);
-  // The activity listener is capped by count, so "load more" raises the cap and
-  // re-subscribes. Growing the live query keeps realtime updates working, which
-  // a separate paginated fetch would fight with.
-  const [logLimit, setLogLimit] = useState(ACTIVITY_PAGE_SIZE);
+  const [activityPage, setActivityPage] = useState(0);
+  const [usagePage, setUsagePage] = useState(0);
+  const scrollRef = useRef(null);
 
- const { activityLogs, usageHistory, loading, hasMore, rateProfileId, supplyRates, showOfflineState, subscribeActivityLogs, fetchUsageHistory } = useHistory();
+  const {
+    activityLogs,
+    usageHistory,
+    loading,
+    usageLoading,
+    showOfflineState,
+    subscribeActivityLogs,
+    fetchUsageHistory,
+    fetchUsageForExport,
+  } = useHistory();
 
- const filterToOutletValue = useMemo(() => ({
-   All: 'all',
-   'Outlet 1': '1',
-   'Outlet 2': '2',
- }), []);
+  // The activity listener is capped by count, so paging forward raises the cap
+  // - one row past the page, which is how the screen knows a next page exists.
+  // Growing the live query keeps realtime updates working, which a separate
+  // paginated fetch would fight with.
+  const activityLimit = (activityPage + 1) * HISTORY_PAGE_SIZE + 1;
 
-// Subscribe activity logs in real-time while Activity tab is active.
-useEffect(() => {
-  if (authLoading || !user || activeTab !== 0) return;
+  useEffect(() => {
+    if (authLoading || !user || activeTab !== 0) return undefined;
+    return subscribeActivityLogs({ outlet: 'all' }, activityLimit);
+  }, [activeTab, authLoading, user, subscribeActivityLogs, activityLimit]);
 
-  const unsubscribe = subscribeActivityLogs(
-    { outlet: filterToOutletValue[activeFilter] || 'all' },
-    logLimit
-  );
+  // Every recorded day (up to a year), read once and paged on the phone.
+  useEffect(() => {
+    if (authLoading || !user) return;
+    fetchUsageHistory();
+  }, [authLoading, user, fetchUsageHistory]);
 
-  return unsubscribe;
-}, [activeFilter, activeTab, authLoading, user, subscribeActivityLogs, filterToOutletValue, logLimit]);
-
-// Changing the outlet or date filter starts a fresh window.
-useEffect(() => {
-  setLogLimit(ACTIVITY_PAGE_SIZE);
-}, [activeFilter, activeRangeId]);
-
-const { startDate, endDate } = useMemo(
-  () => resolveDateRange(activeRangeId),
-  [activeRangeId]
-);
-
-// Usage history backs the summary cards on both tabs, so it loads regardless of
-// which tab is showing (a single capped query, unlike the activity listener).
-useEffect(() => {
-  if (authLoading || !user) return;
-  fetchUsageHistory(startDate, endDate);
-}, [authLoading, user, fetchUsageHistory, startDate, endDate]);
-
-  const filters = useMemo(() => ['All', 'Outlet 1', 'Outlet 2'], []);
-
-  const handleTabPress = useCallback((index) => {
-    setActiveTab(index);
-  }, []);
-
-  const handleFilterPress = useCallback((filter) => {
-    setActiveFilter(filter);
-  }, []);
-
-  const handleDateFilterPress = useCallback(() => {
-    setDateModalVisible(true);
-  }, []);
-
-  const handleDateModalClose = useCallback(() => {
-    setDateModalVisible(false);
-  }, []);
-
-  const handleLoadMoreActivity = useCallback(() => {
-    setLogLimit((current) => current + ACTIVITY_PAGE_SIZE);
-  }, []);
-
-  // Activity logs stream in unfiltered by date (the listener is capped by count,
-  // not range), so the selected range is applied client-side here.
-  const visibleActivityLogs = useMemo(
-    () => filterByDateRange(activityLogs, startDate, endDate),
-    [activityLogs, startDate, endDate]
-  );
-
-  const activeRangeLabel = useMemo(() => {
-    const preset = DATE_RANGE_PRESETS.find((item) => item.id === activeRangeId);
-    return preset?.shortLabel || 'Date';
-  }, [activeRangeId]);
-
-  const summaryData = useMemo(() => {
-    const totalKwh = usageHistory.reduce((sum, item) => sum + (item.totalKwh || 0), 0);
-
-    // Priced from the total, not by adding up the days.
-    //
-    // Each day's stored cost is a marginal figure that deliberately excludes
-    // the once-a-month P5.00 metering charge, so summing them would leave the
-    // fee out entirely - just as summing days that each included it charged
-    // the fee once per day, which is what this header used to show.
-    // Nothing measured means nothing to attribute, so the once-a-month
-    // P5.00 metering flat and its VAT stay out. Without this a brand new
-    // account - no Hub linked, no readings at all - reported P5.60 against
-    // "0 Records / 0.00 kWh", which is the same fault processDailyRollup
-    // fixed for the monthly budget in 1560684. The invoice for an empty
-    // month does still owe the flat; a screen labelled measured usage does
-    // not.
-    const totalCost = calculatePelcoIIIBill(totalKwh, {
-      supplyRates,
-      profileId: rateProfileId,
-      includePeriodFlats: totalKwh > 0,
-    }).totals.total;
-
+  const activity = useMemo(() => {
+    const start = activityPage * HISTORY_PAGE_SIZE;
     return {
-      totalRecords: activeTab === 0 ? visibleActivityLogs.length : usageHistory.length,
-      totalKwh: totalKwh.toFixed(2),
-      totalCost: formatCost(totalCost),
+      items: activityLogs.slice(start, start + HISTORY_PAGE_SIZE),
+      hasPrev: activityPage > 0,
+      hasNext: activityLogs.length > start + HISTORY_PAGE_SIZE,
     };
-  }, [usageHistory, visibleActivityLogs.length, activeTab, rateProfileId, supplyRates]);
+  }, [activityLogs, activityPage]);
+
+  // While the next page is being read the listener still holds the previous,
+  // shorter list - show the spinner rather than an empty page.
+  const activityPageLoading = loading && activity.items.length === 0;
+
+  const usage = useMemo(
+    () => paginate(usageHistory, usagePage, HISTORY_PAGE_SIZE),
+    [usageHistory, usagePage]
+  );
+
+  // The oldest day on record, for the export's "All" choice.
+  const firstUsageDate = usageHistory.length > 0
+    ? usageHistory[usageHistory.length - 1].date
+    : null;
+
+  const goToPage = (setter, next) => {
+    setter(next);
+    scrollRef.current?.scrollTo?.({ y: 0, animated: false });
+  };
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
-      {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>History</Text>
-        <Text style={styles.headerSub}>Activity & usage records</Text>
+        {activeTab === 1 ? (
+          <ExportUsageCard fetchRows={fetchUsageForExport} firstDate={firstUsageDate} />
+        ) : null}
       </View>
 
-      {/* Summary Cards
-          Dashed rather than zeroed when nothing could be read. A zero here is
-          a measurement - it says this range genuinely held no usage and cost
-          nothing - and printing one over an unread range is the same false
-          claim the empty states below were making. */}
-      <View style={[styles.summaryRow, { paddingHorizontal: 16 }]}>
-        <View style={[styles.summaryCard, { width: (width - 48) / 3 }]}>
-          <Text style={styles.summaryValue}>
-            {showOfflineState ? '—' : summaryData.totalRecords}
-          </Text>
-          <Text style={styles.summaryLabel}>Records</Text>
-        </View>
-        <View style={[styles.summaryCard, { width: (width - 48) / 3 }]}>
-          <Text style={styles.summaryValue}>
-            {showOfflineState ? '—' : summaryData.totalKwh}
-          </Text>
-          <Text style={styles.summaryLabel}>kWh Total</Text>
-        </View>
-        <View style={[styles.summaryCard, { width: (width - 48) / 3 }]}>
-          <Text style={styles.summaryValue}>
-            {showOfflineState ? '—' : summaryData.totalCost}
-          </Text>
-          <Text style={styles.summaryLabel}>Total Cost</Text>
-        </View>
-      </View>
-
-      {/* Tabs */}
       <View style={styles.tabContainer}>
         {TABS.map((tab, index) => (
           <TouchableOpacity
             key={tab}
             style={[styles.tab, activeTab === index && styles.tabActive]}
-            onPress={() => handleTabPress(index)}
+            onPress={() => setActiveTab(index)}
             activeOpacity={0.7}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: activeTab === index }}
           >
             <Text style={[styles.tabText, activeTab === index && styles.tabTextActive]}>
               {tab}
@@ -200,72 +115,46 @@ useEffect(() => {
         ))}
       </View>
 
-      {/* Filter Chips */}
-      <View style={styles.filterRow}>
-        {filters.map((filter) => (
-          <FilterChip
-            key={filter}
-            label={filter}
-            active={activeFilter === filter}
-            onPress={() => handleFilterPress(filter)}
-          />
-        ))}
-        <TouchableOpacity
-          style={[styles.dateFilterBtn, activeRangeId !== 'all' && styles.dateFilterBtnActive]}
-          onPress={handleDateFilterPress}
-          activeOpacity={0.7}
-        >
-          <Text
-            style={[
-              styles.dateFilterText,
-              activeRangeId !== 'all' && styles.dateFilterTextActive,
-            ]}
-          >
-            📅 {activeRangeLabel}
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Content */}
       <ScrollView
+        ref={scrollRef}
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
         {activeTab === 0 ? (
           <>
-            {/* The listener is capped by count, so a date range can only filter
-                what has been loaded. Say so rather than implying completeness. */}
-            {activeRangeId !== 'all' && hasMore ? (
-              <Text style={styles.rangeNotice}>
-                Showing the {activityLogs.length} most recent entries within this range.
-                Load more below to look further back.
-              </Text>
-            ) : null}
             <ActivityLog
-              logs={visibleActivityLogs}
-              loading={loading}
-              hasMore={hasMore}
-              onLoadMore={handleLoadMoreActivity}
+              logs={activity.items}
+              loading={activityPageLoading || (loading && activityLogs.length === 0)}
               showOfflineState={showOfflineState}
+            />
+            <Pager
+              hasPrev={activity.hasPrev}
+              hasNext={activity.hasNext}
+              busy={loading}
+              pageLabel={`Page ${activityPage + 1}`}
+              onPrev={() => goToPage(setActivityPage, Math.max(0, activityPage - 1))}
+              onNext={() => goToPage(setActivityPage, activityPage + 1)}
             />
           </>
         ) : (
           <>
-            {/* Above the list, because it exports what the list is showing and
-                the relationship should be visible without scrolling. */}
-            <ExportUsageCard usage={usageHistory} />
-            <UsageHistory usage={usageHistory} loading={loading} />
+            <UsageHistory
+              usage={usage.items}
+              loading={usageLoading}
+              showOfflineState={showOfflineState}
+            />
+            <Pager
+              page={usage.page}
+              pageCount={usage.pageCount}
+              hasPrev={usage.hasPrev}
+              hasNext={usage.hasNext}
+              onPrev={() => goToPage(setUsagePage, usage.page - 1)}
+              onNext={() => goToPage(setUsagePage, usage.page + 1)}
+            />
           </>
         )}
       </ScrollView>
-
-      <DateRangeModal
-        visible={dateModalVisible}
-        activeRangeId={activeRangeId}
-        onSelect={setActiveRangeId}
-        onClose={handleDateModalClose}
-      />
     </SafeAreaView>
   );
 };
@@ -276,57 +165,32 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.background,
   },
   header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingTop: 8,
     paddingBottom: 12,
+    minHeight: 52,
   },
   headerTitle: {
     fontSize: 24,
     fontWeight: '700',
     color: COLORS.text,
   },
-  headerSub: {
-    fontSize: 13,
-    color: COLORS.textLight,
-    marginTop: 2,
-  },
-  summaryRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 16,
-    gap: 8,
-  },
-  summaryCard: {
-    backgroundColor: COLORS.white,
-    borderRadius: 12,
-    padding: 12,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  summaryValue: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: COLORS.primary,
-  },
-  summaryLabel: {
-    fontSize: 11,
-    color: COLORS.textLight,
-    marginTop: 4,
-  },
   tabContainer: {
     flexDirection: 'row',
     marginHorizontal: 16,
     backgroundColor: COLORS.white,
     borderRadius: 10,
-    padding: 4,
+    padding: 3,
     marginBottom: 12,
     borderWidth: 1,
     borderColor: COLORS.border,
   },
   tab: {
     flex: 1,
-    paddingVertical: 8,
+    paddingVertical: 7,
     alignItems: 'center',
     borderRadius: 8,
   },
@@ -334,7 +198,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.primary,
   },
   tabText: {
-    fontSize: 14,
+    fontSize: 13.5,
     fontWeight: '500',
     color: COLORS.textLight,
   },
@@ -342,73 +206,12 @@ const styles = StyleSheet.create({
     color: COLORS.white,
     fontWeight: '600',
   },
-  filterRow: {
-    flexDirection: 'row',
-    paddingHorizontal: 16,
-    marginBottom: 12,
-    gap: 8,
-    alignItems: 'center',
-  },
-  filterChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    backgroundColor: COLORS.white,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  filterChipActive: {
-    backgroundColor: COLORS.primary,
-    borderColor: COLORS.primary,
-  },
-  filterChipText: {
-    fontSize: 12,
-    color: COLORS.textLight,
-    fontWeight: '500',
-  },
-  filterChipTextActive: {
-    color: COLORS.white,
-    fontWeight: '600',
-  },
-  dateFilterBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    backgroundColor: COLORS.white,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    marginLeft: 'auto',
-  },
-  dateFilterBtnActive: {
-    backgroundColor: COLORS.primary,
-    borderColor: COLORS.primary,
-  },
-  dateFilterText: {
-    fontSize: 12,
-    color: COLORS.textLight,
-    fontWeight: '500',
-  },
-  dateFilterTextActive: {
-    color: COLORS.white,
-    fontWeight: '600',
-  },
-  rangeNotice: {
-    fontSize: 11,
-    lineHeight: 16,
-    color: COLORS.textLight,
-    backgroundColor: COLORS.white,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: 8,
-    padding: 10,
-    marginBottom: 10,
-  },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
     paddingHorizontal: 16,
-    paddingBottom: 20,
+    paddingBottom: 24,
   },
 });
 

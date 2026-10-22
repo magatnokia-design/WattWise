@@ -43,22 +43,23 @@
  */
 import XLSX from 'xlsx-js-style';
 
-// The app palette, as ARGB-less hex - green/white/yellow only.
-// Mirrors src/constants/colors.js; xlsx wants no leading '#'.
-const GREEN = '10B981';
-const GREEN_DARK = '059669';
-const YELLOW = 'FEF3C7';
+// The Dagitab palette (Oct 2026), as ARGB-less hex - greens and white only.
+// Mirrors src/constants/colors.js; xlsx wants no leading '#'. Replaced
+// WattWise's #10B981 and the yellow totals, which the rebrand retired.
+const GREEN = '008D43'; // primary - carries white text
+const GREEN_DEEP = '00401F'; // primaryDeep - the two total columns' header
+const GREEN_TINT = 'E8F6EC'; // the two total columns' body
 const WHITE = 'FFFFFF';
-const TEXT = '111827';
-const BORDER = 'E5E7EB';
+const TEXT = '071B2C'; // navy
+const BORDER = 'DCE3EA';
 
 const KWH_FORMAT = '0.000';
 const PESO_FORMAT = '"₱"#,##0.00';
 
 /**
- * Column plan. `total` marks the two columns that get the yellow tint - the
- * same yellow the export button wears, so the file and the control that
- * produced it read as the same feature.
+ * Column plan. `total` marks the two columns that are set apart - a deep
+ * green header over a pale green body - so the day's totals stand out from
+ * the per-outlet detail.
  */
 const COLUMNS = [
   { header: 'Date', width: 12, key: 'date', type: 'text' },
@@ -82,7 +83,7 @@ const thinBorder = {
 };
 
 const headerStyle = (column) => ({
-  fill: { fgColor: { rgb: column.total ? GREEN_DARK : GREEN } },
+  fill: { fgColor: { rgb: column.total ? GREEN_DEEP : GREEN } },
   font: { color: { rgb: WHITE }, bold: true, sz: 11 },
   alignment: {
     horizontal: column.type === 'text' ? 'left' : 'right',
@@ -92,9 +93,9 @@ const headerStyle = (column) => ({
 });
 
 const bodyStyle = (column) => ({
-  ...(column.total ? { fill: { fgColor: { rgb: YELLOW } } } : {}),
+  ...(column.total ? { fill: { fgColor: { rgb: GREEN_TINT } } } : {}),
   font: { color: { rgb: TEXT }, sz: 11, bold: Boolean(column.total) },
-  alignment: { horizontal: column.type === 'text' ? 'left' : 'right' },
+  alignment: { horizontal: column.type === 'text' ? 'left' : 'right', vertical: 'center' },
   border: thinBorder,
 });
 

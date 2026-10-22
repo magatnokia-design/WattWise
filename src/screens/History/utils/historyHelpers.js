@@ -218,3 +218,61 @@ export const describeUsageRows = (rows = []) => {
   if (count === 0) return 'Nothing to export yet';
   return count === 1 ? '1 day' : `${count} days`;
 };
+
+/** Rows per page on both History tabs (Oct 2026: page, don't scroll). */
+export const HISTORY_PAGE_SIZE = 10;
+
+/**
+ * One page of a list. `page` is 0-based and clamped, so a page that no longer
+ * exists after the list shrinks (a new day, a refresh) falls back to the last
+ * real one instead of showing an empty page.
+ *
+ * @returns {{ items: Array, page: number, pageCount: number, hasPrev: boolean, hasNext: boolean }}
+ */
+export const paginate = (list = [], page = 0, size = HISTORY_PAGE_SIZE) => {
+  const items = Array.isArray(list) ? list : [];
+  const pageCount = Math.max(1, Math.ceil(items.length / size));
+  const current = Math.min(Math.max(0, Math.floor(Number(page) || 0)), pageCount - 1);
+  return {
+    items: items.slice(current * size, current * size + size),
+    page: current,
+    pageCount,
+    hasPrev: current > 0,
+    hasNext: current < pageCount - 1,
+  };
+};
+
+const SHORT_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const SHORT_DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+/**
+ * "Thu, Oct 22" for a `YYYY-MM-DD` key, read from the key's own digits so no
+ * time zone can move the day. The weekday is computed for that calendar date
+ * at UTC noon, which is the same weekday everywhere.
+ */
+export const formatDayKey = (key) => {
+  const [y, m, d] = String(key || '').split('-').map(Number);
+  if (!y || !m || !d) return '--';
+  const weekday = SHORT_DAYS[new Date(Date.UTC(y, m - 1, d, 12)).getUTCDay()];
+  return `${weekday}, ${SHORT_MONTHS[m - 1]} ${d}`;
+};
+
+const localDayKey = (ms) => {
+  const date = new Date(ms);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+};
+
+/**
+ * The heading an activity row is grouped under: "Today", "Yesterday", or
+ * "Thu, Oct 22". In the phone's own time, like the time printed on the row.
+ */
+export const activityDayLabel = (timestamp, nowMs = Date.now()) => {
+  const ms = getTimestampMs(timestamp);
+  if (!ms) return 'Unknown date';
+  const key = localDayKey(ms);
+  if (key === localDayKey(nowMs)) return 'Today';
+  const yesterday = new Date(nowMs);
+  yesterday.setDate(yesterday.getDate() - 1);
+  if (key === localDayKey(yesterday.getTime())) return 'Yesterday';
+  return formatDayKey(key);
+};

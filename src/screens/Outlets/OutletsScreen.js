@@ -20,6 +20,7 @@ import { resolveOutletBadge } from '../Dashboard/utils/outletBadge';
 import LinkHubCard from './components/LinkHubCard';
 import SafetyStatusPill from '../PowerSafetyManagement/components/SafetyStatusPill';
 import { formatApplianceName, toMetricNumber } from './utils/outletLabels';
+import { describeRelayFault } from '../../constants/relayFault';
 
 /**
  * The two outlets, and nothing else - the centre tab (Oct 2026: "an Outlet tab
@@ -296,6 +297,22 @@ const OutletsScreen = ({ navigation }) => {
           </TouchableOpacity>
         </View>
 
+        {/* Moved from Home when it was removed (Oct 2026). Not dismissible:
+            the outlet is live and Dagitab cannot open it, so the auto-cutoff
+            cannot protect it either, and only a physical fix ends it. */}
+        {[
+          { number: 1, stuck: outlet1RelayStuck, fresh: outlet1HasReading },
+          { number: 2, stuck: outlet2RelayStuck, fresh: outlet2HasReading },
+        ].filter((item) => item.stuck).map((item) => (
+          <View key={`relay-stuck-${item.number}`} style={styles.relayFaultNotice}>
+            <View style={styles.relayFaultHead}>
+              <Ionicons name="warning" size={16} color={COLORS.error} />
+              <Text style={styles.relayFaultTitle}>Outlet {item.number} is not switching off</Text>
+            </View>
+            <Text style={styles.relayFaultBody}>{describeRelayFault(item.fresh)}</Text>
+          </View>
+        ))}
+
         {outletsUnreachable ? (
           <OfflineState
             body="Your outlets are safe — the app just needs a connection to load them. Check your wi-fi or mobile data."
@@ -375,6 +392,30 @@ const styles = StyleSheet.create({
   },
   loading: {
     marginVertical: 60,
+  },
+  relayFaultNotice: {
+    backgroundColor: COLORS.error + '12',
+    borderWidth: 1,
+    borderColor: COLORS.error + '40',
+    borderRadius: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    gap: 4,
+  },
+  relayFaultHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  relayFaultTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.error,
+  },
+  relayFaultBody: {
+    fontSize: 12,
+    lineHeight: 17,
+    color: COLORS.textLight,
   },
   card: {
     backgroundColor: COLORS.white,

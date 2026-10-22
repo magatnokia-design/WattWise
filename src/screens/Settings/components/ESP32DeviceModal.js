@@ -10,29 +10,39 @@ import {
   Platform,
   useWindowDimensions,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../../../constants/colors';
 
+/**
+ * Link a Hub by typing its ID and token - the fallback when the QR code cannot
+ * be scanned.
+ *
+ * Opens with both fields EMPTY (Oct 2026). It used to open pre-filled with the
+ * linked Hub's ID and its token, which made a form for entering new details
+ * look like one that already held them - and put the device secret back on
+ * screen to anyone holding the phone. The placeholders show the format.
+ */
 const ESP32DeviceModal = ({
   visible,
-  currentDeviceId,
-  currentDeviceToken,
   onClose,
   onSave,
 }) => {
   const { width } = useWindowDimensions();
-  const [deviceId, setDeviceId] = useState(currentDeviceId || '');
-  const [deviceToken, setDeviceToken] = useState(currentDeviceToken || '');
+  const [deviceId, setDeviceId] = useState('');
+  const [deviceToken, setDeviceToken] = useState('');
+  const [showToken, setShowToken] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
     if (!visible) return;
 
-    setDeviceId(currentDeviceId || '');
-    setDeviceToken(currentDeviceToken || '');
+    setDeviceId('');
+    setDeviceToken('');
+    setShowToken(false);
     setSaving(false);
     setError('');
-  }, [visible, currentDeviceId, currentDeviceToken]);
+  }, [visible]);
 
   const handleClose = useCallback(() => {
     if (saving) return;
@@ -45,22 +55,22 @@ const ESP32DeviceModal = ({
     const normalizedToken = String(deviceToken || '').trim();
 
     if (!normalizedDeviceId) {
-      setError('Device ID is required');
+      setError('Enter the Hub ID.');
       return;
     }
 
     if (!/^[A-Za-z0-9_-]{4,80}$/.test(normalizedDeviceId)) {
-      setError('Device ID must be 4-80 chars and use only letters, numbers, _ or -');
+      setError('The Hub ID is 4-80 letters, numbers, _ or -.');
       return;
     }
 
     if (!normalizedToken) {
-      setError('Device token is required');
+      setError('Enter the Hub token.');
       return;
     }
 
     if (normalizedToken.length < 8) {
-      setError('Device token must be at least 8 characters');
+      setError('The Hub token is at least 8 characters.');
       return;
     }
 
@@ -74,7 +84,7 @@ const ESP32DeviceModal = ({
       });
 
       if (!result?.success) {
-        setError(result?.error || 'Failed to save device settings');
+        setError(result?.error || 'The Hub could not be linked.');
         return;
       }
 
@@ -95,19 +105,21 @@ const ESP32DeviceModal = ({
         style={styles.overlay}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        <View style={[styles.modalContainer, { width: width - 32 }]}> 
+        <View style={[styles.modalContainer, { width: width - 32 }]}>
           <View style={styles.headerRow}>
-            <Text style={styles.title}>ESP32 Device</Text>
-            <TouchableOpacity onPress={handleClose} activeOpacity={0.7}>
-              <Text style={styles.closeBtn}>x</Text>
+            <View style={styles.headerIcon}>
+              <Ionicons name="keypad-outline" size={18} color={COLORS.white} />
+            </View>
+            <View style={styles.headerText}>
+              <Text style={styles.title}>Enter Hub details</Text>
+              <Text style={styles.subtitle}>Printed on the card that came with your Hub</Text>
+            </View>
+            <TouchableOpacity onPress={handleClose} activeOpacity={0.7} accessibilityLabel="Close">
+              <Ionicons name="close" size={22} color={COLORS.textLight} />
             </TouchableOpacity>
           </View>
 
-          <Text style={styles.subtitle}>
-            Link your ESP32 credentials to secure hardware updates.
-          </Text>
-
-          <Text style={styles.inputLabel}>Device ID</Text>
+          <Text style={styles.inputLabel}>Hub ID</Text>
           <TextInput
             style={styles.input}
             value={deviceId}
@@ -122,21 +134,30 @@ const ESP32DeviceModal = ({
             maxLength={80}
           />
 
-          <Text style={styles.inputLabel}>Device Token</Text>
-          <TextInput
-            style={styles.input}
-            value={deviceToken}
-            onChangeText={(text) => {
-              setDeviceToken(text);
-              setError('');
-            }}
-            placeholder="Set a shared token for Hub requests"
-            placeholderTextColor={COLORS.textLight}
-            autoCapitalize="none"
-            autoCorrect={false}
-            maxLength={120}
-            secureTextEntry
-          />
+          <Text style={styles.inputLabel}>Hub token</Text>
+          <View style={styles.tokenRow}>
+            <TextInput
+              style={[styles.input, styles.tokenInput]}
+              value={deviceToken}
+              onChangeText={(text) => {
+                setDeviceToken(text);
+                setError('');
+              }}
+              placeholder="At least 8 characters"
+              placeholderTextColor={COLORS.textLight}
+              autoCapitalize="none"
+              autoCorrect={false}
+              maxLength={120}
+              secureTextEntry={!showToken}
+            />
+            <TouchableOpacity
+              style={styles.eye}
+              onPress={() => setShowToken((value) => !value)}
+              accessibilityLabel={showToken ? 'Hide token' : 'Show token'}
+            >
+              <Ionicons name={showToken ? 'eye-off-outline' : 'eye-outline'} size={20} color={COLORS.textLight} />
+            </TouchableOpacity>
+          </View>
 
           {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
@@ -155,7 +176,7 @@ const ESP32DeviceModal = ({
               activeOpacity={0.7}
               disabled={saving}
             >
-              <Text style={styles.saveText}>{saving ? 'Saving...' : 'Save'}</Text>
+              <Text style={styles.saveText}>{saving ? 'Linking…' : 'Link Hub'}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -167,7 +188,7 @@ const ESP32DeviceModal = ({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(7, 27, 44, 0.5)',
     justifyContent: 'flex-end',
     alignItems: 'center',
     paddingBottom: 16,
@@ -175,59 +196,76 @@ const styles = StyleSheet.create({
   modalContainer: {
     backgroundColor: COLORS.white,
     borderRadius: 20,
-    padding: 20,
+    padding: 18,
   },
   headerRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    gap: 12,
+    marginBottom: 14,
+  },
+  headerIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: COLORS.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerText: {
+    flex: 1,
   },
   title: {
-    fontSize: 20,
+    fontSize: 17,
     fontWeight: '700',
     color: COLORS.text,
   },
-  closeBtn: {
-    fontSize: 18,
-    color: COLORS.textLight,
-    padding: 4,
-  },
   subtitle: {
-    fontSize: 13,
+    fontSize: 12,
     color: COLORS.textLight,
-    marginBottom: 16,
+    marginTop: 1,
   },
   inputLabel: {
     fontSize: 13,
     fontWeight: '600',
     color: COLORS.text,
     marginBottom: 6,
-    marginTop: 4,
   },
   input: {
     borderWidth: 1,
     borderColor: COLORS.border,
     borderRadius: 12,
     paddingHorizontal: 14,
-    paddingVertical: 12,
+    paddingVertical: 11,
     fontSize: 15,
     color: COLORS.text,
-    marginBottom: 10,
+    backgroundColor: COLORS.background,
+    marginBottom: 12,
+  },
+  tokenRow: {
+    justifyContent: 'center',
+  },
+  tokenInput: {
+    paddingRight: 46,
+  },
+  eye: {
+    position: 'absolute',
+    right: 12,
+    top: 11,
   },
   errorText: {
-    fontSize: 12,
-    color: '#EF4444',
+    fontSize: 12.5,
+    color: COLORS.error,
     marginBottom: 8,
   },
   actionRow: {
     flexDirection: 'row',
     gap: 12,
-    marginTop: 8,
+    marginTop: 4,
   },
   cancelBtn: {
     flex: 1,
-    paddingVertical: 14,
+    paddingVertical: 13,
     alignItems: 'center',
     borderRadius: 12,
     borderWidth: 1,
@@ -240,14 +278,14 @@ const styles = StyleSheet.create({
   },
   saveBtn: {
     flex: 1,
-    paddingVertical: 14,
+    paddingVertical: 13,
     alignItems: 'center',
     borderRadius: 12,
     backgroundColor: COLORS.primary,
   },
   saveText: {
     fontSize: 15,
-    fontWeight: '600',
+    fontWeight: '700',
     color: COLORS.white,
   },
   buttonDisabled: {

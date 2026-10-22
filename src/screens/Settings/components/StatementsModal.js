@@ -12,6 +12,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../../../constants/colors';
 import { invoiceService } from '../../../services/firebase';
 import { SUPPLY_RATE_FIELDS, normalizeSupplyRates } from '../../../utils/billing';
@@ -138,8 +139,14 @@ const StatementsModal = ({ visible, userId, onClose }) => {
   const openStatement = useCallback((invoice) => {
     setEditing(invoice);
     // Seeded from whatever priced the estimate, so the user edits one number
-    // rather than retyping Block 1 from scratch.
-    setValues(buildInitialValues(invoice.supplyRates));
+    // rather than retyping Block 1 from scratch - except the generation rate
+    // of a month still awaiting it. That field is for the OFFICIAL figure off
+    // the paper bill, and pre-filling it with the estimate's rate made it look
+    // already entered (Oct 2026). It starts empty; a final month shows the
+    // rate it was finalized with.
+    const seeded = buildInitialValues(invoice.supplyRates);
+    if (invoice.status !== 'FINALIZED') seeded[PRIMARY_FIELD.key] = '';
+    setValues(seeded);
     setErrors({});
     setFormError(null);
     setResult(null);
@@ -281,7 +288,7 @@ const StatementsModal = ({ visible, userId, onClose }) => {
     if (invoices.length === 0) {
       return (
         <View style={styles.centered}>
-          <Text style={styles.emptyIcon}>🧾</Text>
+          <Ionicons name="document-text-outline" size={32} color={COLORS.textLight} style={styles.emptyIcon} />
           <Text style={styles.emptyTitle}>No statements yet</Text>
           <Text style={styles.emptyBody}>
             One is prepared and emailed to you when a billing month ends.
@@ -298,7 +305,7 @@ const StatementsModal = ({ visible, userId, onClose }) => {
               {pendingCount === 1
                 ? 'One statement is priced with an estimated rate.'
                 : `${pendingCount} statements are priced with estimated rates.`}
-              {' '}Enter the official generation rate from your paper bill to finalize.
+              {' '}Open it and enter the rate from your bill.
             </Text>
           </View>
         ) : null}
@@ -344,7 +351,7 @@ const StatementsModal = ({ visible, userId, onClose }) => {
 
               <View style={styles.rowRight}>
                 <Text style={styles.rowAmount}>{peso(invoice.totalAmountDue)}</Text>
-                <Text style={styles.rowArrow}>›</Text>
+                <Ionicons name="chevron-forward" size={18} color={COLORS.textLight} style={styles.rowArrow} />
               </View>
             </TouchableOpacity>
           );
@@ -393,7 +400,7 @@ const StatementsModal = ({ visible, userId, onClose }) => {
         value={values[field.key]}
         onChangeText={(text) => handleChange(field.key, text)}
         keyboardType="decimal-pad"
-        placeholder={toInputValue(field.defaultValue)}
+        placeholder={field.primary ? '0.0000' : toInputValue(field.defaultValue)}
         placeholderTextColor={COLORS.textLight}
         editable={!saving}
       />
@@ -424,7 +431,10 @@ const StatementsModal = ({ visible, userId, onClose }) => {
           {emailing ? (
             <ActivityIndicator color={COLORS.primary} />
           ) : (
-            <Text style={styles.secondaryButtonText}>✉  Email me this statement</Text>
+            <View style={styles.secondaryButtonInner}>
+              <Ionicons name="mail-outline" size={17} color={COLORS.primary} />
+              <Text style={styles.secondaryButtonText}>Email me this statement</Text>
+            </View>
           )}
         </TouchableOpacity>
 
@@ -438,9 +448,7 @@ const StatementsModal = ({ visible, userId, onClose }) => {
             {emailNote.text}
           </Text>
         ) : (
-          <Text style={styles.resendHint}>
-            Sends the PDF to your account email. One per minute.
-          </Text>
+          <Text style={styles.resendHint}>Sent as a PDF to your account email.</Text>
         )}
       </View>
     );
@@ -485,8 +493,8 @@ const StatementsModal = ({ visible, userId, onClose }) => {
           <>
         <Text style={styles.formIntro}>
           {isFinalized
-            ? `This month is already locked to an official rate. Entering a different one for ${formatMonthName(editing.billingMonth)} recomputes it and replaces the figure above.`
-            : `Enter the generation rate printed on your PELCO III bill for ${formatMonthName(editing.billingMonth)}. The other Block 1 lines keep their current values unless you change them.`}
+            ? 'Already final. A different rate recomputes this month.'
+            : `Enter the generation rate on your ${formatMonthName(editing.billingMonth)} bill.`}
         </Text>
 
         {renderField(PRIMARY_FIELD)}
@@ -504,12 +512,6 @@ const StatementsModal = ({ visible, userId, onClose }) => {
         {showAdvanced ? ADVANCED_FIELDS.map(renderField) : null}
 
         {formError ? <Text style={styles.formError}>{formError}</Text> : null}
-
-        <Text style={styles.caution}>
-          {isFinalized
-            ? 'The original estimate is kept as the comparison, however many times this month is recomputed. Distribution and government charges are ERC-approved and are not editable.'
-            : 'Finalizing recomputes this month with the rates above and locks it. Distribution and government charges are ERC-approved and are not editable.'}
-        </Text>
 
         <TouchableOpacity
           style={[styles.primaryButton, saving ? styles.primaryButtonDisabled : null]}
@@ -542,7 +544,7 @@ const StatementsModal = ({ visible, userId, onClose }) => {
             <View style={styles.header}>
               {editing && !result ? (
                 <TouchableOpacity onPress={backToList} activeOpacity={0.7} style={styles.back}>
-                  <Text style={styles.backText}>‹</Text>
+                  <Ionicons name="chevron-back" size={22} color={COLORS.primary} />
                 </TouchableOpacity>
               ) : null}
 
@@ -551,7 +553,7 @@ const StatementsModal = ({ visible, userId, onClose }) => {
               </Text>
 
               <TouchableOpacity onPress={onClose} activeOpacity={0.7} style={styles.close}>
-                <Text style={styles.closeText}>✕</Text>
+                <Ionicons name="close" size={22} color={COLORS.textLight} />
               </TouchableOpacity>
             </View>
 
@@ -603,10 +605,8 @@ const styles = StyleSheet.create({
   },
   // Both are icon-sized glyphs, so the padding is the tap target.
   back: { paddingRight: 12, paddingVertical: 4 },
-  backText: { fontSize: 26, color: COLORS.primary, lineHeight: 28 },
   title: { flex: 1, fontSize: 16, fontWeight: '700', color: COLORS.text },
   close: { paddingLeft: 12, paddingVertical: 4, paddingRight: 2 },
-  closeText: { fontSize: 18, color: COLORS.textLight },
 
   // Shrinks to whatever the sheet has left after the header, rather than a
   // fixed 520 that could be taller than the sheet itself on a short screen.
@@ -625,7 +625,8 @@ const styles = StyleSheet.create({
   retryButtonText: { color: COLORS.white, fontWeight: '600', fontSize: 13 },
   offline: { marginVertical: 4 },
 
-  emptyIcon: { fontSize: 32, marginBottom: 8 },
+  emptyIcon: { marginBottom: 8 },
+  secondaryButtonInner: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   emptyTitle: { fontSize: 15, fontWeight: '700', color: COLORS.text, marginBottom: 4 },
   emptyBody: {
     fontSize: 13,
@@ -674,7 +675,7 @@ const styles = StyleSheet.create({
   badgeTextWarn: { color: '#92400E' },
   rowRight: { alignItems: 'flex-end', flexDirection: 'row' },
   rowAmount: { fontSize: 14.5, fontWeight: '700', color: COLORS.text },
-  rowArrow: { fontSize: 20, color: COLORS.textLight, marginLeft: 6, lineHeight: 20 },
+  rowArrow: { marginLeft: 4 },
 
   estimateCard: {
     backgroundColor: COLORS.background,
@@ -723,13 +724,6 @@ const styles = StyleSheet.create({
     marginTop: 4,
     marginBottom: 8,
     lineHeight: 18,
-  },
-  caution: {
-    fontSize: 11.5,
-    color: COLORS.textLight,
-    lineHeight: 17,
-    marginTop: 4,
-    marginBottom: 14,
   },
 
   primaryButton: {
