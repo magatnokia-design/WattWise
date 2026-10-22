@@ -3,6 +3,9 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../../../constants/colors';
 import { getAlertIcon, formatAlertTime } from '../utils/safetyHelpers';
+// Alerts saved before Oct 2026 carry an emoji at the start of the title; the
+// row has its own icon, so it is dropped for display.
+import { cleanTitle } from '../../Notifications/components/notificationDisplay';
 
 // The three most recent first; each "Show more" adds this many (Oct 2026).
 const FIRST_PAGE = 3;
@@ -25,7 +28,7 @@ const AlertRow = ({ item }) => {
       </View>
       <View style={styles.alertContent}>
         <View style={styles.titleRow}>
-          <Text style={styles.alertTitle} numberOfLines={1}>{item.title}</Text>
+          <Text style={styles.alertTitle} numberOfLines={1}>{cleanTitle(item.title)}</Text>
           <Text style={styles.alertTime}>{formatAlertTime(item.timestamp)}</Text>
         </View>
         <Text style={styles.alertMessage} numberOfLines={2}>

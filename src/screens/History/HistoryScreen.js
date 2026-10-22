@@ -141,7 +141,7 @@ const HistoryScreen = () => {
       {/* Pinned above the tab bar rather than following the list, and the list
           card stretches down to it - so a short page never leaves a gap
           between the last row, the page controls and the tabs (Oct 2026). */}
-      {activeTab === 0 ? (
+      {activeTab === 0 && activity.items.length > 0 ? (
         <Pager
           style={styles.pager}
           hasPrev={activity.hasPrev}
@@ -151,7 +151,8 @@ const HistoryScreen = () => {
           onPrev={() => goToPage(setActivityPage, Math.max(0, activityPage - 1))}
           onNext={() => goToPage(setActivityPage, activityPage + 1)}
         />
-      ) : (
+      ) : null}
+      {activeTab === 1 && usage.items.length > 0 ? (
         <Pager
           style={styles.pager}
           page={usage.page}
@@ -161,7 +162,7 @@ const HistoryScreen = () => {
           onPrev={() => goToPage(setUsagePage, usage.page - 1)}
           onNext={() => goToPage(setUsagePage, usage.page + 1)}
         />
-      )}
+      ) : null}
     </SafeAreaView>
   );
 };

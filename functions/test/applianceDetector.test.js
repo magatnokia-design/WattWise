@@ -414,30 +414,23 @@ test('onboarding lists exactly the appliances the detector can identify', () => 
   );
 
   const source = fs.readFileSync(onboarding, 'utf8');
-  const slide = source
-    .split('\n')
-    .find((line) => line.includes('Designed for low-voltage devices'));
-
-  assert.ok(slide, 'the supported-appliances slide should still exist');
+  // Since Oct 2026 the slide lists appliances as { icon, label } rows rather
+  // than lines of one string, so read the labels of the items block that
+  // follows the slide's lead sentence.
+  const start = source.indexOf('Designed for low-voltage devices');
+  assert.ok(start >= 0, 'the supported-appliances slide should still exist');
+  const block = source.slice(start, source.indexOf('],', start));
+  const listed = [...block.matchAll(/label: '([^']+)'/g)].map((match) => match[1]);
 
   for (const profile of APPLIANCE_PROFILES) {
     assert.ok(
-      slide.includes(profile.label),
+      listed.includes(profile.label),
       `onboarding does not list "${profile.label}"`
     );
   }
 
   // And nothing extra: a name on the slide the detector cannot produce is a
   // promise the system does not keep.
-  //
-  // The source holds the list as one string literal, so the separator to split
-  // on is the two characters backslash-n, not an actual newline.
-  const listed = slide
-    .slice(slide.indexOf('devices:'))
-    .split('\\n')
-    .map((entry) => entry.trim())
-    .filter((entry) => /[a-z]/i.test(entry) && !entry.includes('devices:'));
-
   assert.equal(
     listed.length,
     APPLIANCE_PROFILES.length,

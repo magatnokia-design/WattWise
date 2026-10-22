@@ -457,7 +457,7 @@ async function updateOutletMetrics(req, res) {
         dispatchedOutletIds.add(number);
 
         await createSafetyNotification({
-          title: '⚠️ Outlet Over-Power Cutoff',
+          title: 'Outlet over-power cut-off',
           message: `Outlet ${number} exceeded ${MAX_OUTLET_POWER_W}W and was turned off.`,
           outlet: number,
           metadata: {
@@ -502,7 +502,7 @@ async function updateOutletMetrics(req, res) {
         });
 
         await createSafetyNotification({
-          title: '🚨 Total Power Limit',
+          title: 'Total power limit reached',
           message: `Total load exceeded ${MAX_TOTAL_POWER_W}W. Outlet ${outletToCut.number} was turned off.`,
           outlet: outletToCut.number,
           metadata: {
@@ -625,7 +625,7 @@ async function updateOutletMetrics(req, res) {
       await createNotification({
         userId,
         type: 'charge',
-        title: '🔋 Charging looks finished',
+        title: 'Charging looks finished',
         message: `Outlet ${completion.number}: ${describeSettledCharge(completion)}`,
         outlet: completion.number,
         metadata: {
@@ -644,7 +644,7 @@ async function updateOutletMetrics(req, res) {
       await createNotification({
         userId,
         type: event.tripped ? 'safety' : 'system',
-        title: event.tripped ? '⚠️ Outlet is not switching off' : '✅ Outlet is switching again',
+        title: event.tripped ? 'Outlet is not switching off' : 'Outlet is switching again',
         message: event.tripped
           ? `Outlet ${event.number} was switched off but is still drawing `
             + `${event.observedW.toFixed(1)} W. The relay may be stuck closed. `

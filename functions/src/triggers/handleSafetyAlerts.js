@@ -92,13 +92,13 @@ async function handleSafetyAlerts(event) {
 
     switch (currentStage) {
       case 'warning':
-        title = '⚠️ Power Warning';
+        title = 'Power warning';
         message = 'Power consumption approaching safety limits. Please check your appliances.';
         type = 'warning';
         break;
 
       case 'limit':
-        title = '🔴 Safety Limit Reached';
+        title = 'Safety limit reached';
         message = 'Power consumption has reached safety limits. Reduce load immediately.';
         type = 'high_usage';
         break;
@@ -110,10 +110,10 @@ async function handleSafetyAlerts(event) {
         // all - so with protection disabled the user was told their outlets
         // were safe while the appliance carried on drawing.
         if (protectionEnabled) {
-          title = '🚨 Auto-Cutoff Triggered';
+          title = 'Auto cut-off triggered';
           message = 'Power has been automatically cut off for your safety. Dangerous levels detected.';
         } else {
-          title = '🚨 Cut-off Level Reached';
+          title = 'Cut-off level reached';
           message = 'Power reached the cut-off level, but auto cut-off is switched off, so '
             + 'nothing was disconnected. Switch the outlet off yourself, or turn auto cut-off '
             + 'on in Power Safety.';
@@ -122,7 +122,7 @@ async function handleSafetyAlerts(event) {
         break;
 
       case 'normal':
-        title = '✅ Back to Normal';
+        title = 'Back to normal';
         message = 'Power consumption returned to safe levels.';
         type = 'device';
         break;

@@ -25,7 +25,9 @@ const PageButton = ({ icon, label, disabled, onPress }) => (
  * whether there is a next page).
  */
 const Pager = ({ page, pageCount, hasPrev, hasNext, onPrev, onNext, pageLabel, busy = false, style }) => {
-  if (!hasPrev && !hasNext) return null;
+  // Shown even when everything fits on one page, with both arrows greyed:
+  // hiding it made a short Activity tab look as though paging was missing
+  // (Oct 2026). The screen hides it when there are no rows at all.
 
   return (
     <View style={[styles.row, style]}>

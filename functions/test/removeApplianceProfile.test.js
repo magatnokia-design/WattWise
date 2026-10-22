@@ -102,8 +102,21 @@ test('an outlet with a different name is left alone', async () => {
   });
 });
 
-test('forgetting a name that was never saved is refused and touches nothing', async () => {
-  await withFakeDb({ profiles: [LAMP], outlets: { outlet1: { applianceName: 'Electric Fan' } } }, async (state) => {
+test('a name with no saved signature is still cleared from the outlet', async () => {
+  // The stuck state: the signature was forgotten before forgetting un-named
+  // outlets, so the outlet still says "Electric Fan" and Saved appliances is
+  // empty. Forgetting it from the Outlets tab must still work.
+  await withFakeDb({ profiles: [LAMP], outlets: { outlet2: { applianceName: 'Electric Fan' } } }, async (state) => {
+    const result = await removeApplianceProfile({ auth: AUTH, data: { label: 'Electric Fan' } });
+    assert.equal(result.removedProfile, false);
+    assert.deepEqual(result.clearedOutlets, ['outlet2']);
+    assert.equal(state.writes[0].value.applianceName, '');
+    assert.deepEqual(state.user.applianceProfiles.map((profile) => profile.label), ['LED Lamp']);
+  });
+});
+
+test('a name nobody carries is refused and touches nothing', async () => {
+  await withFakeDb({ profiles: [LAMP], outlets: { outlet1: { applianceName: 'Laptop' } } }, async (state) => {
     await assert.rejects(
       removeApplianceProfile({ auth: AUTH, data: { label: 'Electric Fan' } }),
       (error) => error.code === 'not-found'

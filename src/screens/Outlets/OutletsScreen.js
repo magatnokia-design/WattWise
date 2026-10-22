@@ -11,6 +11,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { COLORS } from '../../constants/colors';
 import AppDialog from '../../components/common/AppDialog';
+import OutletNameModal from '../Settings/components/OutletNameModal';
+import { outletService } from '../../services/firebase';
+import { useAuth } from '../../hooks/useAuth';
 import { OfflineState } from '../../components/common/OfflineNotice';
 import { isConnectivityError } from '../../utils/connectivity';
 import OutletControlModal from '../Dashboard/components/OutletControlModal';
@@ -56,6 +59,8 @@ const OutletCard = ({
   suggestion,
   suggestionExpanded,
   naming,
+  canManageName,
+  onManageName,
   onToggleWhy,
   onChoose,
   onToggle,
@@ -76,15 +81,31 @@ const OutletCard = ({
             color={isOn ? COLORS.white : COLORS.textLight}
           />
         </View>
-        <View style={styles.cardTitleBlock}>
+        {/* The appliance name is a button when there is one: rename it, or
+            forget it so detection suggests again (Oct 2026). Before this the
+            only way to clear a wrong name was Saved appliances - and a name
+            whose signature was already gone could not be cleared at all. */}
+        <TouchableOpacity
+          style={styles.cardTitleBlock}
+          onPress={onManageName}
+          disabled={!canManageName || naming}
+          activeOpacity={0.6}
+          accessibilityRole={canManageName ? 'button' : undefined}
+          accessibilityLabel={canManageName ? `Outlet ${number}, ${applianceLabel}. Rename or forget` : undefined}
+        >
           <Text style={styles.cardTitle}>Outlet {number}</Text>
-          <Text
-            style={[styles.appliance, applianceMuted && styles.applianceMuted]}
-            numberOfLines={1}
-          >
-            {applianceLabel}
-          </Text>
-        </View>
+          <View style={styles.applianceRow}>
+            <Text
+              style={[styles.appliance, applianceMuted && styles.applianceMuted]}
+              numberOfLines={1}
+            >
+              {applianceLabel}
+            </Text>
+            {canManageName ? (
+              <Ionicons name="create-outline" size={14} color={COLORS.primary} />
+            ) : null}
+          </View>
+        </TouchableOpacity>
         <View style={[styles.badge, { backgroundColor: tone.bg }]}>
           <View style={[styles.badgeDot, { backgroundColor: tone.fg }]} />
           <Text style={[styles.badgeText, { color: tone.fg }]}>{badge.text}</Text>
@@ -171,6 +192,9 @@ const OutletsScreen = ({ navigation }) => {
   // Outlet being named, so its suggestion buttons disable during the round trip.
   const [namingOutlet, setNamingOutlet] = useState(null);
   const [dialog, setDialog] = useState(null);
+  // { number, name } while the rename form is open.
+  const [renaming, setRenaming] = useState(null);
+  const { user } = useAuth();
 
   const outlets = [1, 2].map((number) => {
     const one = number === 1;
@@ -195,6 +219,7 @@ const OutletsScreen = ({ navigation }) => {
         measuredPowerW: suggestion.measuredPowerW,
       }),
       applianceMuted: !hasLoad || !applianceName,
+      applianceName: String(applianceName || '').trim(),
       // Shared with the web client, byte-identical.
       badge: resolveOutletBadge({
         isOn,
@@ -232,6 +257,60 @@ const OutletsScreen = ({ navigation }) => {
           || 'The command reached Dagitab but could not be carried out. Check that the Hub is powered and online, then try again.',
       });
     }, 300);
+  };
+
+  const forgetApplianceName = async (number, name) => {
+    setDialog(null);
+    setNamingOutlet(number);
+    try {
+      const result = await outletService.removeApplianceProfile(user?.uid, name);
+      if (!result.success) {
+        setDialog({
+          icon: '⚠️',
+          tone: 'danger',
+          title: `${name} was not forgotten`,
+          message: isConnectivityError(result)
+            ? 'No connection - nothing changed. Try again when you are back online.'
+            : (result.error || 'The outlet kept its name. Please try again.'),
+        });
+      }
+    } finally {
+      setNamingOutlet(null);
+    }
+  };
+
+  const handleManageName = (number, name) => {
+    if (!name) return;
+    setDialog({
+      icon: '🔌',
+      title: name,
+      message: `Rename Outlet ${number}'s appliance, or forget it: the name is cleared and Dagitab suggests one again the next time it runs.`,
+      confirmLabel: 'Rename',
+      cancelLabel: 'Forget',
+      onConfirm: () => {
+        setDialog(null);
+        // After the dialog's fade, so the form does not open behind it.
+        setTimeout(() => setRenaming({ number, name }), 300);
+      },
+      onCancel: () => {
+        setDialog({
+          icon: '🗑️',
+          tone: 'danger',
+          title: `Forget ${name}?`,
+          message: `Outlet ${number} goes back to unnamed, and any power signature saved as ${name} is deleted.`,
+          confirmLabel: 'Forget',
+          cancelLabel: 'Keep',
+          onConfirm: () => forgetApplianceName(number, name),
+        });
+      },
+      onDismiss: () => setDialog(null),
+    });
+  };
+
+  const handleRenameSave = async (newName) => {
+    if (!renaming) return { success: false };
+    const result = await updateApplianceName(renaming.number, newName, { source: 'user_choice' });
+    return result.success ? { success: true } : { success: false, error: result.error };
   };
 
   const handleChooseAppliance = async (number, chosenName) => {
@@ -335,6 +414,8 @@ const OutletsScreen = ({ navigation }) => {
               suggestion={o.suggestion}
               suggestionExpanded={expandedSuggestion === o.number}
               naming={namingOutlet === o.number}
+              canManageName={Boolean(o.applianceName)}
+              onManageName={() => handleManageName(o.number, o.applianceName)}
               onToggleWhy={() => setExpandedSuggestion((c) => (c === o.number ? null : o.number))}
               onChoose={(name) => handleChooseAppliance(o.number, name)}
               onToggle={() => setControlModal({ visible: true, outlet: o.number })}
@@ -354,8 +435,25 @@ const OutletsScreen = ({ navigation }) => {
         isLoading={isToggling}
       />
 
+      <OutletNameModal
+        visible={renaming !== null}
+        currentName={renaming?.name || ''}
+        title="Rename appliance"
+        subtitle={renaming ? `Outlet ${renaming.number}` : ''}
+        placeholder="e.g. Printer"
+        fieldLabel="Appliance name"
+        onClose={() => setRenaming(null)}
+        onSave={handleRenameSave}
+      />
+
       {dialog ? (
-        <AppDialog {...dialog} confirmLabel="Got it" onConfirm={() => setDialog(null)} />
+        <AppDialog
+          {...dialog}
+          confirmLabel={dialog.confirmLabel || 'Got it'}
+          onConfirm={dialog.onConfirm || (() => setDialog(null))}
+          onCancel={dialog.onCancel || (() => setDialog(null))}
+          onDismiss={dialog.onDismiss || (() => setDialog(null))}
+        />
       ) : null}
     </SafeAreaView>
   );
@@ -458,9 +556,15 @@ const styles = StyleSheet.create({
     color: COLORS.text,
   },
   appliance: {
+    flexShrink: 1,
     marginTop: 2,
     fontSize: 14,
     color: COLORS.textDark,
+  },
+  applianceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
   },
   applianceMuted: {
     color: COLORS.textLight,

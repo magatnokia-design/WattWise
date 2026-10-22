@@ -29,6 +29,15 @@ const MAX_LABEL_LENGTH = 40;
  * The identity verdict is deleted with it, because it was a verdict on the
  * name that no longer exists; updateOutletMetrics writes a fresh one on its
  * next evaluation.
+ *
+ * A NAME WITH NO SAVED SIGNATURE CAN STILL BE FORGOTTEN
+ *
+ * Forgetting from the Outlets tab names an outlet's appliance, which may not
+ * be a saved one: an account that forgot "Electric Fan" before the un-naming
+ * above existed was left with the outlet still called "Electric Fan" and
+ * nothing in Saved appliances to forget - stuck, with detection silent for
+ * good. So "not found" is only an error when neither a signature nor an outlet
+ * carried the name; otherwise whichever half exists is cleared.
  */
 async function removeApplianceProfile(request) {
   try {
@@ -65,10 +74,6 @@ async function removeApplianceProfile(request) {
       return { removed: true, profiles: remaining };
     });
 
-    if (!result.removed) {
-      throw new HttpsError('not-found', `No saved appliance named "${label}"`);
-    }
-
     const outletRefs = VALID_OUTLET_IDS.map((outletId) =>
       db.doc(`users/${auth.uid}/outlets/${outletId}`)
     );
@@ -92,6 +97,10 @@ async function removeApplianceProfile(request) {
       clearedOutlets.push(VALID_OUTLET_IDS[index]);
     });
 
+    if (!result.removed && clearedOutlets.length === 0) {
+      throw new HttpsError('not-found', `No saved appliance or outlet named "${label}"`);
+    }
+
     if (clearedOutlets.length > 0) {
       await batch.commit();
     }
@@ -101,6 +110,7 @@ async function removeApplianceProfile(request) {
     return {
       success: true,
       label,
+      removedProfile: result.removed,
       remaining: result.profiles.length,
       clearedOutlets,
     };
