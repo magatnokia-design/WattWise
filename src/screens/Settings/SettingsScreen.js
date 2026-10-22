@@ -428,8 +428,8 @@ const SettingsScreen = ({ navigation }) => {
     setDialog({
       icon: '🗑️',
       tone: 'danger',
-      title: 'Remove this device?',
-      message: `Telemetry and commands from ${settings.esp32DeviceId} will be rejected until you link it again by scanning its QR code.`,
+      title: 'Remove this Hub?',
+      message: `${settings.esp32DeviceId} stops reporting to this account until it is scanned again. To move it to another account, just scan it there - it does not need removing first.`,
       confirmLabel: 'Remove',
       cancelLabel: 'Keep',
       onConfirm: async () => {
@@ -458,6 +458,11 @@ const SettingsScreen = ({ navigation }) => {
   // Scanned pairing reuses the manual-entry save path, so both routes produce
   // identical device state.
   const handleDeviceScanned = useCallback(async (deviceData) => {
+    // Re-scanning the Hub this account already has changes nothing - and was
+    // what people tried when it showed Offline, which is a power or Wi-Fi
+    // matter (Oct 2026: four re-pairs in one afternoon, none needed). The save
+    // still runs, so a new token on the same Hub is still picked up.
+    const alreadyLinked = settings.esp32Linked && settings.esp32DeviceId === deviceData.deviceId;
     const result = await updateDeviceSettings(deviceData);
 
     if (result.success) {
@@ -467,17 +472,22 @@ const SettingsScreen = ({ navigation }) => {
       // settled screen. `Alert.alert` did not need this; it was a native dialog
       // outside React's view hierarchy.
       setTimeout(() => {
-        setDialog({
+        setDialog(alreadyLinked ? {
           icon: '✅',
-          title: 'Device linked',
-          message: `${deviceData.deviceId} is now linked to your account. Readings should appear on the Outlets tab within a few seconds.`,
+          title: 'Already linked',
+          message: `${deviceData.deviceId} was already linked to this account - one scan is all it ever needs. If it shows Offline, check that it has power and Wi-Fi.`,
+          confirmLabel: 'Done',
+        } : {
+          icon: '✅',
+          title: 'Hub linked',
+          message: `${deviceData.deviceId} is now linked to your account. Readings appear on the Outlets tab within a few seconds. You will not need to scan it again.`,
           confirmLabel: 'Done',
         });
       }, 400);
     }
 
     return result;
-  }, [updateDeviceSettings]);
+  }, [updateDeviceSettings, settings.esp32Linked, settings.esp32DeviceId]);
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
