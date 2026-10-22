@@ -11,9 +11,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../../constants/colors';
 import BudgetProgressCard from './components/BudgetProgressCard';
-import SpendingBreakdown from './components/SpendingBreakdown';
-import AlertThresholds from './components/AlertThresholds';
-import ProjectedCost from './components/ProjectedCost';
+import MonthAtAGlance from './components/MonthAtAGlance';
 import SetBudgetModal from './components/SetBudgetModal';
 import RangeUsageCard from './components/RangeUsageCard';
 import { OfflineState } from '../../components/common/OfflineNotice';
@@ -25,10 +23,6 @@ const BudgetTrackingScreen = ({ navigation }) => {
   const {
     monthlyBudget,
     currentSpending,
-    outlet1Spending,
-    outlet2Spending,
-    dailyAverage,
-    projectedCost,
     daysInMonth,
     currentDay,
     budgetHistory,
@@ -117,103 +111,24 @@ const BudgetTrackingScreen = ({ navigation }) => {
           setRange={rangeUsage.setRange}
           summary={rangeUsage.summary}
           status={rangeUsage.status}
+          insights={rangeUsage.insights}
           message={rangeUsage.message}
           onRetry={rangeUsage.reload}
           monthlyBudget={monthlyBudget}
-        />
-
-        {/* Alert Thresholds */}
-        <AlertThresholds
-          monthlyBudget={monthlyBudget}
-          currentSpending={currentSpending}
-          percentageUsed={percentageUsed}
-        />
-
-        {/* Spending Breakdown */}
-        <SpendingBreakdown
-          outlet1Spending={outlet1Spending}
-          outlet2Spending={outlet2Spending}
-          totalSpending={currentSpending}
-        />
-
-        {/* Daily Average & Projected Cost */}
-        <View style={styles.statsContainer}>
-          <View style={styles.statCard}>
-            <View style={styles.statIconContainer}>
-              <Ionicons name="calendar-outline" size={24} color={COLORS.primary} />
-            </View>
-            <Text style={styles.statLabel}>Daily Average</Text>
-            <Text style={styles.statValue}>₱{dailyAverage.toFixed(2)}</Text>
-            <Text style={styles.statSubtext}>
-              Day {currentDay} of {daysInMonth}
-            </Text>
-          </View>
-
-          <View style={styles.statCard}>
-            <View style={styles.statIconContainer}>
-              <Ionicons name="trending-up-outline" size={24} color={COLORS.primary} />
-            </View>
-            <Text style={styles.statLabel}>Projected Cost</Text>
-            <Text style={styles.statValue}>₱{projectedCost.toFixed(2)}</Text>
-            <Text style={styles.statSubtext}>
-              End of month estimate
-            </Text>
-          </View>
-        </View>
-
-        {/* Projected Cost Details */}
-        <ProjectedCost
-          projectedCost={projectedCost}
-          monthlyBudget={monthlyBudget}
-          currentSpending={currentSpending}
           daysInMonth={daysInMonth}
-          currentDay={currentDay}
         />
 
-        {/* Monthly History */}
-        {budgetHistory.length > 0 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Previous Months</Text>
-            <View style={styles.historyContainer}>
-              {budgetHistory.map((item) => (
-                // Keyed on the month, not the array index: the list is re-read
-                // on every refresh and a stable key is what keeps a row's
-                // identity across that.
-                <View key={item.monthKey || item.id} style={styles.historyItem}>
-                  <View style={styles.historyMonth}>
-                    <Text style={styles.monthName}>{item.month}</Text>
-                    <Text style={styles.monthYear}>{item.year}</Text>
-                  </View>
-                  <View style={styles.historyStats}>
-                    <View style={styles.historyAmountRow}>
-                      <Text style={styles.historyAmount}>₱{item.spent.toFixed(2)}</Text>
-                      {/* Which figure this is. A finalized month shows what the
-                          statement billed, not what the rollup estimated. */}
-                      {item.isFinal ? (
-                        <View style={styles.historyPill}>
-                          <Text style={styles.historyPillText}>Final</Text>
-                        </View>
-                      ) : null}
-                    </View>
-                    {item.budget > 0 ? (
-                      <Text style={[
-                        styles.historyStatus,
-                        { color: item.spent <= item.budget ? COLORS.success : COLORS.error }
-                      ]}>
-                        {item.spent <= item.budget ? 'Under budget' : 'Over budget'}
-                      </Text>
-                    ) : (
-                      // No budget was set that month, so there is nothing to be
-                      // under or over. It used to read "Over budget" against a
-                      // limit of zero, which every month with any usage failed.
-                      <Text style={styles.historyStatus}>No budget set</Text>
-                    )}
-                  </View>
-                </View>
-              ))}
-            </View>
-          </View>
-        )}
+        {/* One overall view of the month: where it is heading, what is safe
+            to spend per day, and the last three months. Replaced Alert
+            Thresholds, Spending Breakdown, the two stat tiles, Projected
+            Analysis and Previous Months (Oct 2026 feedback: keep it simple). */}
+        <MonthAtAGlance
+          monthlyBudget={monthlyBudget}
+          currentSpending={currentSpending}
+          currentDay={currentDay}
+          daysInMonth={daysInMonth}
+          budgetHistory={budgetHistory}
+        />
         </>
         )}
 
@@ -274,114 +189,7 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingBottom: 32,
   },
-  statsContainer: {
-    flexDirection: 'row',
-    paddingHorizontal: 20,
-    gap: 12,
-    marginTop: 20,
-  },
-  statCard: {
-    flex: 1,
-    backgroundColor: COLORS.white,
-    borderRadius: 12,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    alignItems: 'center',
-  },
-  statIconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: COLORS.primaryLight + '20',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  statLabel: {
-    fontSize: 12,
-    color: COLORS.textLight,
-    marginBottom: 4,
-  },
-  statValue: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: COLORS.text,
-    marginBottom: 4,
-  },
-  statSubtext: {
-    fontSize: 11,
-    color: COLORS.textLight,
-    textAlign: 'center',
-  },
-  section: {
-    marginTop: 20,
-    paddingHorizontal: 20,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: COLORS.text,
-    marginBottom: 12,
-  },
-  historyContainer: {
-    backgroundColor: COLORS.white,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    overflow: 'hidden',
-  },
-  historyItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-  },
-  historyMonth: {
-    flex: 1,
-  },
-  monthName: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: COLORS.text,
-    marginBottom: 2,
-  },
-  monthYear: {
-    fontSize: 12,
-    color: COLORS.textLight,
-  },
-  historyStats: {
-    alignItems: 'flex-end',
-  },
-  historyAmountRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
   // The same pill Monthly Statements and Compare Usage use for a billed month.
-  historyPill: {
-    backgroundColor: '#ECF8EF',
-    borderRadius: 10,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-  },
-  historyPillText: {
-    fontSize: 10.5,
-    fontWeight: '700',
-    color: COLORS.primaryDark,
-  },
-  historyAmount: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: COLORS.text,
-    marginBottom: 2,
-  },
-  historyStatus: {
-    fontSize: 12,
-    fontWeight: '500',
-  },
   infoFooter: {
     flexDirection: 'row',
     alignItems: 'flex-start',

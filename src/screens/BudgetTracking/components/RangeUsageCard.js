@@ -11,29 +11,31 @@ import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import { COLORS } from '../../../constants/colors';
 import { getManilaDateKey } from '../../../utils/liveUsage';
-import { RANGE_PRESETS } from '../../../utils/rangeUsage';
+import { RANGE_PRESETS, buildBudgetTips } from '../../../utils/rangeUsage';
 
 /**
- * "Check your usage" - pick any two dates and see what was used and what it
- * cost, so the monthly budget can be planned from real figures. Asked for in
- * the Oct 2026 feedback: "from Oct 8 to today, how much have I used?"
+ * "Check your usage" - any dates, or one day: what was used, what it cost,
+ * what stands out, and what would help. Asked for in the Oct 2026 feedback
+ * ("from Oct 8 to today, how much have I used?", "simple words", "tips how to
+ * budget").
  *
- * Plain words on purpose (same feedback: "simple words"). The one caveat that
- * matters - this is the cost of the electricity, not the bill - is a single
- * line under the result rather than a paragraph.
+ * Every insight and tip is worked out from the figures (rangeUsage.js, shared
+ * with the web and tested) - nothing here is general advice dressed as a
+ * finding. The per-outlet rows were removed on request: the appliance line
+ * says the same thing in words people use.
  */
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-// "2026-10-08" -> "Oct 8, 2026". Built from the key's own digits, so no time
-// zone can move the day.
-const formatKey = (key) => {
+// "2026-10-08" -> "Oct 8, 2026", from the key's own digits so no time zone
+// can move the day.
+const formatKey = (key, withYear = true) => {
   const [y, m, d] = String(key).split('-').map(Number);
-  return y && m && d ? `${MONTHS[m - 1]} ${d}, ${y}` : '--';
+  if (!y || !m || !d) return '--';
+  return withYear ? `${MONTHS[m - 1]} ${d}, ${y}` : `${MONTHS[m - 1]} ${d}`;
 };
 
-// The picker works in the phone's local time; a date key is a calendar day.
-// Local midnight of that day, and back, keeps the picked day the picked day.
+// The picker works in phone-local time; a date key is a calendar day.
 const keyToLocalDate = (key) => {
   const [y, m, d] = String(key).split('-').map(Number);
   return new Date(y, m - 1, d);
@@ -41,29 +43,47 @@ const keyToLocalDate = (key) => {
 const localDateToKey = (date) =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 
+const formatHour = (hour) => {
+  const h = Number(hour);
+  if (!Number.isFinite(h)) return null;
+  const suffix = h < 12 ? 'AM' : 'PM';
+  return `${h % 12 === 0 ? 12 : h % 12} ${suffix}`;
+};
+
 const peso = (value) => `₱${Number(value || 0).toFixed(2)}`;
 const kwh = (value) => `${Number(value || 0).toFixed(2)} kWh`;
 
-const RangeUsageCard = ({ range, setRange, summary, status, message, onRetry, monthlyBudget }) => {
+const RangeUsageCard = ({
+  range,
+  setRange,
+  summary,
+  insights,
+  status,
+  message,
+  onRetry,
+  monthlyBudget,
+  daysInMonth,
+}) => {
   // iOS has no imperative dialog; it shows the picker inline for the field
   // being edited. Android uses the system calendar dialog.
   const [iosField, setIosField] = useState(null);
   const today = getManilaDateKey();
 
-  const choose = (field, key) => {
-    setRange((current) => ({ ...current, [field]: key }));
+  // field: 'startDate' | 'endDate' | 'day' (one date sets both ends).
+  const apply = (field, key) => {
+    if (field === 'day') setRange({ startDate: key, endDate: key });
+    else setRange((current) => ({ ...current, [field]: key }));
   };
 
   const openPicker = (field) => {
-    const value = keyToLocalDate(range[field]);
-    const maximumDate = keyToLocalDate(today);
+    const current = field === 'day' ? range.endDate : range[field];
     if (Platform.OS === 'android') {
       DateTimePickerAndroid.open({
-        value,
+        value: keyToLocalDate(current),
         mode: 'date',
-        maximumDate,
+        maximumDate: keyToLocalDate(today),
         onChange: (event, date) => {
-          if (event.type === 'set' && date) choose(field, localDateToKey(date));
+          if (event.type === 'set' && date) apply(field, localDateToKey(date));
         },
       });
     } else {
@@ -71,13 +91,55 @@ const RangeUsageCard = ({ range, setRange, summary, status, message, onRetry, mo
     }
   };
 
-  const activePreset = RANGE_PRESETS.find((preset) => {
-    const resolved = preset.resolve(today);
-    return resolved.startDate === range.startDate && resolved.endDate === range.endDate;
-  });
+  const isSingleDay = range.startDate === range.endDate;
+  const activePreset = isSingleDay
+    ? 'day'
+    : RANGE_PRESETS.find((preset) => {
+      const resolved = preset.resolve(today);
+      return resolved.startDate === range.startDate && resolved.endDate === range.endDate;
+    })?.id;
 
   const hasBudget = monthlyBudget > 0;
   const paceOver = hasBudget && summary.monthPaceCost > monthlyBudget;
+  const tips = status === 'ready'
+    ? buildBudgetTips(summary, insights, { monthlyBudget, daysInMonth })
+    : [];
+
+  const periodWord = summary.days === 1 ? 'the day before' : `the ${summary.days} days before`;
+  const facts = [];
+  if (insights?.change) {
+    const { percent, previousCost } = insights.change;
+    facts.push({
+      icon: percent > 0 ? 'trending-up' : 'trending-down',
+      tone: percent > 0 ? 'up' : 'down',
+      text: percent === 0
+        ? `Same as ${periodWord} (${peso(previousCost)}).`
+        : `${Math.abs(percent)}% ${percent > 0 ? 'more' : 'less'} than ${periodWord} (${peso(previousCost)}).`,
+    });
+  }
+  if (insights?.day?.peakPower > 0) {
+    const hour = formatHour(insights.day.peakHour);
+    facts.push({
+      icon: 'flash',
+      text: `Highest draw was ${insights.day.peakPower.toFixed(0)} W${hour ? ` around ${hour}` : ''}.`,
+    });
+  }
+  if (insights?.topAppliance) {
+    const top = insights.topAppliance;
+    facts.push({ icon: 'pie-chart', text: `${top.name} used ${top.share}% of the energy (${peso(top.cost)}).` });
+  }
+  if (insights?.busiest) {
+    facts.push({
+      icon: 'arrow-up-circle',
+      text: `Busiest day: ${formatKey(insights.busiest.date, false)} — ${peso(insights.busiest.cost)}.`,
+    });
+  }
+  if (insights?.quietest && insights.quietest.date !== insights.busiest?.date) {
+    facts.push({
+      icon: 'arrow-down-circle',
+      text: `Quietest day: ${formatKey(insights.quietest.date, false)} — ${peso(insights.quietest.cost)}.`,
+    });
+  }
 
   return (
     <View style={styles.container}>
@@ -85,11 +147,11 @@ const RangeUsageCard = ({ range, setRange, summary, status, message, onRetry, mo
         <Ionicons name="calendar" size={22} color={COLORS.primary} />
         <Text style={styles.title}>Check your usage</Text>
       </View>
-      <Text style={styles.lead}>Pick any dates to see how much you used and what it cost.</Text>
+      <Text style={styles.lead}>Pick dates, or one day, to see what you used and how to save.</Text>
 
       <View style={styles.presets}>
         {RANGE_PRESETS.map((preset) => {
-          const active = activePreset?.id === preset.id;
+          const active = activePreset === preset.id;
           return (
             <TouchableOpacity
               key={preset.id}
@@ -102,6 +164,14 @@ const RangeUsageCard = ({ range, setRange, summary, status, message, onRetry, mo
             </TouchableOpacity>
           );
         })}
+        <TouchableOpacity
+          style={[styles.chip, activePreset === 'day' && styles.chipActive]}
+          onPress={() => openPicker('day')}
+          accessibilityRole="button"
+          accessibilityState={{ selected: activePreset === 'day' }}
+        >
+          <Text style={[styles.chipText, activePreset === 'day' && styles.chipTextActive]}>Pick a day</Text>
+        </TouchableOpacity>
       </View>
 
       <View style={styles.dates}>
@@ -124,12 +194,12 @@ const RangeUsageCard = ({ range, setRange, summary, status, message, onRetry, mo
 
       {Platform.OS !== 'android' && iosField ? (
         <DateTimePicker
-          value={keyToLocalDate(range[iosField])}
+          value={keyToLocalDate(iosField === 'day' ? range.endDate : range[iosField])}
           mode="date"
           display="inline"
           maximumDate={keyToLocalDate(today)}
           onChange={(event, date) => {
-            if (date) choose(iosField, localDateToKey(date));
+            if (date) apply(iosField, localDateToKey(date));
             setIosField(null);
           }}
         />
@@ -139,9 +209,7 @@ const RangeUsageCard = ({ range, setRange, summary, status, message, onRetry, mo
         <Text style={styles.problem}>{message}</Text>
       ) : status === 'offline' ? (
         <View style={styles.offline}>
-          <Text style={styles.problem}>
-            These dates could not be loaded. Check your connection.
-          </Text>
+          <Text style={styles.problem}>These dates could not be loaded. Check your connection.</Text>
           <TouchableOpacity onPress={onRetry} style={styles.retry} accessibilityRole="button">
             <Text style={styles.retryText}>Try again</Text>
           </TouchableOpacity>
@@ -160,17 +228,29 @@ const RangeUsageCard = ({ range, setRange, summary, status, message, onRetry, mo
               <Text style={[styles.resultValue, styles.resultCost]}>{peso(summary.cost)}</Text>
             </View>
           </View>
+          {!isSingleDay && summary.days > 0 ? (
+            <Text style={styles.perDay}>
+              {peso(summary.dailyCost)} a day over {summary.days} days
+            </Text>
+          ) : null}
 
-          <View style={styles.rows}>
-            <Row label="Outlet 1" value={kwh(summary.outlet1Kwh)} />
-            <Row label="Outlet 2" value={kwh(summary.outlet2Kwh)} />
-            <Row
-              label={`Per day (${summary.days} ${summary.days === 1 ? 'day' : 'days'})`}
-              value={`${peso(summary.dailyCost)} a day`}
-            />
-          </View>
+          {facts.length > 0 ? (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>What stands out</Text>
+              {facts.map((fact) => (
+                <View key={fact.text} style={styles.fact}>
+                  <Ionicons
+                    name={fact.icon}
+                    size={16}
+                    color={fact.tone === 'up' ? COLORS.error : COLORS.primary}
+                  />
+                  <Text style={styles.factText}>{fact.text}</Text>
+                </View>
+              ))}
+            </View>
+          ) : null}
 
-          {summary.days > 0 ? (
+          {summary.days > 0 && summary.totalKwh > 0 ? (
             <View style={[styles.pace, paceOver && styles.paceOver]}>
               <Text style={[styles.paceText, paceOver && styles.paceTextOver]}>
                 At this rate, a full month costs about {peso(summary.monthPaceCost)}
@@ -183,23 +263,25 @@ const RangeUsageCard = ({ range, setRange, summary, status, message, onRetry, mo
             </View>
           ) : null}
 
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Tips to save</Text>
+            {tips.map((tip) => (
+              <View key={tip} style={styles.fact}>
+                <Ionicons name="bulb-outline" size={16} color={COLORS.warning} />
+                <Text style={styles.factText}>{tip}</Text>
+              </View>
+            ))}
+          </View>
+
           <Text style={styles.footnote}>
             {summary.includesToday ? 'Today counts what you have used so far. ' : ''}
-            This is the cost of the electricity at your rates. Your bill also adds a
-            small monthly meter charge.
+            Costs are the electricity at your rates. Your bill also adds a small monthly meter charge.
           </Text>
         </>
       )}
     </View>
   );
 };
-
-const Row = ({ label, value }) => (
-  <View style={styles.row}>
-    <Text style={styles.rowLabel}>{label}</Text>
-    <Text style={styles.rowValue}>{value}</Text>
-  </View>
-);
 
 const styles = StyleSheet.create({
   container: {
@@ -305,9 +387,6 @@ const styles = StyleSheet.create({
   result: {
     flexDirection: 'row',
     marginTop: 18,
-    paddingBottom: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
   },
   resultBlock: {
     flex: 1,
@@ -326,25 +405,37 @@ const styles = StyleSheet.create({
   resultCost: {
     color: COLORS.primary,
   },
-  rows: {
-    paddingVertical: 8,
-  },
-  row: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 6,
-  },
-  rowLabel: {
-    fontSize: 14,
+  perDay: {
+    textAlign: 'center',
+    marginTop: 6,
+    fontSize: 13,
     color: COLORS.textLight,
   },
-  rowValue: {
+  section: {
+    marginTop: 16,
+    paddingTop: 14,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+    gap: 10,
+  },
+  sectionTitle: {
     fontSize: 14,
     fontWeight: '600',
     color: COLORS.text,
   },
+  fact: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+  },
+  factText: {
+    flex: 1,
+    fontSize: 14,
+    lineHeight: 20,
+    color: COLORS.textDark,
+  },
   pace: {
-    marginTop: 4,
+    marginTop: 16,
     padding: 12,
     borderRadius: 10,
     backgroundColor: '#ECF8EF',
@@ -361,7 +452,7 @@ const styles = StyleSheet.create({
     color: '#991B1B',
   },
   footnote: {
-    marginTop: 12,
+    marginTop: 14,
     fontSize: 12,
     color: COLORS.textLight,
     lineHeight: 17,

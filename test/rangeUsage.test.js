@@ -124,3 +124,92 @@ test('presets end today and start where their names say', () => {
   assert.deepEqual(resolved.week, { startDate: '2026-10-16', endDate: today });
   assert.equal(countDays(resolved.thirty.startDate, today), 30);
 });
+
+// --- insights and tips -------------------------------------------------------
+
+import { previousRange, rangeInsights, buildBudgetTips } from '../src/utils/rangeUsage.js';
+
+const day = (date, fan, laptop, cost, extra = {}) => ({
+  date,
+  outlet1Energy: fan,
+  outlet2Energy: laptop,
+  totalEnergy: fan + laptop,
+  cost,
+  applianceBreakdown: [
+    { applianceName: 'Electric Fan', energyKwh: fan, cost: cost * (fan / (fan + laptop)) },
+    { applianceName: 'Laptop Charger', energyKwh: laptop, cost: cost * (laptop / (fan + laptop)) },
+  ],
+  ...extra,
+});
+
+test('previousRange is the same length, ending the day before', () => {
+  assert.deepEqual(previousRange('2026-10-08', '2026-10-22'), { startDate: '2026-09-23', endDate: '2026-10-07' });
+  assert.deepEqual(previousRange('2026-10-08', '2026-10-08'), { startDate: '2026-10-07', endDate: '2026-10-07' });
+});
+
+test('insights name the busiest day, the top appliance and the change', () => {
+  const today = '2026-10-22';
+  const rows = [
+    day('2026-10-12', 0.4, 0.1, 5), // Mon
+    day('2026-10-13', 0.6, 0.2, 9),
+    day('2026-10-14', 0.3, 0.1, 4),
+  ];
+  const summary = summarizeRange(rows, { startDate: '2026-10-12', endDate: '2026-10-14', today });
+  const previous = summarizeRange([day('2026-10-10', 0.5, 0.5, 12)], { startDate: '2026-10-09', endDate: '2026-10-11', today });
+  const insights = rangeInsights(rows, summary, previous);
+
+  assert.equal(insights.busiest.date, '2026-10-13');
+  assert.equal(insights.quietest.date, '2026-10-14');
+  assert.equal(insights.topAppliance.name, 'Electric Fan');
+  assert.equal(insights.topAppliance.share, 76);
+  assert.equal(insights.change.percent, 50); // 18 against 12
+});
+
+test('no % change against a period with nothing in it', () => {
+  const today = '2026-10-22';
+  const rows = [day('2026-10-12', 0.4, 0.1, 5)];
+  const summary = summarizeRange(rows, { startDate: '2026-10-12', endDate: '2026-10-12', today });
+  const previous = summarizeRange([], { startDate: '2026-10-11', endDate: '2026-10-11', today });
+  assert.equal(rangeInsights(rows, summary, previous).change, null);
+});
+
+test('a single day reports its own peak and no busiest/quietest', () => {
+  const today = '2026-10-22';
+  const rows = [day('2026-10-12', 0.4, 0.1, 5, { peakPower: 61.4, peakHour: 15 })];
+  const summary = summarizeRange(rows, { startDate: '2026-10-12', endDate: '2026-10-12', today });
+  const insights = rangeInsights(rows, summary, null);
+  assert.deepEqual(insights.day, { peakPower: 61.4, peakHour: 15 });
+  assert.equal(insights.busiest, null);
+});
+
+test('tips are worked out from the figures, at most three', () => {
+  const today = '2026-10-22';
+  const rows = [
+    day('2026-10-17', 1.0, 0.1, 14), // Sat
+    day('2026-10-18', 1.0, 0.1, 14), // Sun
+    day('2026-10-19', 0.4, 0.1, 6),
+    day('2026-10-20', 0.4, 0.1, 6),
+    day('2026-10-21', 0.4, 0.1, 6),
+  ];
+  const summary = summarizeRange(rows, { startDate: '2026-10-17', endDate: '2026-10-21', today });
+  const insights = rangeInsights(rows, summary, null);
+  const tips = buildBudgetTips(summary, insights, { monthlyBudget: 150, daysInMonth: 31 });
+
+  assert.equal(tips.length, 3);
+  assert.match(tips[0], /aim for about ₱4\.84 a day/); // 150 / 31
+  assert.match(tips[1], /^Using Electric Fan 20% less would save about ₱[\d.]+ a month\.$/);
+  assert.match(tips[2], /Weekends cost more: ₱14\.00 a day against ₱6\.00/);
+});
+
+test('with no budget the first tip suggests one at the current pace', () => {
+  const today = '2026-10-22';
+  const rows = [day('2026-10-21', 0.4, 0.1, 6)];
+  const summary = summarizeRange(rows, { startDate: '2026-10-21', endDate: '2026-10-21', today });
+  const tips = buildBudgetTips(summary, rangeInsights(rows, summary, null), { monthlyBudget: 0, daysInMonth: 31 });
+  assert.match(tips[0], /Set a monthly budget/);
+});
+
+test('an empty range gets one honest line, not invented tips', () => {
+  const summary = summarizeRange([], { startDate: '2026-10-01', endDate: '2026-10-02', today: '2026-10-22' });
+  assert.deepEqual(buildBudgetTips(summary, null, { monthlyBudget: 100 }).length, 1);
+});

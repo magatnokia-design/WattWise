@@ -99,3 +99,45 @@ export const getBudgetStatus = (currentSpending, monthlyBudget) => {
     color: COLORS.success,
   };
 };
+/**
+ * "This month at a glance": where the month is heading and what is safe to
+ * spend per day from here. Every figure comes from the month's own spending
+ * (budget/{month}.currentSpending), so it agrees with the Monthly Budget card
+ * above it.
+ *
+ * `status`:
+ *   'none'     no budget set - nothing to be on or off track against
+ *   'over'     already spent more than the budget
+ *   'at-risk'  under now, but the daily pace ends the month over it
+ *   'on-track' the pace ends the month within it
+ *
+ * `safeDaily` is what can be spent per remaining day (today included, since it
+ * is not over) and still finish within budget. Zero once the budget is gone.
+ */
+export const summarizeMonth = ({ monthlyBudget = 0, currentSpending = 0, currentDay = 1, daysInMonth = 30 } = {}) => {
+  const budget = Math.max(0, Number(monthlyBudget) || 0);
+  const spent = Math.max(0, Number(currentSpending) || 0);
+  const day = Math.min(Math.max(1, Number(currentDay) || 1), daysInMonth);
+
+  const dailyAverage = spent / day;
+  const projected = dailyAverage * daysInMonth;
+  const daysLeft = daysInMonth - day + 1;
+  const remaining = budget - spent;
+
+  let status = 'none';
+  if (budget > 0) {
+    if (spent > budget) status = 'over';
+    else if (projected > budget) status = 'at-risk';
+    else status = 'on-track';
+  }
+
+  return {
+    dailyAverage: Number(dailyAverage.toFixed(2)),
+    projected: Number(projected.toFixed(2)),
+    daysLeft,
+    remaining: Number(remaining.toFixed(2)),
+    safeDaily: budget > 0 && remaining > 0 ? Number((remaining / daysLeft).toFixed(2)) : 0,
+    projectedDifference: Number(Math.abs(projected - budget).toFixed(2)),
+    status,
+  };
+};
