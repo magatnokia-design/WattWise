@@ -229,6 +229,7 @@ const OutletsScreen = ({ navigation }) => {
       }),
       applianceMuted: !hasLoad || !applianceName,
       applianceName: String(applianceName || '').trim(),
+      hasLoad,
       // Shared with the web client, byte-identical.
       badge: resolveOutletBadge({
         isOn,
@@ -427,7 +428,10 @@ const OutletsScreen = ({ navigation }) => {
               suggestion={o.suggestion}
               suggestionExpanded={expandedSuggestion === o.number}
               naming={namingOutlet === o.number}
-              canManageName={Boolean(o.applianceName)}
+              // Only while something is running: an off outlet reads "Nothing
+              // plugged in", and a pencil beside that offered to rename an
+              // appliance the card had just said was not there (Oct 2026).
+              canManageName={Boolean(o.applianceName) && o.hasLoad}
               onManageName={() => handleManageName(o.number, o.applianceName)}
               onToggleWhy={() => setExpandedSuggestion((c) => (c === o.number ? null : o.number))}
               onChoose={(name) => handleChooseAppliance(o.number, name)}

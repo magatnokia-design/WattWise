@@ -46,6 +46,7 @@ const HistoryScreen = () => {
 
   const {
     activityLogs,
+    activityTotal,
     usageHistory,
     loading,
     usageLoading,
@@ -162,7 +163,9 @@ const HistoryScreen = () => {
           hasPrev={activity.hasPrev}
           hasNext={activity.hasNext}
           busy={loading}
-          pageLabel={`Page ${activityPage + 1}`}
+          pageLabel={activityTotal
+            ? `Page ${activityPage + 1} of ${Math.max(1, Math.ceil(activityTotal / activityPageSize))}`
+            : `Page ${activityPage + 1}`}
           onPrev={() => goToPage(setActivityPage, Math.max(0, activityPage - 1))}
           onNext={() => goToPage(setActivityPage, activityPage + 1)}
         />

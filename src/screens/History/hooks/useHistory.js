@@ -98,6 +98,9 @@ const USAGE_READ_LIMIT = 366;
 
 export const useHistory = () => {
   const [activityLogs, setActivityLogs] = useState([]);
+  // Total activity rows on the account, for "Page 2 of 7". null until counted.
+  const [activityTotal, setActivityTotal] = useState(null);
+  const countedNewestRef = useRef(null);
   const [storedUsage, setStoredUsage] = useState([]);
   const [usageRange, setUsageRange] = useState({ startDate: null, endDate: null });
   const [outlets, setOutlets] = useState([]);
@@ -227,6 +230,16 @@ export const useHistory = () => {
       (logs, meta) => {
         const normalizedLogs = normalizeActivityLogs(logs);
         setActivityLogs(normalizedLogs);
+
+        // Re-counted only when the newest row changes - a new switch - not on
+        // every snapshot, so paging back and forth costs nothing extra.
+        const newestId = logs[0]?.id || null;
+        if (newestId !== countedNewestRef.current) {
+          countedNewestRef.current = newestId;
+          historyService.countActivityLogs(userId).then((total) => {
+            if (Number.isFinite(total)) setActivityTotal(total);
+          });
+        }
         setHasMore(normalizedLogs.length >= limitCount);
         lastDocRef.current = null;
         setLastDoc(null);
@@ -357,6 +370,7 @@ export const useHistory = () => {
 
   return {
     activityLogs,
+    activityTotal,
     usageHistory,
     loading,
     usageLoading,

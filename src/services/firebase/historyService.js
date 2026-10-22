@@ -9,6 +9,7 @@ import {
   startAfter,
   doc,
   getDoc,
+  getCountFromServer,
 } from 'firebase/firestore';
 import { db } from './config';
 import { isUnconfirmedEmpty, UNREACHABLE_READ_RESULT } from '../../utils/connectivity';
@@ -120,6 +121,23 @@ export const historyService = {
       console.error('Error preparing activity log subscription:', error);
       if (onError) onError(error);
       return () => {};
+    }
+  },
+
+  /**
+   * How many activity rows the account has, so the Activity tab can say
+   * "Page 2 of 7" rather than just "Page 2" (Oct 2026). An aggregation query:
+   * the server counts without sending the documents, billed as one read per
+   * thousand. Resolves to null when the count cannot be had (offline), and the
+   * screen then falls back to the page number alone.
+   */
+  countActivityLogs: async (userId) => {
+    try {
+      const logsRef = collection(db, 'users', userId, 'history_logs');
+      const snapshot = await getCountFromServer(logsRef);
+      return snapshot.data().count;
+    } catch (error) {
+      return null;
     }
   },
 
