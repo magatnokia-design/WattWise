@@ -6,6 +6,7 @@ import {
   ScrollView,
   TouchableOpacity,
   RefreshControl,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -27,6 +28,7 @@ const BudgetTrackingScreen = ({ navigation }) => {
     currentDay,
     budgetHistory,
     showOfflineState,
+    hasLoaded,
     handleSetBudget,
     handleRefresh,
   } = useBudgetTracking();
@@ -93,6 +95,13 @@ const BudgetTrackingScreen = ({ navigation }) => {
             body="Your budget and this month's spending are stored on your account, and the app needs a connection to read them. Nothing has been lost or reset."
             onRetry={onRefresh}
           />
+        ) : !hasLoaded ? (
+          // First open this session: nothing read yet. A spinner, not the
+          // "No Budget Set" card - that card is a claim about the account.
+          <View style={styles.loading}>
+            <ActivityIndicator size="large" color={COLORS.primary} />
+            <Text style={styles.loadingText}>Loading your budget…</Text>
+          </View>
         ) : (
         <>
         {/* Budget Progress */}
@@ -153,6 +162,15 @@ const BudgetTrackingScreen = ({ navigation }) => {
 };
 
 const styles = StyleSheet.create({
+  loading: {
+    paddingVertical: 80,
+    alignItems: 'center',
+    gap: 12,
+  },
+  loadingText: {
+    fontSize: 14,
+    color: COLORS.textLight,
+  },
   container: {
     flex: 1,
     backgroundColor: COLORS.background,

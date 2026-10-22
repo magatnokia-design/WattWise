@@ -5,17 +5,36 @@ import { auth } from '../../../services/firebase/config';
 import { useLoadOutcome } from '../../../hooks/useLoadTracker';
 import { applyFinalizedSpend } from '../utils/budgetHelpers';
 
+/**
+ * The month's budget, spending and the last three months.
+ *
+ * COPY RULE: byte-identical with the web repo's copy at the same path.
+ *
+ * Fast on purpose (Oct 2026: "when I click Budget it's like empty, then it
+ * has data"). Two causes, both fixed here:
+ *
+ *  - The reads ran one after another: the month, sometimes a second read for a
+ *    carried-over budget, and only then history + statements. All three now
+ *    start together.
+ *  - Every visit started from zero. Firestore here has no disk cache, so the
+ *    screen drew ₱0 / "No Budget Set" until the network answered. The last
+ *    result is now kept for the session (`lastByUser`) and shown immediately
+ *    on the next visit while a fresh read runs - stale-while-revalidate.
+ *
+ * `hasLoaded` is false only until the first answer this session. Until then
+ * the screen shows a loading state, never the zeros in useState, because a
+ * ₱0 budget and an unread one are not the same claim.
+ */
+
+// userId -> last good result. Module scope, so it outlives the screen but not
+// the app; signing out clears it.
+const lastByUser = new Map();
+
 const useBudgetTracking = () => {
   const [userId, setUserId] = useState(null);
-  const [monthlyBudget, setMonthlyBudget] = useState(0);
-  const [currentSpending, setCurrentSpending] = useState(0);
-  const [outlet1Spending, setOutlet1Spending] = useState(0);
-  const [outlet2Spending, setOutlet2Spending] = useState(0);
-  const [dailyAverage, setDailyAverage] = useState(0);
-  const [projectedCost, setProjectedCost] = useState(0);
-  const [budgetHistory, setBudgetHistory] = useState([]);
-  const [loading, setLoading] = useState(false);
-  // A zero budget and an unread one are not the same claim.
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  // A ₱0 budget with ₱0 spent is also what an unreachable read looks like.
   const load = useLoadOutcome();
 
   // Get current month details
@@ -30,21 +49,21 @@ const useBudgetTracking = () => {
       setUserId(nextUserId);
 
       if (!nextUserId) {
-        setMonthlyBudget(0);
-        setCurrentSpending(0);
-        setOutlet1Spending(0);
-        setOutlet2Spending(0);
-        setDailyAverage(0);
-        setProjectedCost(0);
-        setBudgetHistory([]);
+        lastByUser.clear();
+        setData(null);
         setLoading(false);
+        return;
       }
+
+      // Show what this session already knows at once; the fetch below still
+      // runs and replaces it.
+      const cached = lastByUser.get(nextUserId);
+      if (cached) setData(cached);
     });
 
     return unsubscribe;
   }, []);
 
-  // Fetch budget data
   const fetchBudgetData = useCallback(async () => {
     if (!userId) {
       setLoading(false);
@@ -52,52 +71,48 @@ const useBudgetTracking = () => {
     }
 
     setLoading(true);
-    
+
     try {
-      const result = await budgetService.getCurrentMonthBudget(userId);
-
-      if (result.success) {
-        const data = result.data;
-        setMonthlyBudget(data.monthlyBudget || 0);
-        setCurrentSpending(data.currentSpending || 0);
-        setOutlet1Spending(data.outlet1Spending || 0);
-        setOutlet2Spending(data.outlet2Spending || 0);
-
-        // Calculate daily average and projected cost
-        const avgDaily = currentDay > 0 ? (data.currentSpending || 0) / currentDay : 0;
-        setDailyAverage(avgDaily);
-        setProjectedCost(avgDaily * daysInMonth);
-      }
-
-      // Fetch budget history (last 3 months), and the statements that priced
-      // any of those months for real. A month the user has finalized was billed
-      // at PELCO III's official rates, and this table says "spend against the
-      // budget in force then" - see applyFinalizedSpend.
-      const [historyResult, invoiceResult] = await Promise.all([
+      // All three at once. History and statements together give "spend against
+      // the budget in force then", with a finalized month at what it was billed
+      // - see applyFinalizedSpend.
+      const [monthResult, historyResult, invoiceResult] = await Promise.all([
+        budgetService.getCurrentMonthBudget(userId),
         budgetService.getBudgetHistory(userId, 3),
         invoiceService.getInvoices(userId, 3),
       ]);
 
-      if (historyResult.success) {
-        // A failed invoice read leaves every row on its stored figure rather
-        // than asserting that none of those months were finalized.
-        const invoices = new Map(
-          (invoiceResult.success ? invoiceResult.data : [])
-            .map((invoice) => [invoice.billingMonth, invoice])
-        );
-
-        setBudgetHistory(applyFinalizedSpend(historyResult.data, invoices));
-        load.succeeded();
-      } else {
-        load.failed(historyResult);
+      if (!monthResult.success || !historyResult.success) {
+        load.failed(monthResult.success ? historyResult : monthResult);
+        return;
       }
+
+      // A failed invoice read leaves every row on its stored figure rather
+      // than asserting that none of those months were finalized.
+      const invoices = new Map(
+        (invoiceResult.success ? invoiceResult.data : [])
+          .map((invoice) => [invoice.billingMonth, invoice])
+      );
+
+      const month = monthResult.data || {};
+      const next = {
+        monthlyBudget: month.monthlyBudget || 0,
+        currentSpending: month.currentSpending || 0,
+        outlet1Spending: month.outlet1Spending || 0,
+        outlet2Spending: month.outlet2Spending || 0,
+        budgetHistory: applyFinalizedSpend(historyResult.data, invoices),
+      };
+
+      lastByUser.set(userId, next);
+      setData(next);
+      load.succeeded();
     } catch (error) {
       console.error('Error fetching budget data:', error);
       load.failed(error);
     } finally {
       setLoading(false);
     }
-  }, [currentDay, daysInMonth, userId, load.succeeded, load.failed]);
+  }, [userId, load.succeeded, load.failed]);
 
   useEffect(() => {
     if (!userId) return;
@@ -109,13 +124,18 @@ const useBudgetTracking = () => {
     try {
       if (!userId) throw new Error('User not authenticated');
 
-      const result = await budgetService.setMonthlyBudget(userId, parseFloat(budget));
+      const amount = parseFloat(budget);
+      const result = await budgetService.setMonthlyBudget(userId, amount);
 
       if (!result.success) {
         throw new Error(result.error);
       }
 
-      setMonthlyBudget(parseFloat(budget));
+      setData((current) => {
+        const next = { ...(current || {}), monthlyBudget: amount };
+        lastByUser.set(userId, next);
+        return next;
+      });
       return { success: true };
     } catch (error) {
       console.error('Error setting budget:', error);
@@ -128,18 +148,24 @@ const useBudgetTracking = () => {
     await fetchBudgetData();
   }, [fetchBudgetData]);
 
+  const currentSpending = data?.currentSpending || 0;
+  const dailyAverage = currentDay > 0 ? currentSpending / currentDay : 0;
+
   return {
     showEmptyState: load.showEmptyState,
-    showOfflineState: load.showOfflineState,
-    monthlyBudget,
+    // A cached result on screen is not an offline account: only say offline
+    // when there is nothing this session could show instead.
+    showOfflineState: load.showOfflineState && !data,
+    hasLoaded: Boolean(data),
+    monthlyBudget: data?.monthlyBudget || 0,
     currentSpending,
-    outlet1Spending,
-    outlet2Spending,
+    outlet1Spending: data?.outlet1Spending || 0,
+    outlet2Spending: data?.outlet2Spending || 0,
     dailyAverage,
-    projectedCost,
+    projectedCost: dailyAverage * daysInMonth,
     daysInMonth,
     currentDay,
-    budgetHistory,
+    budgetHistory: data?.budgetHistory || [],
     loading,
     handleSetBudget,
     handleRefresh,

@@ -8,6 +8,7 @@ import {
   FlatList,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../../constants/colors';
 import TimerCard from './components/TimerCard';
 import AddTimerModal from './components/AddTimerModal';
@@ -50,7 +51,7 @@ const secondsUntilRun = (item, nowMs) => {
   return Number.isFinite(seconds) ? seconds : null;
 };
 
-const ScheduleScreen = () => {
+const ScheduleScreen = ({ navigation }) => {
   const [modalVisible, setModalVisible] = useState(false);
   const [dialog, setDialog] = useState(null);
   const [activeFilter, setActiveFilter] = useState('All');
@@ -310,7 +311,18 @@ const ScheduleScreen = () => {
     <SafeAreaView style={styles.safeArea} edges={['top']}>
       {/* Header */}
       <View style={styles.header}>
-        <View>
+        {/* Opened from the Outlets tab since Oct 2026, so it needs a way back. */}
+        {navigation?.canGoBack?.() ? (
+          <TouchableOpacity
+            onPress={() => navigation.goBack()}
+            style={styles.backBtn}
+            accessibilityRole="button"
+            accessibilityLabel="Back"
+          >
+            <Ionicons name="arrow-back" size={24} color={COLORS.text} />
+          </TouchableOpacity>
+        ) : null}
+        <View style={styles.headerTitles}>
           <Text style={styles.headerTitle}>Schedule</Text>
           <Text style={styles.headerSub}>Automate your outlets</Text>
         </View>
@@ -409,6 +421,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 8,
     paddingBottom: 12,
+  },
+  backBtn: {
+    padding: 4,
+    marginRight: 8,
+  },
+  headerTitles: {
+    flex: 1,
   },
   headerTitle: {
     fontSize: 24,

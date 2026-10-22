@@ -29,7 +29,15 @@ import {
  * The period of the same length just before the range is read too, so the
  * insights can say "12% less than the 15 days before". If only that read
  * fails, the comparison is left out rather than made against nothing.
+ *
+ * Results are kept for the session by user and dates (`lastByRange`), so
+ * reopening Budget shows the last answer at once while a fresh read runs.
  */
+
+// "uid|start|end" -> { rows, previousRows }. Module scope: outlives the
+// screen, not the app.
+const lastByRange = new Map();
+
 const useRangeUsage = () => {
   const [userId, setUserId] = useState(null);
   const [range, setRange] = useState(() => RANGE_PRESETS[0].resolve(getManilaDateKey()));
@@ -49,6 +57,7 @@ const useRangeUsage = () => {
       }
       setUserId(user?.uid || null);
       if (!user?.uid) {
+        lastByRange.clear();
         setOutlets([]);
         return;
       }
@@ -81,7 +90,15 @@ const useRangeUsage = () => {
   useEffect(() => {
     if (!userId || invalidMessage) return undefined;
     let cancelled = false;
-    setStatus('loading');
+    const cacheKey = `${userId}|${range.startDate}|${range.endDate}`;
+    const cached = lastByRange.get(cacheKey);
+    if (cached) {
+      setRows(cached.rows);
+      setPreviousRows(cached.previousRows);
+      setStatus('ready');
+    } else {
+      setStatus('loading');
+    }
     const before = previousRange(range.startDate, range.endDate);
 
     Promise.all([
@@ -92,15 +109,22 @@ const useRangeUsage = () => {
       .then(([result, previous]) => {
         if (cancelled) return;
         if (result?.success) {
-          setRows(result.data || []);
-          setPreviousRows(previous?.success ? previous.data || [] : null);
+          const next = {
+            rows: result.data || [],
+            previousRows: previous?.success ? previous.data || [] : null,
+          };
+          lastByRange.set(cacheKey, next);
+          setRows(next.rows);
+          setPreviousRows(next.previousRows);
           setStatus('ready');
-        } else {
+        } else if (!cached) {
+          // With a cached answer on screen, a failed refresh keeps it rather
+          // than replacing real figures with "could not be loaded".
           setStatus('offline');
         }
       })
       .catch(() => {
-        if (!cancelled) setStatus('offline');
+        if (!cancelled && !cached) setStatus('offline');
       });
 
     return () => {

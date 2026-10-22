@@ -46,24 +46,15 @@ export const countDays = (startKey, endKey) =>
   Math.round((keyToUtcMs(endKey) - keyToUtcMs(startKey)) / DAY_MS) + 1;
 
 /**
- * The quick choices above the calendar. Each returns { startDate, endDate }
- * as Manila date keys ending today.
+ * The quick choice above the calendar - just "This month". Last 7 / 30 days
+ * were removed on request (Oct 2026): the user picks their own dates, or one
+ * day. Returns { startDate, endDate } as Manila date keys ending today.
  */
 export const RANGE_PRESETS = [
   {
     id: 'month',
     label: 'This month',
     resolve: (today) => ({ startDate: `${today.slice(0, 7)}-01`, endDate: today }),
-  },
-  {
-    id: 'week',
-    label: 'Last 7 days',
-    resolve: (today) => ({ startDate: addDaysToKey(today, -6), endDate: today }),
-  },
-  {
-    id: 'thirty',
-    label: 'Last 30 days',
-    resolve: (today) => ({ startDate: addDaysToKey(today, -29), endDate: today }),
   },
 ];
 

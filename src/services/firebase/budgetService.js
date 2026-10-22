@@ -1,6 +1,13 @@
 import { doc, getDoc, setDoc, updateDoc, collection, query, orderBy, limit, getDocs } from 'firebase/firestore';
 import { db } from './config';
 import { isUnconfirmedEmpty, UNREACHABLE_READ_RESULT } from '../../utils/connectivity';
+import { getManilaDateKey } from '../../utils/liveUsage';
+
+// The budget month is the Manila month, as the nightly rollup writes it
+// (budget/{YYYY-MM} in processDailyRollup). This was toISOString(), i.e. UTC,
+// so for the first eight hours of every month the app read - and saved a new
+// budget into - the previous month.
+const currentManilaMonth = () => getManilaDateKey().slice(0, 7);
 
 const monthLabelFromKey = (monthKey) => {
   const date = new Date(`${monthKey}-01T00:00:00`);
@@ -36,7 +43,7 @@ export const budgetService = {
   // Get current month budget
   getCurrentMonthBudget: async (userId) => {
     try {
-      const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM
+      const currentMonth = currentManilaMonth(); // YYYY-MM
       const budgetDoc = await getDoc(
         doc(db, 'users', userId, 'budget', currentMonth)
       );
@@ -145,7 +152,7 @@ export const budgetService = {
   // Set monthly budget
   setMonthlyBudget: async (userId, amount) => {
     try {
-      const currentMonth = new Date().toISOString().slice(0, 7);
+      const currentMonth = currentManilaMonth();
       const budgetRef = doc(db, 'users', userId, 'budget', currentMonth);
       
       // Check if document exists
@@ -240,7 +247,7 @@ export const budgetService = {
   // Safe to call on every sign-in, unlike initializeBudget which overwrites.
   ensureCurrentMonthBudget: async (userId) => {
     try {
-      const currentMonth = new Date().toISOString().slice(0, 7);
+      const currentMonth = currentManilaMonth();
       const budgetRef = doc(db, 'users', userId, 'budget', currentMonth);
       const snapshot = await getDoc(budgetRef);
 
@@ -277,7 +284,7 @@ export const budgetService = {
 
   initializeBudget: async (userId) => {
     try {
-      const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM
+      const currentMonth = currentManilaMonth(); // YYYY-MM
       await setDoc(doc(db, 'users', userId, 'budget', currentMonth), {
         month: currentMonth,
         monthlyBudget: 0,

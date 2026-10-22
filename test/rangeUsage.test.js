@@ -116,13 +116,12 @@ test('date-key arithmetic is calendar days, unaffected by month ends and DST', (
   assert.ok(countDays('2026-01-01', '2026-12-31') <= MAX_RANGE_DAYS);
 });
 
-test('presets end today and start where their names say', () => {
+test('the only preset is this month, ending today', () => {
   const today = '2026-10-22';
   const resolved = Object.fromEntries(RANGE_PRESETS.map((p) => [p.id, p.resolve(today)]));
 
   assert.deepEqual(resolved.month, { startDate: '2026-10-01', endDate: today });
-  assert.deepEqual(resolved.week, { startDate: '2026-10-16', endDate: today });
-  assert.equal(countDays(resolved.thirty.startDate, today), 30);
+  assert.deepEqual(Object.keys(resolved), ['month']);
 });
 
 // --- insights and tips -------------------------------------------------------

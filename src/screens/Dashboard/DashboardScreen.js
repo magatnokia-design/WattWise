@@ -15,29 +15,20 @@ import { SIZES, FONTS } from '../../constants/theme';
 import { describeRelayFault } from '../../constants/relayFault';
 import NotificationPanel from '../Notifications/components/NotificationPanel';
 import { useNotifications } from '../Notifications/hooks/useNotifications';
-import AppDialog from '../../components/common/AppDialog';
-import { isConnectivityError } from '../../utils/connectivity';
 import { RateNotice } from '../../components/common/RateNotice';
 import { OfflineState } from '../../components/common/OfflineNotice';
 import { useDismissibleNotice } from '../../hooks/useDismissibleNotice';
-import OutletControlModal from './components/OutletControlModal';
-import ApplianceSuggestion from './components/ApplianceSuggestion';
 import { useOutletControl } from './hooks/useOutletControl';
-import { resolveOutletBadge } from './utils/outletBadge';
 import { useSafetyStage } from './hooks/useSafetyStage';
 import { getSafetyStageConfig } from '../PowerSafetyManagement/utils/safetyHelpers';
 import { budgetService } from '../../services/firebase';
 import { auth } from '../../services/firebase/config';
 import { Wordmark } from '../../components/common/Wordmark';
+import LinkHubCard from '../Outlets/components/LinkHubCard';
 
 const toMetricNumber = (value) => {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
-};
-
-const formatMetric = (value, unit, decimals = 1) => {
-  const formatted = toMetricNumber(value).toFixed(decimals);
-  return `${formatted} ${unit}`;
 };
 
 /**
@@ -67,93 +58,13 @@ const formatEnergyKwh = (value) => {
   return `${KWH_FORMATTERS[decimals].format(parsed)} kWh`;
 };
 
-/**
- * Appliance line under each outlet title. It reflects what is actually drawing
- * power right now: while loading we stay blank rather than flashing "Not set",
- * and with no live load we say so instead of showing a stale saved name.
- */
-const formatApplianceName = (
-  name,
-  {
-    hasLoad,
-    hasReading,
-    isLoading,
-    identityState,
-    recognised,
-    unsupported,
-    unsupportedReason,
-    measuredPowerW,
-  }
-) => {
-  if (isLoading) return '—';
-
-  // Telemetry stopping is not evidence of an empty outlet. This used to fall
-  // through to "Nothing plugged in" the moment readings went stale, asserting
-  // the outlet was empty on the strength of measurements that had ended twelve
-  // seconds earlier - and a fan running behind a dropped wi-fi connection reads
-  // exactly the same as an unplugged one. Report the half still known.
-  if (!hasReading) return 'No reading';
-  if (!hasLoad) return 'Nothing plugged in';
-
-  // Before the name, deliberately. An outlet named "LED Lamp" with a kettle on
-  // it should not go on saying "LED Lamp" - the load is out of scope whatever
-  // the outlet is called, and that is the more useful thing to know.
-  if (unsupported) {
-    if (unsupportedReason === 'over_power') {
-      return typeof measuredPowerW === 'number'
-        ? `Draws more than Dagitab supports · ${measuredPowerW.toFixed(0)} W`
-        : 'Draws more than Dagitab supports';
-    }
-    return 'Not something Dagitab monitors';
-  }
-
-  const normalized = String(name || '').trim();
-  if (!normalized) return 'Not set';
-
-  // The measurements say this is no longer the appliance the outlet is named
-  // after. Printing the name unqualified is what let an outlet report "LED Lamp"
-  // while a 60 W ceiling fan ran on it, and the user is the one who has to
-  // notice - so say it, rather than quietly showing a name known to be wrong.
-  if (identityState === 'changed') return `Not ${normalized}`;
-
-  // Matched against this account's own saved signature rather than a generic
-  // wattage range: Dagitab knows this appliance, not just its name. The web
-  // client marks it the same way, so both say the same thing about the same run.
-  if (recognised) return `${normalized} · recognised`;
-
-  return normalized;
-};
-
 const formatPeso = (value) => {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed.toFixed(2) : '0.00';
 };
 
-/**
- * The status pill. `resolveOutletBadge` decides what it says; this only decides
- * what colour that is. The tone lookup is read at render rather than built at
- * module level because `styles` is defined further down the file.
- */
-const StatusBadge = ({ badge }) => {
-  const tone = badge.tone === 'good'
-    ? { pill: styles.statusOn, dot: styles.dotOn, label: styles.statusTextOn }
-    : badge.tone === 'danger'
-      ? { pill: styles.statusDanger, dot: styles.dotDanger, label: styles.statusTextDanger }
-      : badge.tone === 'warn'
-        ? { pill: styles.statusWarn, dot: styles.dotWarn, label: styles.statusTextWarn }
-        : { pill: styles.statusOff, dot: styles.dotOff, label: styles.statusTextOff };
-
-  return (
-    <View style={[styles.statusBadge, tone.pill]}>
-      <View style={[styles.statusDot, tone.dot]} />
-      <Text style={[styles.statusText, tone.label]}>{badge.text}</Text>
-    </View>
-  );
-};
-
 export const DashboardScreen = ({ navigation }) => {
   const [notificationVisible, setNotificationVisible] = useState(false);
-  const [expandedSuggestionOutlet, setExpandedSuggestionOutlet] = useState(null);
 
   // Only the count is used here - the panel loads its own list when opened.
   const { unreadCount } = useNotifications();
@@ -167,21 +78,10 @@ export const DashboardScreen = ({ navigation }) => {
   const {
     outlet1Status,
     outlet2Status,
-    outlet1ApplianceName,
-    outlet2ApplianceName,
-    outlet1Metrics,
-    outlet2Metrics,
-    outlet1Suggestion,
-    outlet2Suggestion,
-    outlet1HasLoad,
-    outlet2HasLoad,
     outlet1HasReading,
     outlet2HasReading,
-    outlet1SwitchingTo,
-    outlet2SwitchingTo,
     outlet1RelayStuck,
     outlet2RelayStuck,
-    isLoadingOutlets,
     hasNeverReported,
     outletsUnreachable,
     totalEnergyKwh,
@@ -190,52 +90,7 @@ export const DashboardScreen = ({ navigation }) => {
     estimatedCostPerHour,
     effectiveRate,
     hasSupplyRates,
-    isToggling,
-    toggleOutlet,
-    updateApplianceName,
   } = useOutletControl();
-
-  const outlet1Label = 'Outlet 1';
-  const outlet2Label = 'Outlet 2';
-  const outlet1ApplianceLabel = formatApplianceName(outlet1ApplianceName, {
-    hasLoad: outlet1HasLoad,
-    hasReading: outlet1HasReading,
-    isLoading: isLoadingOutlets,
-    identityState: outlet1Suggestion.identityState,
-    recognised: outlet1Suggestion.recognised,
-    unsupported: outlet1Suggestion.unsupported,
-    unsupportedReason: outlet1Suggestion.unsupportedReason,
-    measuredPowerW: outlet1Suggestion.measuredPowerW,
-  });
-  const outlet2ApplianceLabel = formatApplianceName(outlet2ApplianceName, {
-    hasLoad: outlet2HasLoad,
-    hasReading: outlet2HasReading,
-    isLoading: isLoadingOutlets,
-    identityState: outlet2Suggestion.identityState,
-    recognised: outlet2Suggestion.recognised,
-    unsupported: outlet2Suggestion.unsupported,
-    unsupportedReason: outlet2Suggestion.unsupportedReason,
-    measuredPowerW: outlet2Suggestion.measuredPowerW,
-  });
-
-  // Shared with the web client, byte-identical, so the same outlet never reads
-  // "ON" on the phone and "Switching off..." in the browser. The old badge said
-  // only ON or OFF, which during the poll window asserted a relay position the
-  // meter was actively contradicting.
-  const outlet1Badge = resolveOutletBadge({
-    isOn: outlet1Status,
-    isDrawing: outlet1HasLoad,
-    telemetryFresh: outlet1HasReading,
-    switchingTo: outlet1SwitchingTo,
-    relayStuck: outlet1RelayStuck,
-  });
-  const outlet2Badge = resolveOutletBadge({
-    isOn: outlet2Status,
-    isDrawing: outlet2HasLoad,
-    telemetryFresh: outlet2HasReading,
-    switchingTo: outlet2SwitchingTo,
-    relayStuck: outlet2RelayStuck,
-  });
 
   // Staleness comes from the outlets, not from the safety document's own
   // 40-second rule. Both live on this screen now, and with two different
@@ -294,107 +149,6 @@ export const DashboardScreen = ({ navigation }) => {
   const budgetPercent = budget.monthlyBudget > 0
     ? Math.min(100, (budget.currentSpending / budget.monthlyBudget) * 100)
     : 0;
-
-  // Modal states
-  const [controlModal, setControlModal] = useState({ visible: false, outlet: null });
-  // Outlet number currently being named, so its suggestion buttons disable
-  // during the round trip instead of queueing duplicate writes.
-  const [isNamingOutlet, setIsNamingOutlet] = useState(null);
-
-  // One dialog at a time, held as its own props - the same shape Settings uses.
-  const [dialog, setDialog] = useState(null);
-
-  // Handle toggle outlet
-  const handleToggleOutlet = (outletNumber) => {
-    setControlModal({ visible: true, outlet: outletNumber });
-  };
-
-  // Confirm toggle
-  const handleConfirmToggle = async () => {
-    const { outlet } = controlModal;
-    const currentStatus = outlet === 1 ? outlet1Status : outlet2Status;
-    const result = await toggleOutlet(outlet, !currentStatus);
-
-    if (result.success) {
-      setControlModal({ visible: false, outlet: null });
-      return;
-    }
-
-    // Two different faults, and blaming the wrong one sends the user to check
-    // the wrong thing. A connectivity failure means the command never left this
-    // phone; anything else means it reached the server and was refused there.
-    const offline = isConnectivityError(result);
-
-    // The confirmation sheet closes on failure too - it has nothing left to
-    // confirm, and leaving it open would put this dialog on top of another
-    // Modal. Deferred past its fade for the same reason.
-    setControlModal({ visible: false, outlet: null });
-    setTimeout(() => {
-      setDialog(offline ? {
-        icon: '📡',
-        tone: 'warning',
-        title: 'No connection',
-        message: 'The command could not leave this phone, so the outlet has not changed. Check your wi-fi or mobile data and try again — the Hub is fine.',
-      } : {
-        icon: '⚠️',
-        tone: 'danger',
-        title: 'The outlet did not switch',
-        message: result.error
-          || 'The command reached Dagitab but could not be carried out. Check that the Hub is powered and online, then try again.',
-      });
-    }, 300);
-  };
-
-  const toggleSuggestionWhy = (outletNumber) => {
-    setExpandedSuggestionOutlet((current) => (current === outletNumber ? null : outletNumber));
-  };
-
-  // Confirms an appliance for an outlet - either the top suggestion or one of
-  // the same-wattage alternatives the user picked instead.
-  const handleChooseAppliance = async (outletNumber, chosenName) => {
-    const suggestion = outletNumber === 1 ? outlet1Suggestion : outlet2Suggestion;
-    const name = String(chosenName || '').trim();
-    if (!name || isNamingOutlet) {
-      return;
-    }
-
-    const isTopSuggestion = name === suggestion?.name;
-    setIsNamingOutlet(outletNumber);
-
-    try {
-      const result = await updateApplianceName(outletNumber, name, {
-        source: isTopSuggestion ? 'auto_suggestion' : 'user_choice',
-        confidencePercent: isTopSuggestion ? suggestion?.confidencePercent : undefined,
-        modelVersion: suggestion?.modelVersion,
-      });
-
-      if (!result.success) {
-        setDialog({
-          icon: '⚠️',
-          tone: 'danger',
-          title: 'The name was not applied',
-          message: result.error || 'The outlet kept its previous name. Please try again.',
-        });
-        return;
-      }
-
-      setExpandedSuggestionOutlet((current) => (current === outletNumber ? null : current));
-
-      // Naming always lands; learning the signature needs a few seconds of live
-      // measurement, so say so instead of failing silently.
-      if (!result.learned) {
-        setDialog({
-          icon: '📝',
-          tone: 'warning',
-          title: 'Saved as a name only',
-          message: result.learnError
-            || 'The outlet is named, but its power signature was not learned yet. Keep the appliance running for a few seconds and confirm again.',
-        });
-      }
-    } finally {
-      setIsNamingOutlet(null);
-    }
-  };
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -512,17 +266,10 @@ export const DashboardScreen = ({ navigation }) => {
           </View>
         </TouchableOpacity>
 
-        {/* Outlets Section - the primary content of this screen */}
-        <View style={styles.sectionHeaderRow}>
-          <View style={styles.sectionAccent} />
-          <Text style={styles.sectionTitle}>Smart Outlets</Text>
-        </View>
-
-        {/* Nothing could be read, so nothing below is known. This has to be
-            tested before the setup prompt: both states show two empty outlet
-            documents, and only this one is entitled to say why. Telling a user
-            with a linked hub to go and link their hub is the failure this
-            whole change exists to stop. */}
+        {/* The outlet cards moved to the Outlets tab (Oct 2026). Home keeps the
+            two things that are about the account rather than one outlet: the
+            offline notice, and the setup prompt for an account with no Hub yet -
+            this is the first screen after sign-up. */}
         {outletsUnreachable ? (
           <OfflineState
             body={
@@ -531,192 +278,12 @@ export const DashboardScreen = ({ navigation }) => {
               'pull down to refresh.'
             }
           />
+        ) : hasNeverReported ? (
+          <LinkHubCard
+            style={styles.linkHub}
+            onPress={() => navigation.navigate('Settings')}
+          />
         ) : null}
-
-        {/* Before any device has ever reported, the two cards below have nothing
-            to show and read as a broken app rather than an unfinished setup.
-            This is the first screen after registration, so it is worth spending
-            the space on saying what to do next. */}
-        {hasNeverReported ? (
-          <View style={styles.setupCard}>
-            <Text style={styles.setupIcon}>🔌</Text>
-            <Text style={styles.setupTitle}>Link your Dagitab unit</Text>
-            {/* Worded to cover both cases: never scanned, and scanned but the
-                unit has not reported yet. Claiming "nothing is paired" would be
-                wrong for the second, and that is the case where a user is most
-                likely to think the app is broken. */}
-            <Text style={styles.setupText}>
-              No readings have arrived from a Dagitab unit yet. Scan the QR code
-              on your unit in Settings, then check it is powered and on wi-fi —
-              both outlets appear here within a few seconds of it reporting.
-            </Text>
-            <TouchableOpacity
-              style={styles.setupButton}
-              onPress={() => navigation.navigate('Settings')}
-            >
-              <Text style={styles.setupButtonText}>Go to Settings</Text>
-            </TouchableOpacity>
-            <Text style={styles.setupHint}>
-              Settings → Scan device QR
-            </Text>
-          </View>
-        ) : null}
-
-        {/* Outlet Cards */}
-        {/* Hidden while unreachable too - two cards reading 0.0 W next to an
-            offline notice would contradict it, and the zeroes are not readings
-            but the absence of any. */}
-        <View style={[
-          styles.outletsContainer,
-          (hasNeverReported || outletsUnreachable) ? styles.hidden : null,
-        ]}>
-          {/* Outlet 1 */}
-          <View style={styles.outletCard}>
-            <View style={styles.outletHeader}>
-              <View style={styles.outletHeaderInfo}>
-                <Text style={styles.outletTitle}>{outlet1Label}</Text>
-                <View style={styles.applianceRow}>
-                  <Text style={styles.applianceLabel}>Appliance:</Text>
-                  <Text
-                    style={[
-                      styles.applianceValue,
-                      (!outlet1HasLoad || !outlet1ApplianceName) && styles.applianceValuePlaceholder,
-                      outlet1Suggestion.identityState === 'changed' && styles.applianceValueChanged,
-                    ]}
-                  >
-                    {outlet1ApplianceLabel}
-                  </Text>
-                </View>
-              </View>
-              <StatusBadge badge={outlet1Badge} />
-            </View>
-
-            <View style={styles.metricsGrid}>
-              <View style={styles.metricItem}>
-                <Ionicons name="flash" size={20} color={COLORS.primary} />
-                <Text style={styles.metricValue}>{formatMetric(outlet1Metrics.power, 'W', 1)}</Text>
-                <Text style={styles.metricLabel}>Power</Text>
-              </View>
-              <View style={styles.metricItem}>
-                <Ionicons name="speedometer" size={20} color={COLORS.primary} />
-                <Text style={styles.metricValue}>{formatMetric(outlet1Metrics.voltage, 'V', 1)}</Text>
-                <Text style={styles.metricLabel}>Voltage</Text>
-              </View>
-              <View style={styles.metricItem}>
-                <Ionicons name="pulse" size={20} color={COLORS.primary} />
-                <Text style={styles.metricValue}>{formatMetric(outlet1Metrics.current, 'A', 3)}</Text>
-                <Text style={styles.metricLabel}>Current</Text>
-              </View>
-              <View style={styles.metricItem}>
-                <Ionicons name="time" size={20} color={COLORS.primary} />
-                <Text style={styles.metricValue}>{formatEnergyKwh(outlet1Metrics.energy)}</Text>
-                <Text style={styles.metricLabel}>Energy</Text>
-              </View>
-            </View>
-
-            <ApplianceSuggestion
-              suggestion={outlet1Suggestion}
-              expanded={expandedSuggestionOutlet === 1}
-              disabled={isNamingOutlet === 1}
-              onToggleWhy={() => toggleSuggestionWhy(1)}
-              onChoose={(name) => handleChooseAppliance(1, name)}
-            />
-
-            <TouchableOpacity
-              style={[styles.toggleButton, outlet1Status ? styles.toggleButtonOn : styles.toggleButtonOff]}
-              onPress={() => handleToggleOutlet(1)}
-              disabled={isToggling}
-            >
-              <Ionicons
-                name={outlet1Status ? 'power' : 'power-outline'}
-                size={20}
-                color={COLORS.white}
-              />
-              <Text style={styles.toggleButtonText}>
-                {outlet1Status ? 'Turn OFF' : 'Turn ON'}
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Outlet 2 */}
-          <View style={styles.outletCard}>
-            <View style={styles.outletHeader}>
-              <View style={styles.outletHeaderInfo}>
-                <Text style={styles.outletTitle}>{outlet2Label}</Text>
-                <View style={styles.applianceRow}>
-                  <Text style={styles.applianceLabel}>Appliance:</Text>
-                  <Text
-                    style={[
-                      styles.applianceValue,
-                      (!outlet2HasLoad || !outlet2ApplianceName) && styles.applianceValuePlaceholder,
-                      outlet2Suggestion.identityState === 'changed' && styles.applianceValueChanged,
-                    ]}
-                  >
-                    {outlet2ApplianceLabel}
-                  </Text>
-                </View>
-              </View>
-              <StatusBadge badge={outlet2Badge} />
-            </View>
-
-            <View style={styles.metricsGrid}>
-              <View style={styles.metricItem}>
-                <Ionicons name="flash" size={20} color={COLORS.primary} />
-                <Text style={styles.metricValue}>{formatMetric(outlet2Metrics.power, 'W', 1)}</Text>
-                <Text style={styles.metricLabel}>Power</Text>
-              </View>
-              <View style={styles.metricItem}>
-                <Ionicons name="speedometer" size={20} color={COLORS.primary} />
-                <Text style={styles.metricValue}>{formatMetric(outlet2Metrics.voltage, 'V', 1)}</Text>
-                <Text style={styles.metricLabel}>Voltage</Text>
-              </View>
-              <View style={styles.metricItem}>
-                <Ionicons name="pulse" size={20} color={COLORS.primary} />
-                <Text style={styles.metricValue}>{formatMetric(outlet2Metrics.current, 'A', 3)}</Text>
-                <Text style={styles.metricLabel}>Current</Text>
-              </View>
-              <View style={styles.metricItem}>
-                <Ionicons name="time" size={20} color={COLORS.primary} />
-                <Text style={styles.metricValue}>{formatEnergyKwh(outlet2Metrics.energy)}</Text>
-                <Text style={styles.metricLabel}>Energy</Text>
-              </View>
-            </View>
-
-            <ApplianceSuggestion
-              suggestion={outlet2Suggestion}
-              expanded={expandedSuggestionOutlet === 2}
-              disabled={isNamingOutlet === 2}
-              onToggleWhy={() => toggleSuggestionWhy(2)}
-              onChoose={(name) => handleChooseAppliance(2, name)}
-            />
-
-            <TouchableOpacity
-              style={[styles.toggleButton, outlet2Status ? styles.toggleButtonOn : styles.toggleButtonOff]}
-              onPress={() => handleToggleOutlet(2)}
-              disabled={isToggling}
-            >
-              <Ionicons
-                name={outlet2Status ? 'power' : 'power-outline'}
-                size={20}
-                color={COLORS.white}
-              />
-              <Text style={styles.toggleButtonText}>
-                {outlet2Status ? 'Turn OFF' : 'Turn ON'}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Modals */}
-        <OutletControlModal
-          visible={controlModal.visible}
-          onClose={() => setControlModal({ visible: false, outlet: null })}
-          outletNumber={controlModal.outlet}
-          outletName={controlModal.outlet === 1 ? outlet1Label : outlet2Label}
-          currentStatus={controlModal.outlet === 1 ? outlet1Status : outlet2Status}
-          onConfirm={handleConfirmToggle}
-          isLoading={isToggling}
-        />
 
         {/* Budget Overview */}
         <TouchableOpacity
@@ -765,19 +332,14 @@ export const DashboardScreen = ({ navigation }) => {
         visible={notificationVisible}
         onClose={() => setNotificationVisible(false)}
       />
-
-      {dialog ? (
-        <AppDialog
-          {...dialog}
-          confirmLabel={dialog.confirmLabel || 'Got it'}
-          onConfirm={() => setDialog(null)}
-        />
-      ) : null}
     </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
+  linkHub: {
+    marginBottom: 16,
+  },
   container: {
     flex: 1,
     backgroundColor: COLORS.background,
@@ -911,155 +473,14 @@ const styles = StyleSheet.create({
     color: COLORS.white,
     fontWeight: '600',
   },
-  sectionHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 12,
-    marginTop: 4,
-  },
-  sectionAccent: {
-    width: 4,
-    height: 20,
-    borderRadius: 2,
-    backgroundColor: COLORS.primary,
-  },
-  sectionTitle: {
-    ...FONTS.h3,
-    color: COLORS.textDark,
-    fontWeight: 'bold',
-  },
-  outletsContainer: {
-    marginBottom: 8,
-  },
   // Kept mounted rather than unmounted so the outlet cards do not have to
   // re-initialise the moment the first telemetry arrives.
-  hidden: {
-    display: 'none',
-  },
-  setupCard: {
-    backgroundColor: COLORS.white,
-    borderRadius: SIZES.radius,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    marginHorizontal: 16,
-    marginBottom: 12,
-    padding: 24,
-    alignItems: 'center',
-  },
-  setupIcon: {
-    fontSize: 36,
-    marginBottom: 12,
-  },
-  setupTitle: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: COLORS.text,
-    marginBottom: 8,
-  },
-  setupText: {
-    fontSize: 13,
-    color: COLORS.textLight,
-    lineHeight: 20,
-    textAlign: 'center',
-    marginBottom: 18,
-  },
-  setupButton: {
-    backgroundColor: COLORS.primary,
-    paddingVertical: 12,
-    paddingHorizontal: 28,
-    borderRadius: 10,
-  },
-  setupButtonText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: COLORS.white,
-  },
-  setupHint: {
-    fontSize: 12,
-    color: COLORS.textLight,
-    marginTop: 10,
-  },
-  outletCard: {
-    backgroundColor: COLORS.white,
-    borderRadius: SIZES.radius,
-    padding: SIZES.padding,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  outletHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 16,
-    gap: 8,
-  },
   // The appliance line is the part that may wrap; the pill keeps its width.
-  outletHeaderInfo: {
-    flex: 1,
-  },
-  outletTitle: {
-    ...FONTS.h4,
-    color: COLORS.textDark,
-    fontWeight: 'bold',
-  },
-  applianceRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 6,
-    gap: 6,
-  },
-  applianceLabel: {
-    ...FONTS.small,
-    color: COLORS.textLight,
-  },
-  applianceValue: {
-    ...FONTS.body,
-    color: COLORS.textDark,
-    fontWeight: '600',
-    fontSize: 13,
-  },
-  applianceValuePlaceholder: {
-    color: COLORS.textLight,
-    fontWeight: '500',
-  },
   // "Not <name>" - the measurements contradict the label. Amber rather than red:
   // a swapped appliance is something to correct, not a fault. Matches the web
   // client's treatment and the notice that explains how to clear it.
-  applianceValueChanged: {
-    color: '#B45309',
-  },
-  statusBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-    gap: 4,
-    // The pill used to hold two characters and now holds "Switching off..." and
-    // "On - no reading". Without this the header row lets both children size to
-    // content and overflow into each other, which is what jammed the label and
-    // value together on the comparison card.
-    flexShrink: 0,
-  },
-  statusOn: {
-    backgroundColor: COLORS.success + '20',
-  },
-  statusOff: {
-    backgroundColor: COLORS.textLight + '20',
-  },
   // Amber, the tone this app already uses for "in flight or needs attention,
   // not broken" - the same treatment as the swapped-appliance notice.
-  statusWarn: {
-    backgroundColor: '#FFFBEB',
-  },
-  dotWarn: {
-    backgroundColor: '#B45309',
-  },
-  statusTextWarn: {
-    color: '#B45309',
-  },
   // Red, and the only place this badge uses it. Amber already means "in flight
   // or needs attention, not broken", which is exactly what a stuck relay is
   // not - reusing it here would have put the one uncontrollable outlet in the
@@ -1082,95 +503,6 @@ const styles = StyleSheet.create({
   relayFaultBody: {
     fontSize: 12,
     lineHeight: 17,
-    color: COLORS.textLight,
-  },
-  statusDanger: {
-    backgroundColor: COLORS.error + '1A',
-  },
-  dotDanger: {
-    backgroundColor: COLORS.error,
-  },
-  statusTextDanger: {
-    color: COLORS.error,
-  },
-  statusDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-  },
-  dotOn: {
-    backgroundColor: COLORS.success,
-  },
-  dotOff: {
-    backgroundColor: COLORS.textLight,
-  },
-  statusText: {
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  statusTextOn: {
-    color: COLORS.success,
-  },
-  statusTextOff: {
-    color: COLORS.textLight,
-  },
-  metricsGrid: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 16,
-  },
-  metricItem: {
-    alignItems: 'center',
-    flex: 1,
-    backgroundColor: COLORS.background,
-    padding: 8,
-    borderRadius: 8,
-    marginHorizontal: 2,
-  },
-  metricValue: {
-    ...FONTS.body,
-    color: COLORS.textDark,
-    fontWeight: '600',
-    fontSize: 12,
-  },
-  metricLabel: {
-    ...FONTS.small,
-    color: COLORS.textLight,
-    marginTop: 2,
-    fontSize: 10,
-  },
-  toggleButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    borderRadius: 8,
-    gap: 8,
-    marginTop: 12,
-  },
-  toggleButtonOn: {
-    backgroundColor: COLORS.error,
-  },
-  toggleButtonOff: {
-    backgroundColor: COLORS.success,
-  },
-  toggleButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.white,
-  },
-  outletFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  costText: {
-    ...FONTS.h4,
-    color: COLORS.primary,
-    fontWeight: 'bold',
-  },
-  costLabel: {
-    ...FONTS.small,
     color: COLORS.textLight,
   },
   budgetCard: {
