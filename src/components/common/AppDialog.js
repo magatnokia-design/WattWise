@@ -1,6 +1,42 @@
 import React from 'react';
 import { Modal, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../../constants/colors';
+
+/**
+ * Icons, not emoji (Oct 2026). Callers still pass the emoji they always did -
+ * about sixty of them across the app - and it is drawn as the matching Ionicon
+ * in the tone's colour, so every dialog changed at once and none can be
+ * missed. An Ionicons name may be passed directly instead.
+ */
+const EMOJI_ICONS = {
+  '⚠️': 'warning',
+  '📡': 'cloud-offline',
+  '🔑': 'key',
+  '📧': 'mail-unread',
+  '✉️': 'mail',
+  '🗑️': 'trash',
+  '🔌': 'power',
+  '📝': 'create',
+  '⏳': 'hourglass',
+  '🧾': 'receipt',
+  '🛡️': 'shield-checkmark',
+  '🚪': 'exit',
+  '🔔': 'notifications',
+  '🔒': 'lock-closed',
+  '📱': 'phone-portrait',
+  '📋': 'clipboard',
+  '✅': 'checkmark-circle',
+  '⚡': 'flash',
+  '📤': 'share',
+  '📷': 'camera',
+};
+
+export const dialogIconName = (icon) => {
+  if (!icon) return null;
+  if (EMOJI_ICONS[icon]) return EMOJI_ICONS[icon];
+  return /^[a-z0-9-]+$/.test(icon) ? icon : 'information-circle';
+};
 
 /**
  * The app's own dialog, replacing `Alert.alert`.
@@ -63,7 +99,7 @@ export const AppDialog = ({
         <View style={styles.card}>
           {icon ? (
             <View style={[styles.iconWrap, { backgroundColor: palette.tint }]}>
-              <Text style={styles.icon}>{icon}</Text>
+              <Ionicons name={dialogIconName(icon)} size={24} color={palette.accent} />
             </View>
           ) : null}
 
@@ -129,9 +165,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 14,
-  },
-  icon: {
-    fontSize: 22,
   },
   title: {
     fontSize: 18,

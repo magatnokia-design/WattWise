@@ -219,8 +219,8 @@ export const describeUsageRows = (rows = []) => {
   return count === 1 ? '1 day' : `${count} days`;
 };
 
-/** Rows per page on both History tabs (Oct 2026: page, don't scroll). */
-export const HISTORY_PAGE_SIZE = 10;
+/** Rows per page on both History tabs (Oct 2026: page, don't scroll). 12 fills the card on a phone without scrolling. */
+export const HISTORY_PAGE_SIZE = 12;
 
 /**
  * One page of a list. `page` is 0-based and clamped, so a page that no longer

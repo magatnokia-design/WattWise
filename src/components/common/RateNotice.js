@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../../constants/colors';
 
 /**
@@ -18,7 +19,7 @@ export const RateNotice = ({ onPress, onDismiss, style }) => (
       activeOpacity={onPress ? 0.7 : 1}
       disabled={!onPress}
     >
-      <Text style={styles.icon}>⚠️</Text>
+      <Ionicons name="warning" size={18} color="#B45309" style={styles.icon} />
       <View style={styles.textWrap}>
         <Text style={styles.title}>Using default PELCO III rates</Text>
         <Text style={styles.body}>
@@ -35,7 +36,7 @@ export const RateNotice = ({ onPress, onDismiss, style }) => (
         activeOpacity={0.7}
         hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
       >
-        <Text style={styles.dismissText}>✕</Text>
+        <Ionicons name="close" size={16} color={COLORS.textLight} />
       </TouchableOpacity>
     ) : null}
   </View>
@@ -61,11 +62,6 @@ const styles = StyleSheet.create({
     paddingLeft: 10,
     paddingTop: 1,
   },
-  dismissText: {
-    fontSize: 15,
-    color: '#B45309',
-    fontWeight: '700',
-  },
   icon: {
     fontSize: 16,
     marginRight: 10,
@@ -83,12 +79,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#B45309',
     lineHeight: 17,
-  },
-  chevron: {
-    fontSize: 22,
-    color: '#B45309',
-    marginLeft: 8,
-    lineHeight: 24,
   },
 });
 

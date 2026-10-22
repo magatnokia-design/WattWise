@@ -1,6 +1,7 @@
 // Reusable Input Component
 import React, { useState } from 'react';
 import { View, TextInput, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../../constants/colors';
 import { SIZES, FONTS } from '../../constants/theme';
 
@@ -38,7 +39,7 @@ export const Input = ({
             style={styles.eyeIcon}
             onPress={() => setIsPasswordVisible(!isPasswordVisible)}
           >
-            <Text style={styles.eyeText}>{isPasswordVisible ? '👁️' : '👁️‍🗨️'}</Text>
+            <Ionicons name={isPasswordVisible ? 'eye-off-outline' : 'eye-outline'} size={20} color={COLORS.textLight} />
           </TouchableOpacity>
         )}
       </View>
@@ -79,9 +80,6 @@ const styles = StyleSheet.create({
     top: 0,
     bottom: 0,
     justifyContent: 'center',
-  },
-  eyeText: {
-    fontSize: 20,
   },
   errorText: {
     ...FONTS.small,

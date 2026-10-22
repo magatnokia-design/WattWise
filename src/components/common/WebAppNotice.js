@@ -1,5 +1,6 @@
 import React, { useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Linking } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../../constants/colors';
 
 /**
@@ -34,7 +35,7 @@ export const WebAppNotice = ({ title, body, url, onDismiss, style }) => {
         accessibilityRole="link"
         accessibilityLabel={`${title}. Opens dagitab.site in your browser.`}
       >
-        <Text style={styles.icon}>💻</Text>
+        <Ionicons name="laptop-outline" size={18} color={COLORS.primary} style={styles.icon} />
         <View style={styles.textWrap}>
           <Text style={styles.title}>{title}</Text>
           <Text style={styles.body}>{body}</Text>
@@ -51,7 +52,7 @@ export const WebAppNotice = ({ title, body, url, onDismiss, style }) => {
           accessibilityRole="button"
           accessibilityLabel="Dismiss this tip"
         >
-          <Text style={styles.dismissText}>✕</Text>
+          <Ionicons name="close" size={16} color={COLORS.textLight} />
         </TouchableOpacity>
       ) : null}
     </View>
@@ -77,11 +78,6 @@ const styles = StyleSheet.create({
   dismiss: {
     paddingLeft: 10,
     paddingTop: 1,
-  },
-  dismissText: {
-    fontSize: 15,
-    color: COLORS.primaryDark,
-    fontWeight: '700',
   },
   icon: {
     fontSize: 16,

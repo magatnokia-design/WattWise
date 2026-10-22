@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../../../constants/colors';
 import { parseDeviceQrPayload } from '../utils/deviceQr';
 
@@ -90,7 +91,9 @@ const CameraScanner = ({ visible, onClose, onScanned }) => {
     if (!permission.granted) {
       return (
         <View style={styles.centered}>
-          <Text style={styles.permissionIcon}>📷</Text>
+          <View style={styles.permissionIcon}>
+            <Ionicons name="camera" size={30} color={COLORS.primary} />
+          </View>
           <Text style={styles.permissionTitle}>Camera access needed</Text>
           <Text style={styles.permissionText}>
             Dagitab needs the camera to scan the QR code on your device.
@@ -148,7 +151,9 @@ const CameraScanner = ({ visible, onClose, onScanned }) => {
  */
 const CameraUnavailableNotice = () => (
   <View style={styles.centered}>
-    <Text style={styles.permissionIcon}>🛠️</Text>
+    <View style={styles.permissionIcon}>
+      <Ionicons name="construct" size={30} color={COLORS.primary} />
+    </View>
     <Text style={styles.permissionTitle}>Scanner needs a new build</Text>
     <Text style={styles.permissionText}>
       The camera module is not part of the app build currently installed.
@@ -172,9 +177,9 @@ const DeviceQRScannerModal = ({ visible, onClose, onScanned }) => (
         its own insets or the header renders under the status bar. */}
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <View style={styles.header}>
-        <Text style={styles.title}>Scan Device QR</Text>
-        <TouchableOpacity onPress={onClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-          <Text style={styles.close}>✕</Text>
+        <Text style={styles.title}>Scan your Hub's QR code</Text>
+        <TouchableOpacity onPress={onClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityLabel="Close">
+          <Ionicons name="close" size={24} color={COLORS.textLight} />
         </TouchableOpacity>
       </View>
 
@@ -207,11 +212,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: COLORS.text,
   },
-  close: {
-    fontSize: 18,
-    color: COLORS.textLight,
-    padding: 4,
-  },
   centered: {
     flex: 1,
     alignItems: 'center',
@@ -219,7 +219,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 32,
   },
   permissionIcon: {
-    fontSize: 44,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#ECF8EF',
+    alignItems: 'center',
+    justifyContent: 'center',
     marginBottom: 14,
   },
   permissionTitle: {

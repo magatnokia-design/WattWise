@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../../constants/colors';
 
 /**
@@ -27,7 +28,7 @@ export const OfflineState = ({
   style,
 }) => (
   <View style={[styles.card, compact ? styles.cardCompact : null, style]}>
-    <Text style={styles.icon}>📡</Text>
+    <Ionicons name="cloud-offline-outline" size={36} color={COLORS.textLight} style={styles.icon} />
     <Text style={styles.title}>{title}</Text>
     <Text style={styles.body}>{body}</Text>
 
@@ -58,7 +59,7 @@ export const OfflineBanner = ({
   style,
 }) => (
   <View style={[styles.banner, style]}>
-    <Text style={styles.bannerIcon}>📡</Text>
+    <Ionicons name="cloud-offline-outline" size={16} color={COLORS.textLight} style={styles.bannerIcon} />
     <Text style={styles.bannerText}>{message}</Text>
     {onRetry ? (
       <TouchableOpacity

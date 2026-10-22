@@ -19,7 +19,7 @@ import { HISTORY_PAGE_SIZE, paginate } from './utils/historyHelpers';
 const TABS = ['Activity', 'Usage'];
 
 /**
- * History, compact (Oct 2026): Activity and Usage, ten rows a page.
+ * History, compact (Oct 2026): Activity and Usage, twelve rows a page.
  *
  * Removed on request: the Records / kWh total / Total cost tiles, the
  * All / Outlet 1 / Outlet 2 filter, and the date filter. Usage shows only the
@@ -224,9 +224,11 @@ const styles = StyleSheet.create({
   fill: {
     flexGrow: 1,
   },
+  // Clear of the tab bar: the buttons sat close enough to the tabs to be
+  // mistaken for part of them (Oct 2026).
   pager: {
-    paddingTop: 8,
-    paddingBottom: 10,
+    paddingTop: 10,
+    paddingBottom: 22,
   },
 });
 

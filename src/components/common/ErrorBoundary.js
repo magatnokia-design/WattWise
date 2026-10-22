@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../../constants/colors';
 
 /**
@@ -48,7 +49,7 @@ export class ErrorBoundary extends React.Component {
     return (
       <View style={styles.container}>
         <ScrollView contentContainerStyle={styles.content}>
-          <Text style={styles.icon}>⚡</Text>
+          <Ionicons name="flash-off" size={40} color={COLORS.primary} style={styles.icon} />
           <Text style={styles.title}>Something went wrong</Text>
           <Text style={styles.body}>
             Dagitab hit an unexpected problem on this screen. Your outlets and

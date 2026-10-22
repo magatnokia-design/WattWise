@@ -10,15 +10,16 @@ import {
 
 const days = (count) => Array.from({ length: count }, (_, index) => ({ id: index }));
 
-test('ten rows a page, with the last page holding the remainder', () => {
-  assert.equal(HISTORY_PAGE_SIZE, 10);
-  const first = paginate(days(23), 0);
+test('a page holds HISTORY_PAGE_SIZE rows, the last one the remainder', () => {
+  assert.equal(HISTORY_PAGE_SIZE, 12);
+  const first = paginate(days(23), 0, 10);
   assert.equal(first.items.length, 10);
   assert.equal(first.pageCount, 3);
+  assert.equal(paginate(days(23), 0).items.length, 12);
   assert.equal(first.hasPrev, false);
   assert.equal(first.hasNext, true);
 
-  const last = paginate(days(23), 2);
+  const last = paginate(days(23), 2, 10);
   assert.deepEqual(last.items.map((row) => row.id), [20, 21, 22]);
   assert.equal(last.hasNext, false);
   assert.equal(last.hasPrev, true);
@@ -27,10 +28,10 @@ test('ten rows a page, with the last page holding the remainder', () => {
 test('a page that no longer exists falls back to the last real one', () => {
   // The list can shrink under the user (a refresh), and an empty page with
   // no way forward would read as "no usage".
-  const result = paginate(days(12), 5);
+  const result = paginate(days(12), 5, 10);
   assert.equal(result.page, 1);
   assert.deepEqual(result.items.map((row) => row.id), [10, 11]);
-  assert.equal(paginate(days(12), -3).page, 0);
+  assert.equal(paginate(days(12), -3, 10).page, 0);
 });
 
 test('an empty list is one empty page with nowhere to go', () => {

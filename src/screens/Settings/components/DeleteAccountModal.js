@@ -11,6 +11,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../../../constants/colors';
 
 /**
@@ -35,12 +36,12 @@ import { COLORS } from '../../../constants/colors';
 // What actually gets removed. Written as user-facing nouns rather than
 // collection names, but it is the same list the callable enumerates.
 const DELETED_ITEMS = [
-  ['👤', 'Your account', 'Email, name and sign-in. You will not be able to sign in again.'],
-  ['⚡', 'All energy readings', 'Every voltage, current and power measurement recorded for both outlets.'],
-  ['🧾', 'Usage history and bills', 'Daily records, monthly statements and any past bills you entered for comparison.'],
-  ['🔌', 'Learned appliances', 'Every appliance signature Dagitab measured and you confirmed.'],
-  ['💰', 'Budget and alerts', 'Your monthly budget, spending records and all notifications.'],
-  ['⏱️', 'Schedules and safety settings', 'Timers, countdowns and your power safety thresholds.'],
+  ['person-outline', 'Your account', 'Email, name and sign-in. You will not be able to sign in again.'],
+  ['flash-outline', 'All energy readings', 'Every voltage, current and power measurement recorded for both outlets.'],
+  ['receipt-outline', 'Usage history and bills', 'Daily records, monthly statements and any past bills you entered for comparison.'],
+  ['pricetags-outline', 'Learned appliances', 'Every appliance signature Dagitab measured and you confirmed.'],
+  ['wallet-outline', 'Budget and alerts', 'Your monthly budget, spending records and all notifications.'],
+  ['timer-outline', 'Schedules and safety settings', 'Timers, countdowns and your power safety thresholds.'],
 ];
 
 export const DeleteAccountModal = ({ visible, email, usesPassword = true, onClose, onConfirm }) => {
@@ -134,7 +135,9 @@ export const DeleteAccountModal = ({ visible, email, usesPassword = true, onClos
                 <ScrollView style={styles.list} showsVerticalScrollIndicator={false}>
                   {DELETED_ITEMS.map(([icon, label, detail]) => (
                     <View key={label} style={styles.item}>
-                      <Text style={styles.itemIcon}>{icon}</Text>
+                      <View style={styles.itemIcon}>
+                        <Ionicons name={icon} size={16} color={COLORS.error} />
+                      </View>
                       <View style={styles.itemText}>
                         <Text style={styles.itemLabel}>{label}</Text>
                         <Text style={styles.itemDetail}>{detail}</Text>
@@ -279,9 +282,13 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   itemIcon: {
-    fontSize: 15,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#FEF2F2',
+    alignItems: 'center',
+    justifyContent: 'center',
     marginRight: 10,
-    marginTop: 1,
   },
   itemText: {
     flex: 1,

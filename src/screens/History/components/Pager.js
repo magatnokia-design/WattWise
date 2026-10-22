@@ -20,7 +20,7 @@ const PageButton = ({ icon, label, disabled, onPress }) => (
 
 /**
  * "‹  Page 2 of 5  ›" under a History list (Oct 2026), so the user steps
- * through ten rows at a time instead of scrolling. `pageLabel` overrides the
+ * through a page of rows at a time instead of scrolling. `pageLabel` overrides the
  * middle text where the total is not known yet (the activity log only knows
  * whether there is a next page).
  */
