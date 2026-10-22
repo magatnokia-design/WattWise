@@ -75,10 +75,14 @@ jobs:
           # something". Matched against the combined output, not the exit code.
           UNREACHABLE='audit endpoint returned an error|Service Unavailable|503|ENOTFOUND|EAI_AGAIN|ETIMEDOUT|ECONNRESET|network'
 
+          # audit-gate.js is npm audit plus a reviewed, per-advisory allowlist
+          # (<package>/audit-allowlist.json, if present). Each entry names one
+          # advisory ID, why it cannot reach this code, and when to remove it.
+          # Anything not on it fails exactly as plain `npm audit` would.
           for attempt in 1 2 3; do
-            if out=$(npm audit --audit-level="$LEVEL" 2>&1); then
+            if out=$(node "$GITHUB_WORKSPACE/scripts/audit-gate.js" --level "$LEVEL" --allowlist audit-allowlist.json 2>&1); then
               echo "$out"
-              echo "::notice::$NAME: no vulnerabilities at $LEVEL or above."
+              echo "::notice::$NAME: no vulnerabilities at $LEVEL or above outside the reviewed allowlist."
               exit 0
             fi
 
