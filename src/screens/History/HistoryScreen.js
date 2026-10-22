@@ -14,12 +14,18 @@ import Pager from './components/Pager';
 import { useHistory } from './hooks/useHistory';
 import ExportUsageCard from './components/ExportUsageCard';
 import { useAuth } from '../../hooks/useAuth';
-import { HISTORY_PAGE_SIZE, paginate } from './utils/historyHelpers';
+import { HISTORY_PAGE_SIZE, fitPageSize, paginate } from './utils/historyHelpers';
+
+// Row geometry, matching the fixed heights in ActivityLog and UsageHistory.
+// Each page is sized to the space on screen so it never needs scrolling.
+const ACTIVITY_ROW = { rowHeight: 49, chrome: 22 };
+const USAGE_ROW = { rowHeight: 40, chrome: 42 };
+const LIST_BOTTOM_PADDING = 12;
 
 const TABS = ['Activity', 'Usage'];
 
 /**
- * History, compact (Oct 2026): Activity and Usage, twelve rows a page.
+ * History, compact (Oct 2026): Activity and Usage, a page sized to fit the screen.
  *
  * Removed on request: the Records / kWh total / Total cost tiles, the
  * All / Outlet 1 / Outlet 2 filter, and the date filter. Usage shows only the
@@ -32,6 +38,11 @@ const HistoryScreen = () => {
   const [activityPage, setActivityPage] = useState(0);
   const [usagePage, setUsagePage] = useState(0);
   const scrollRef = useRef(null);
+  // Height the list area has between the tabs and the page controls.
+  const [listHeight, setListHeight] = useState(0);
+  const available = listHeight - LIST_BOTTOM_PADDING;
+  const activityPageSize = listHeight ? fitPageSize(available, ACTIVITY_ROW) : HISTORY_PAGE_SIZE;
+  const usagePageSize = listHeight ? fitPageSize(available, USAGE_ROW) : HISTORY_PAGE_SIZE;
 
   const {
     activityLogs,
@@ -48,7 +59,7 @@ const HistoryScreen = () => {
   // - one row past the page, which is how the screen knows a next page exists.
   // Growing the live query keeps realtime updates working, which a separate
   // paginated fetch would fight with.
-  const activityLimit = (activityPage + 1) * HISTORY_PAGE_SIZE + 1;
+  const activityLimit = (activityPage + 1) * activityPageSize + 1;
 
   useEffect(() => {
     if (authLoading || !user || activeTab !== 0) return undefined;
@@ -62,21 +73,21 @@ const HistoryScreen = () => {
   }, [authLoading, user, fetchUsageHistory]);
 
   const activity = useMemo(() => {
-    const start = activityPage * HISTORY_PAGE_SIZE;
+    const start = activityPage * activityPageSize;
     return {
-      items: activityLogs.slice(start, start + HISTORY_PAGE_SIZE),
+      items: activityLogs.slice(start, start + activityPageSize),
       hasPrev: activityPage > 0,
-      hasNext: activityLogs.length > start + HISTORY_PAGE_SIZE,
+      hasNext: activityLogs.length > start + activityPageSize,
     };
-  }, [activityLogs, activityPage]);
+  }, [activityLogs, activityPage, activityPageSize]);
 
   // While the next page is being read the listener still holds the previous,
   // shorter list - show the spinner rather than an empty page.
   const activityPageLoading = loading && activity.items.length === 0;
 
   const usage = useMemo(
-    () => paginate(usageHistory, usagePage, HISTORY_PAGE_SIZE),
-    [usageHistory, usagePage]
+    () => paginate(usageHistory, usagePage, usagePageSize),
+    [usageHistory, usagePage, usagePageSize]
   );
 
   // The oldest day on record, for the export's "All" choice.
@@ -118,6 +129,10 @@ const HistoryScreen = () => {
       <ScrollView
         ref={scrollRef}
         style={styles.scrollView}
+        onLayout={(event) => {
+          const next = Math.round(event.nativeEvent.layout.height);
+          if (Math.abs(next - listHeight) > 2) setListHeight(next);
+        }}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >

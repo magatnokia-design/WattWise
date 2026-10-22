@@ -276,3 +276,17 @@ export const activityDayLabel = (timestamp, nowMs = Date.now()) => {
   if (key === localDayKey(yesterday.getTime())) return 'Yesterday';
   return formatDayKey(key);
 };
+
+/**
+ * How many rows fit in `availableHeight` without scrolling, so a page fills
+ * the screen and stops at the page controls (Oct 2026). `chrome` is the card's
+ * own padding, border and any header row. Clamped, so a tiny measurement
+ * (first layout pass, a split screen) never yields a one-row page.
+ */
+export const fitPageSize = (availableHeight, { rowHeight, chrome = 0, min = 5, max = 25 } = {}) => {
+  const height = Number(availableHeight);
+  const row = Number(rowHeight);
+  if (!(height > 0) || !(row > 0)) return HISTORY_PAGE_SIZE;
+  const rows = Math.floor((height - chrome) / row);
+  return Math.max(min, Math.min(max, rows));
+};

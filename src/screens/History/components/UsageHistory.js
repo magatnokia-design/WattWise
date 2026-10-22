@@ -74,13 +74,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 6,
   },
+  // Fixed heights so HistoryScreen can size a page to fit (USAGE_ROW_HEIGHT).
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 9,
+    height: 40,
   },
   headRow: {
-    paddingVertical: 6,
+    height: 28,
   },
   rowBorder: {
     borderTopWidth: 1,

@@ -81,10 +81,23 @@ async function registerApplianceProfile(request) {
       selection.modelVersion = String(data.modelVersion).slice(0, MAX_LABEL_LENGTH);
     }
 
+    // The identity verdict is settled in the same write (Oct 2026). Naming
+    // used to leave `applianceIdentity.suggestionPending` true until telemetry
+    // next re-evaluated the run - a few seconds to a minute - so the phone
+    // showed the old suggestion again after the user had accepted it. The
+    // user's word is the verdict until the next measurement says otherwise;
+    // updateOutletMetrics overwrites this on its next evaluation. A nested map,
+    // so merge keeps the fields of the old verdict this does not restate.
     await outletRef.set({
       outletNumber,
       applianceName: label,
       applianceSelection: selection,
+      applianceIdentity: {
+        namedAs: label,
+        state: 'confirmed',
+        suggestionPending: false,
+        updatedAtMs: Date.now(),
+      },
       lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
     }, { merge: true });
 

@@ -57,3 +57,12 @@ test('activity is grouped under Today, Yesterday, then the date', () => {
   assert.equal(activityDayLabel(new Date(2026, 9, 20, 12, 0), now), 'Tue, Oct 20');
   assert.equal(activityDayLabel(null, now), 'Unknown date');
 });
+
+test('a page holds as many rows as the space fits, within bounds', async () => {
+  const { fitPageSize } = await import('../src/screens/History/utils/historyHelpers.js');
+  // 600 px, 40 px chrome, 49 px rows -> 11 rows.
+  assert.equal(fitPageSize(600, { rowHeight: 49, chrome: 40 }), 11);
+  assert.equal(fitPageSize(100, { rowHeight: 49 }), 5, 'never fewer than the minimum');
+  assert.equal(fitPageSize(5000, { rowHeight: 40 }), 25, 'never more than the maximum');
+  assert.equal(fitPageSize(0, { rowHeight: 40 }), HISTORY_PAGE_SIZE, 'unmeasured falls back');
+});

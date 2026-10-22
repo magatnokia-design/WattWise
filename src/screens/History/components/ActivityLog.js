@@ -63,6 +63,10 @@ const ActivityLogItem = ({ item }) => {
             {source.label}
           </Text>
           {watts ? ` · ${watts}` : ''}
+          {/* The day, in the row rather than as a heading over a group: one
+              row is always one height, so the screen can fit a whole page
+              without scrolling (Oct 2026). */}
+          {` · ${activityDayLabel(item.timestamp)}`}
           {delivery ? (
             <Text style={{ color: SOURCE_TONES[delivery.tone] || COLORS.textLight, fontWeight: '600' }}>
               {` · ${delivery.label}`}
@@ -93,8 +97,8 @@ const ActivityLogItem = ({ item }) => {
 };
 
 /**
- * The page of activity the screen hands down, grouped under day headings in
- * one card. Paging lives in the screen (Pager).
+ * The page of activity the screen hands down, in one card. Paging lives in
+ * the screen (Pager), which sizes the page to fit (ACTIVITY_ROW_HEIGHT).
  */
 const ActivityLog = ({
   style,
@@ -136,26 +140,12 @@ const ActivityLog = ({
     );
   }
 
-  const nowMs = Date.now();
-  const groups = [];
-  logs.forEach((item) => {
-    const label = activityDayLabel(item.timestamp, nowMs);
-    const last = groups[groups.length - 1];
-    if (last && last.label === label) last.items.push(item);
-    else groups.push({ label, items: [item] });
-  });
-
   return (
     <View style={[styles.card, style]}>
-      {groups.map((group, groupIndex) => (
-        <View key={`${group.label}-${groupIndex}`}>
-          <Text style={[styles.dayLabel, groupIndex > 0 && styles.dayLabelSpaced]}>{group.label}</Text>
-          {group.items.map((item, index) => (
-            <View key={item.id || `${item.timestamp || 'log'}-${index}`}>
-              {index > 0 ? <View style={styles.separator} /> : null}
-              <ActivityLogItem item={item} />
-            </View>
-          ))}
+      {logs.map((item, index) => (
+        <View key={item.id || `${item.timestamp || 'log'}-${index}`}>
+          {index > 0 ? <View style={styles.separator} /> : null}
+          <ActivityLogItem item={item} />
         </View>
       ))}
     </View>
@@ -171,22 +161,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
   },
-  dayLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: COLORS.textLight,
-    textTransform: 'uppercase',
-    letterSpacing: 0.4,
-    marginBottom: 4,
-  },
-  dayLabelSpaced: {
-    marginTop: 10,
-  },
+  // A fixed height so HistoryScreen can size a page to fit (ACTIVITY_ROW_HEIGHT).
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    paddingVertical: 7,
+    minHeight: 48,
+    paddingVertical: 4,
   },
   separator: {
     height: 1,

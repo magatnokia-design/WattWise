@@ -194,14 +194,23 @@ const OutletsScreen = ({ navigation }) => {
   const [dialog, setDialog] = useState(null);
   // { number, name } while the rename form is open.
   const [renaming, setRenaming] = useState(null);
+  // The name just chosen, per outlet, shown at once while the server confirms
+  // it. Without this the card kept offering the old suggestion for the whole
+  // round trip - and the callable also learns the signature, so it is not
+  // quick - which read as the tap not having worked (Oct 2026).
+  const [pendingNames, setPendingNames] = useState({});
   const { user } = useAuth();
 
   const outlets = [1, 2].map((number) => {
     const one = number === 1;
-    const suggestion = one ? outlet1Suggestion : outlet2Suggestion;
+    const pendingName = pendingNames[number];
+    const liveSuggestion = one ? outlet1Suggestion : outlet2Suggestion;
+    const suggestion = pendingName
+      ? { ...liveSuggestion, showBadge: false, canAccept: false, identityState: 'confirmed' }
+      : liveSuggestion;
     const hasLoad = one ? outlet1HasLoad : outlet2HasLoad;
     const hasReading = one ? outlet1HasReading : outlet2HasReading;
-    const applianceName = one ? outlet1ApplianceName : outlet2ApplianceName;
+    const applianceName = pendingName || (one ? outlet1ApplianceName : outlet2ApplianceName);
     const isOn = one ? outlet1Status : outlet2Status;
     return {
       number,
@@ -320,6 +329,7 @@ const OutletsScreen = ({ navigation }) => {
 
     const isTop = name === suggestion?.name;
     setNamingOutlet(number);
+    setPendingNames((current) => ({ ...current, [number]: name }));
     try {
       const result = await updateApplianceName(number, name, {
         source: isTop ? 'auto_suggestion' : 'user_choice',
@@ -349,6 +359,9 @@ const OutletsScreen = ({ navigation }) => {
       }
     } finally {
       setNamingOutlet(null);
+      // By now the server has written the name and settled the verdict, and
+      // the outlet listener carries both - the stand-in can go.
+      setPendingNames((current) => ({ ...current, [number]: undefined }));
     }
   };
 
