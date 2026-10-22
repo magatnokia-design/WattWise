@@ -20,7 +20,6 @@ import { OfflineState } from '../../components/common/OfflineNotice';
 import useBudgetTracking from './hooks/useBudgetTracking';
 import useRangeUsage from './hooks/useRangeUsage';
 import { useOfflineRetry } from '../../hooks/useOfflineRetry';
-import { Wordmark } from '../../components/common/Wordmark';
 
 const BudgetTrackingScreen = () => {
   const {
@@ -70,11 +69,10 @@ const BudgetTrackingScreen = () => {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      {/* A tab since Oct 2026, the first one, where Home was - so it carries
-          the brand rather than a back button. The notification bell is on
-          Settings. */}
+      {/* A tab since Oct 2026, so a title rather than a back button. The logo
+          and the notification bell are on Settings. */}
       <View style={styles.header}>
-        <Wordmark height={28} />
+        <Text style={styles.headerTitle}>Budget</Text>
         <TouchableOpacity
           onPress={() => setShowBudgetModal(true)}
           style={styles.iconButton}
@@ -187,6 +185,11 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.background,
+  },
+  headerTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: COLORS.text,
   },
   header: {
     flexDirection: 'row',

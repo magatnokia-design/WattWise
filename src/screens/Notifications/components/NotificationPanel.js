@@ -9,6 +9,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../../../constants/colors';
 import NotificationItem from './NotificationItem';
 import { OfflineState } from '../../../components/common/OfflineNotice';
@@ -60,9 +61,11 @@ const NotificationPanel = ({ visible, onClose }) => {
       />
     ) : (
       <View style={styles.emptyContainer}>
-        <Text style={styles.emptyIcon}>🔔</Text>
-        <Text style={styles.emptyTitle}>No Notifications</Text>
-        <Text style={styles.emptySub}>You&apos;re all caught up!</Text>
+        <View style={styles.emptyIcon}>
+          <Ionicons name="notifications-outline" size={28} color={COLORS.primary} />
+        </View>
+        <Text style={styles.emptyTitle}>You&apos;re all caught up</Text>
+        <Text style={styles.emptySub}>Safety, budget and Hub alerts will show here.</Text>
       </View>
     )
   ), [showOfflineState]);
@@ -78,8 +81,9 @@ const NotificationPanel = ({ visible, onClose }) => {
           : 'Not loaded'}
       </Text>
       {notifications.length > 0 && (
-        <TouchableOpacity onPress={handleClearAll} activeOpacity={0.7}>
-          <Text style={styles.clearAllText}>Clear All</Text>
+        <TouchableOpacity onPress={handleClearAll} activeOpacity={0.7} style={styles.clearAll}>
+          <Ionicons name="trash-outline" size={13} color={COLORS.error} />
+          <Text style={styles.clearAllText}>Clear all</Text>
         </TouchableOpacity>
       )}
     </View>
@@ -120,11 +124,12 @@ const NotificationPanel = ({ visible, onClose }) => {
                     activeOpacity={0.7}
                     style={styles.markReadBtn}
                   >
+                    <Ionicons name="checkmark-done" size={15} color={COLORS.primary} />
                     <Text style={styles.markReadText}>Mark all read</Text>
                   </TouchableOpacity>
                 )}
-                <TouchableOpacity onPress={onClose} activeOpacity={0.7}>
-                  <Text style={styles.closeBtn}>✕</Text>
+                <TouchableOpacity onPress={onClose} activeOpacity={0.7} accessibilityLabel="Close">
+                  <Ionicons name="close" size={22} color={COLORS.textLight} />
                 </TouchableOpacity>
               </View>
             </View>
@@ -132,7 +137,7 @@ const NotificationPanel = ({ visible, onClose }) => {
             {/* Notification List */}
             <FlatList
               data={notifications}
-              keyExtractor={(item, index) => index.toString()}
+              keyExtractor={(item, index) => item.id || index.toString()}
               renderItem={renderItem}
               ListEmptyComponent={renderEmpty}
               ListHeaderComponent={renderHeader}
@@ -194,7 +199,7 @@ const styles = StyleSheet.create({
     color: COLORS.text,
   },
   badge: {
-    backgroundColor: COLORS.primary,
+    backgroundColor: COLORS.error,
     borderRadius: 10,
     paddingHorizontal: 7,
     paddingVertical: 2,
@@ -210,6 +215,9 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   markReadBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 8,
@@ -219,11 +227,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     color: COLORS.primary,
-  },
-  closeBtn: {
-    fontSize: 18,
-    color: COLORS.textLight,
-    padding: 4,
   },
   listHeader: {
     flexDirection: 'row',
@@ -236,6 +239,11 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: COLORS.textLight,
     fontWeight: '500',
+  },
+  clearAll: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
   clearAllText: {
     fontSize: 12,
@@ -254,7 +262,7 @@ const styles = StyleSheet.create({
   separator: {
     height: 1,
     backgroundColor: COLORS.border,
-    marginLeft: 70,
+    marginLeft: 64,
   },
   offline: {
     margin: 20,
@@ -264,8 +272,13 @@ const styles = StyleSheet.create({
     paddingVertical: 60,
   },
   emptyIcon: {
-    fontSize: 48,
-    marginBottom: 16,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#ECF8EF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 14,
   },
   emptyTitle: {
     fontSize: 18,

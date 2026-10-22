@@ -18,10 +18,8 @@ import {
   buildTrend,
   explainAccuracy,
   formatMonthShort,
-  describeCostBasis,
   labelCostBasis,
 } from './utils/comparisonHelpers';
-import { foldApplianceRows } from '../../utils/applianceBreakdown';
 import { WebAppNotice } from '../../components/common/WebAppNotice';
 import { OfflineState } from '../../components/common/OfflineNotice';
 import { WEB_APP_LINKS } from '../../constants/webApp';
@@ -61,16 +59,6 @@ const ReferenceComparisonScreen = ({ navigation }) => {
 
   const hasUsage = totals.daysRecorded > 0;
 
-  // The same fold the emailed statement uses: six named rows, and a residual
-  // summed from the tail itself so the block can only restate figures that
-  // exist. Kept identical on purpose - two surfaces itemising one month by
-  // different rules is the bug this block was added to close.
-  const applianceRows = useMemo(() => foldApplianceRows(totals.appliances), [totals.appliances]);
-  const applianceKwh = useMemo(
-    () => applianceRows.reduce((sum, row) => sum + (Number(row.energyKwh) || 0), 0),
-    [applianceRows]
-  );
-
   const trend = useMemo(
     () => buildTrend(comparison, label, previousLabel, {
       recorded: totals.daysRecorded,
@@ -94,11 +82,18 @@ const ReferenceComparisonScreen = ({ navigation }) => {
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={styles.backButton}
+          accessibilityRole="button"
+          accessibilityLabel="Back"
+        >
           <Ionicons name="arrow-back" size={24} color={COLORS.text} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Compare Usage</Text>
-        <View style={styles.backButton} />
+        <View style={styles.headerTitles}>
+          <Text style={styles.headerTitle}>Compare usage</Text>
+          <Text style={styles.headerSub}>One month against the month before</Text>
+        </View>
       </View>
 
       <ScrollView
@@ -114,12 +109,6 @@ const ReferenceComparisonScreen = ({ navigation }) => {
           />
         }
       >
-        <Text style={styles.intro}>
-          Pick one month. Everything below is about that month - what Dagitab measured,
-          how that compares with the month before, and how it lines up with the PELCO III
-          bill covering the same electricity.
-        </Text>
-
         {/* Adding a past bill means copying peso figures off paper, which is
             markedly easier with a keyboard. Entry still works here in full. */}
         {webNotice.visible && (
@@ -149,7 +138,7 @@ const ReferenceComparisonScreen = ({ navigation }) => {
         />
 
         <View style={styles.body}>
-          <Text style={styles.sectionTitle}>What Dagitab measured in {label}</Text>
+          <Text style={styles.sectionTitle}>Measured in {label}</Text>
 
           {hasUsage ? (
             <>
@@ -199,75 +188,17 @@ const ReferenceComparisonScreen = ({ navigation }) => {
                       billed figure is stated here instead of hidden. */}
                   {totals.costBasis === 'estimate' ? null : (
                     <Text style={styles.basisNote}>
-                      {label} comes to {formatPeso(totals.cost)}.{' '}
-                      {describeCostBasis(totals.costBasis, label)} The change above prices both
-                      months with your own rates so the two are measured the same way.
+                      {label} comes to {formatPeso(totals.cost)} ({labelCostBasis(totals.costBasis).toLowerCase()}).
+                      The change above prices both months at your own rates.
                     </Text>
                   )}
 
-                  <Text style={styles.sectionTitle}>Which outlet changed</Text>
-                  <View style={styles.outletCard}>
-                    {/* The slot is carried alongside the name because the two
-                        outlets can legitimately share one. Appliance names are
-                        user-set and the rollup records whatever they were on the
-                        day it ran, so a rename - or the same appliance moved
-                        between outlets - produces two rows reading "My Ceiling
-                        Fan" with different figures and no way to tell which is
-                        which. Seen on a real account. */}
-                    {[
-                      { id: 'outlet1', slot: 'Outlet 1', name: totals.outlet1Name, delta: comparison.outlet1 },
-                      { id: 'outlet2', slot: 'Outlet 2', name: totals.outlet2Name, delta: comparison.outlet2 },
-                    ].map((outlet, index) => {
-                      const improving = outlet.delta.direction === 'down';
-                      const color = outlet.delta.direction === 'flat' || trend.partial
-                        ? COLORS.textLight
-                        : (improving ? COLORS.success : COLORS.error);
-
-                      return (
-                        <View
-                          // Keyed on the slot, not the name. Two outlets sharing
-                          // a name gave React duplicate keys.
-                          key={outlet.id}
-                          style={[styles.outletRow, index === 0 && styles.outletRowDivided]}
-                        >
-                          <View style={styles.outletInfo}>
-                            <Text style={styles.outletName}>
-                              {outlet.name}
-                              {outlet.name === outlet.slot ? '' : ` · ${outlet.slot}`}
-                            </Text>
-                            <Text style={styles.outletFlow}>
-                              {formatKwh(outlet.delta.previous)} → {formatKwh(outlet.delta.current)}
-                            </Text>
-                          </View>
-                          <Text style={[styles.outletDelta, { color }]}>
-                            {outlet.delta.direction === 'flat'
-                              ? '—'
-                              : `${outlet.delta.direction === 'down' ? '↓' : '↑'} ${
-                                outlet.delta.absolutePercent === null
-                                  ? formatKwh(outlet.delta.absolute)
-                                  : `${outlet.delta.absolutePercent.toFixed(1)}%`
-                              }`}
-                          </Text>
-                        </View>
-                      );
-                    })}
-                  </View>
                 </>
               ) : (
                 /* No baseline, so no bars and no arrows - just the month's own
                    totals. Rendering a delta against an unmeasured month would
                    print a 100% rise off a zero that was never measured. */
                 <View style={styles.totalsCard}>
-                  {/* The slot is carried here for the same reason the sibling
-                      branch above carries it, and for one more. These two rows
-                      are outlet totals for the whole month, labelled with the
-                      appliance name each outlet held on the LAST recorded day -
-                      not a per-appliance breakdown. Printed as a bare name they
-                      read as one. The per-appliance answer is the "Where it
-                      went" block below, which credits each day to the name the
-                      outlet carried on that day - the statement's rule. Naming
-                      the outlet here is what keeps these figures true as
-                      written and the two blocks distinguishable. */}
                   {[
                     { key: 'energy', label: 'Energy used', value: formatKwh(totals.kWh) },
                     {
@@ -278,16 +209,6 @@ const ReferenceComparisonScreen = ({ navigation }) => {
                       // this is an estimate at the user's configured rates;
                       // after, it is what the statement billed.
                       badge: totals.isFinal ? 'Final' : null,
-                    },
-                    {
-                      key: 'outlet1',
-                      label: `Outlet 1 · ${totals.outlet1Name}`,
-                      value: formatKwh(totals.outlet1),
-                    },
-                    {
-                      key: 'outlet2',
-                      label: `Outlet 2 · ${totals.outlet2Name}`,
-                      value: formatKwh(totals.outlet2),
                     },
                   ].map((row, index) => (
                     <View
@@ -306,73 +227,19 @@ const ReferenceComparisonScreen = ({ navigation }) => {
                     </View>
                   ))}
                   <Text style={styles.totalsFooter}>
-                    {totals.daysRecorded} {totals.daysRecorded === 1 ? 'day' : 'days'} recorded,
-                    from outlet 1 and outlet 2 only. Each outlet is named for the appliance
-                    it held most recently. {describeCostBasis(totals.costBasis, label)}
+                    {totals.daysRecorded} {totals.daysRecorded === 1 ? 'day' : 'days'} recorded.
+                    No {previousLabel} readings to compare with.
                   </Text>
                 </View>
               )}
 
-              {/* Where it went.
-                  The outlet rows above answer "which of the two sockets"; this
-                  answers "which appliance", and they are not the same question.
-                  Outlet totals carry the name each outlet held on the LAST
-                  recorded day, so renaming an appliance rewrites the whole month
-                  retroactively. These rows credit each day's energy to the name
-                  the outlet carried on THAT day, which is the rule the emailed
-                  statement uses and the only one a rename cannot rewrite.
-
-                  Both were already true; only the statement was showing this
-                  one. August 2026 read as six appliances on the PDF and two here
-                  off the same 7.24 kWh, and nothing on this screen said why. */}
-              {applianceRows.length > 0 ? (
-                <>
-                  <Text style={styles.sectionTitle}>Where it went in {label}</Text>
-                  <View style={styles.totalsCard}>
-                    {applianceRows.map((row, index) => {
-                      const share = totals.kWh > 0 ? (row.energyKwh / totals.kWh) * 100 : 0;
-
-                      return (
-                        <View
-                          key={row.applianceName}
-                          style={[styles.totalsRow, index > 0 && styles.totalsRowDivided]}
-                        >
-                          <View style={styles.totalsLabelWrap}>
-                            <Text style={styles.applianceName} numberOfLines={1}>
-                              {row.applianceName}
-                            </Text>
-                            <Text style={styles.applianceShare}>{share.toFixed(0)}%</Text>
-                          </View>
-                          <Text style={styles.totalsValue}>{formatKwh(row.energyKwh)}</Text>
-                        </View>
-                      );
-                    })}
-
-                    {/* The total bar, for the same reason the statement carries
-                        one: a block that itemises a total has to add up to it,
-                        and a shortfall has to be visible rather than silent. */}
-                    <View style={[styles.totalsRow, styles.totalsRowDivided]}>
-                      <Text style={styles.applianceTotalLabel}>Total measured</Text>
-                      <Text style={styles.applianceTotalValue}>{formatKwh(applianceKwh)}</Text>
-                    </View>
-
-                    <Text style={styles.totalsFooter}>
-                      Energy is credited to the name the outlet carried on the day it was
-                      measured, so an appliance renamed mid-month appears under both names.
-                      This is the same split as your emailed statement.
-                    </Text>
-                  </View>
-                </>
-              ) : null}
             </>
           ) : (
             <View style={styles.emptyState}>
-              <Ionicons name="calendar-outline" size={64} color={COLORS.border} />
+              <Ionicons name="calendar-outline" size={40} color={COLORS.textLight} />
               <Text style={styles.emptyTitle}>Nothing recorded for {label}</Text>
               <Text style={styles.emptyText}>
-                Dagitab builds a monthly total from daily usage, which is recorded
-                once your outlets have been reporting for a full day. You can still
-                file that month&apos;s PELCO III bill below.
+                You can still add that month&apos;s bill below.
               </Text>
             </View>
           )}
@@ -385,7 +252,7 @@ const ReferenceComparisonScreen = ({ navigation }) => {
             nor add one, whatever Firestore held. Found from the web client,
             which gates neither. */}
         <View style={styles.billSection}>
-          <Text style={styles.sectionTitle}>Check against your real bill</Text>
+          <Text style={styles.sectionTitle}>Your PELCO III bill</Text>
 
           {accuracy && hasUsage ? (
             <View style={styles.accuracyCard}>
@@ -476,10 +343,7 @@ const ReferenceComparisonScreen = ({ navigation }) => {
               <Ionicons name="receipt-outline" size={22} color={COLORS.primary} />
               <View style={styles.addBillText}>
                 <Text style={styles.addBillTitle}>Add your {label} bill</Text>
-                <Text style={styles.addBillSub}>
-                  Enter the total from your paper PELCO III bill to see how close
-                  Dagitab&apos;s estimate came.
-                </Text>
+                <Text style={styles.addBillSub}>See how close Dagitab&apos;s estimate came.</Text>
               </View>
               <Ionicons name="chevron-forward" size={18} color={COLORS.textLight} />
             </TouchableOpacity>
@@ -514,33 +378,32 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    backgroundColor: COLORS.white,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 12,
   },
   backButton: {
     padding: 4,
-    width: 32,
+    marginRight: 8,
+  },
+  headerTitles: {
+    flex: 1,
   },
   headerTitle: {
-    fontSize: 20,
+    fontSize: 24,
     fontWeight: '700',
     color: COLORS.text,
+  },
+  headerSub: {
+    fontSize: 13,
+    color: COLORS.textLight,
+    marginTop: 2,
   },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
     paddingBottom: 32,
-  },
-  intro: {
-    fontSize: 13,
-    color: COLORS.textLight,
-    paddingHorizontal: 20,
-    paddingTop: 16,
   },
   // Sits inside the body block now rather than spanning the screen, so it takes
   // its horizontal padding from the parent.
@@ -584,15 +447,15 @@ const styles = StyleSheet.create({
     lineHeight: 19,
   },
   body: {
-    paddingHorizontal: 20,
-    marginTop: 20,
+    paddingHorizontal: 16,
+    marginTop: 16,
   },
   offline: {
     marginHorizontal: 20,
     marginTop: 20,
   },
   billSection: {
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     marginTop: 12,
   },
   sectionTitle: {
@@ -601,13 +464,6 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     marginTop: 8,
     marginBottom: 10,
-  },
-  outletCard: {
-    backgroundColor: COLORS.white,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    marginBottom: 12,
   },
   totalsCard: {
     backgroundColor: COLORS.white,
@@ -663,29 +519,6 @@ const styles = StyleSheet.create({
     marginTop: -4,
     marginBottom: 14,
   },
-  applianceName: {
-    flexShrink: 1,
-    fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.text,
-  },
-  applianceShare: {
-    flexShrink: 0,
-    fontSize: 12,
-    color: COLORS.textLight,
-  },
-  applianceTotalLabel: {
-    flex: 1,
-    fontSize: 13,
-    fontWeight: '700',
-    color: COLORS.text,
-  },
-  applianceTotalValue: {
-    flexShrink: 0,
-    fontSize: 15,
-    fontWeight: '700',
-    color: COLORS.primary,
-  },
   totalsValue: {
     flexShrink: 0,
     fontSize: 15,
@@ -700,34 +533,6 @@ const styles = StyleSheet.create({
     paddingBottom: 14,
     borderTopWidth: 1,
     borderTopColor: COLORS.border,
-  },
-  outletRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 16,
-  },
-  outletRowDivided: {
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-  },
-  outletInfo: {
-    flex: 1,
-  },
-  outletName: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.text,
-  },
-  outletFlow: {
-    fontSize: 12,
-    color: COLORS.textLight,
-    marginTop: 3,
-  },
-  outletDelta: {
-    fontSize: 14,
-    fontWeight: '700',
-    marginLeft: 12,
   },
   accuracyCard: {
     backgroundColor: COLORS.white,

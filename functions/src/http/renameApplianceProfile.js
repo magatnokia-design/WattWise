@@ -133,7 +133,11 @@ async function renameApplianceProfile(request) {
 
       batch.set(snapshot.ref, {
         applianceName: toLabel,
-        'applianceSelection.name': toLabel,
+        // Nested, not 'applianceSelection.name': set() with merge reads a dotted
+        // key as a literal field name, so that wrote a top-level field called
+        // "applianceSelection.name" and left the real one on the old label.
+        // A nested map is merged field by field, keeping the rest of it.
+        applianceSelection: { name: toLabel },
         lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
       }, { merge: true });
 

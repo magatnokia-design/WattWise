@@ -14,7 +14,7 @@ const kwh = (value) => `${Number(value || 0).toFixed(2)} kWh`;
  * what it cost - nothing else. The per-outlet breakdown lives in the Excel
  * export, which stays detailed.
  */
-const UsageHistory = ({ usage = EMPTY_USAGE, loading = false, showOfflineState = false }) => {
+const UsageHistory = ({ usage = EMPTY_USAGE, loading = false, showOfflineState = false, style }) => {
   if (usage.length === 0) {
     if (loading) {
       return (
@@ -44,7 +44,7 @@ const UsageHistory = ({ usage = EMPTY_USAGE, loading = false, showOfflineState =
   }
 
   return (
-    <View style={styles.card}>
+    <View style={[styles.card, style]}>
       <View style={[styles.row, styles.headRow]}>
         <Text style={[styles.head, styles.dateCol]}>Date</Text>
         <Text style={[styles.head, styles.numCol]}>Energy</Text>

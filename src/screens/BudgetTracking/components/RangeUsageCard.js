@@ -5,12 +5,11 @@ import {
   StyleSheet,
   TouchableOpacity,
   ActivityIndicator,
-  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import { COLORS } from '../../../constants/colors';
 import { getManilaDateKey } from '../../../utils/liveUsage';
+import DagitabCalendar from '../../../components/common/DagitabCalendar';
 import { RANGE_PRESETS, buildBudgetTips } from '../../../utils/rangeUsage';
 
 /**
@@ -35,14 +34,6 @@ const formatKey = (key, withYear = true) => {
   return withYear ? `${MONTHS[m - 1]} ${d}, ${y}` : `${MONTHS[m - 1]} ${d}`;
 };
 
-// The picker works in phone-local time; a date key is a calendar day.
-const keyToLocalDate = (key) => {
-  const [y, m, d] = String(key).split('-').map(Number);
-  return new Date(y, m - 1, d);
-};
-const localDateToKey = (date) =>
-  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-
 const formatHour = (hour) => {
   const h = Number(hour);
   if (!Number.isFinite(h)) return null;
@@ -64,32 +55,12 @@ const RangeUsageCard = ({
   monthlyBudget,
   daysInMonth,
 }) => {
-  // iOS has no imperative dialog; it shows the picker inline for the field
-  // being edited. Android uses the system calendar dialog.
-  const [iosField, setIosField] = useState(null);
+  // The Dagitab calendar (Oct 2026), replacing the phone's own date dialog:
+  // 'range' when From or To is tapped, 'single' for "Pick a day", null closed.
+  const [calendarMode, setCalendarMode] = useState(null);
   const today = getManilaDateKey();
 
-  // field: 'startDate' | 'endDate' | 'day' (one date sets both ends).
-  const apply = (field, key) => {
-    if (field === 'day') setRange({ startDate: key, endDate: key });
-    else setRange((current) => ({ ...current, [field]: key }));
-  };
-
-  const openPicker = (field) => {
-    const current = field === 'day' ? range.endDate : range[field];
-    if (Platform.OS === 'android') {
-      DateTimePickerAndroid.open({
-        value: keyToLocalDate(current),
-        mode: 'date',
-        maximumDate: keyToLocalDate(today),
-        onChange: (event, date) => {
-          if (event.type === 'set' && date) apply(field, localDateToKey(date));
-        },
-      });
-    } else {
-      setIosField(field);
-    }
-  };
+  const openPicker = (field) => setCalendarMode(field === 'day' ? 'single' : 'range');
 
   const isSingleDay = range.startDate === range.endDate;
   const activePreset = isSingleDay
@@ -192,18 +163,19 @@ const RangeUsageCard = ({
         ))}
       </View>
 
-      {Platform.OS !== 'android' && iosField ? (
-        <DateTimePicker
-          value={keyToLocalDate(iosField === 'day' ? range.endDate : range[iosField])}
-          mode="date"
-          display="inline"
-          maximumDate={keyToLocalDate(today)}
-          onChange={(event, date) => {
-            if (date) apply(iosField, localDateToKey(date));
-            setIosField(null);
-          }}
-        />
-      ) : null}
+      <DagitabCalendar
+        visible={calendarMode !== null}
+        mode={calendarMode || 'range'}
+        title={calendarMode === 'single' ? 'Check one day' : 'Check your usage'}
+        startDate={calendarMode === 'single' ? range.endDate : range.startDate}
+        endDate={range.endDate}
+        maxDate={today}
+        onClose={() => setCalendarMode(null)}
+        onConfirm={(picked) => {
+          setRange({ startDate: picked.startDate, endDate: picked.endDate });
+          setCalendarMode(null);
+        }}
+      />
 
       {status === 'invalid' ? (
         <Text style={styles.problem}>{message}</Text>

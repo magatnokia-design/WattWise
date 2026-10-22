@@ -24,11 +24,11 @@ const PageButton = ({ icon, label, disabled, onPress }) => (
  * middle text where the total is not known yet (the activity log only knows
  * whether there is a next page).
  */
-const Pager = ({ page, pageCount, hasPrev, hasNext, onPrev, onNext, pageLabel, busy = false }) => {
+const Pager = ({ page, pageCount, hasPrev, hasNext, onPrev, onNext, pageLabel, busy = false, style }) => {
   if (!hasPrev && !hasNext) return null;
 
   return (
-    <View style={styles.row}>
+    <View style={[styles.row, style]}>
       <PageButton icon="chevron-back" label="Previous page" disabled={!hasPrev || busy} onPress={onPrev} />
       <Text style={styles.label}>
         {pageLabel || `Page ${page + 1} of ${pageCount}`}

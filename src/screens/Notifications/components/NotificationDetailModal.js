@@ -8,9 +8,10 @@ import {
   TouchableOpacity,
   useWindowDimensions,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../../../constants/colors';
+import { notificationIcon, cleanTitle } from './notificationDisplay';
 import {
-  getNotificationIcon,
   getNotificationColor,
   formatNotificationTime,
   formatNotificationDate,
@@ -36,7 +37,7 @@ const NotificationDetailModal = ({ visible, notification, onClose }) => {
   if (!notification) return null;
 
   const accent = getNotificationColor(notification.type);
-  const icon = getNotificationIcon(notification.type);
+  const icon = notificationIcon(notification.type);
   const rows = describeNotificationDetails(notification);
 
   return (
@@ -51,10 +52,10 @@ const NotificationDetailModal = ({ visible, notification, onClose }) => {
         <View style={[styles.card, { width: Math.min(width - 40, 400) }]}>
           <View style={styles.header}>
             <View style={[styles.iconContainer, { backgroundColor: `${accent}20` }]}>
-              <Text style={styles.icon}>{icon}</Text>
+              <Ionicons name={icon} size={20} color={accent} />
             </View>
             <View style={styles.headerText}>
-              <Text style={styles.title}>{notification.title || 'Notification'}</Text>
+              <Text style={styles.title}>{cleanTitle(notification.title)}</Text>
               <Text style={styles.timestamp}>
                 {formatNotificationTime(notification.timestamp)}
                 {'  ·  '}
@@ -127,9 +128,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
-  },
-  icon: {
-    fontSize: 20,
   },
   headerText: {
     flex: 1,

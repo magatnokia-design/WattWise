@@ -159,7 +159,7 @@ const SettingsScreen = ({ navigation }) => {
           icon: '🗑️',
           tone: 'danger',
           title: `Forget ${label}?`,
-          message: 'The power signature measured for this appliance is deleted. Detection falls back to the built-in profiles, which are less accurate for it until it is learned again.',
+          message: `Dagitab forgets how ${label} draws power, and any outlet named ${label} goes back to unnamed - so the next time it runs, Dagitab suggests a name again.`,
           confirmLabel: 'Forget',
           cancelLabel: 'Keep',
           onConfirm: forget,
@@ -361,6 +361,16 @@ const SettingsScreen = ({ navigation }) => {
     navigation.navigate('HelpCenter');
   }, [navigation]);
 
+  const handleSupport = useCallback(() => {
+    Linking.openURL('mailto:support@dagitab.site?subject=Dagitab%20help').catch(() => {
+      setDialog({
+        icon: '✉️',
+        title: 'Email support@dagitab.site',
+        message: 'No mail app opened on this phone. Write to support@dagitab.site from any email and we will reply there.',
+      });
+    });
+  }, []);
+
   const handlePrivacy = useCallback(() => {
     navigation.navigate('Document', { document: 'privacy' });
   }, [navigation]);
@@ -527,7 +537,7 @@ const SettingsScreen = ({ navigation }) => {
           {/* The only destructive account row. The modal itemises what goes
               before offering any way forward. */}
           <SettingsRow
-            icon="trash-outline"
+            icon="person-remove-outline"
             label="Delete account"
             isDestructive
             showArrow
@@ -628,7 +638,7 @@ const SettingsScreen = ({ navigation }) => {
             <>
               <Separator />
               <SettingsRow
-                icon="unlink-outline"
+                icon="close-circle-outline"
                 label="Remove Hub"
                 isDestructive
                 showArrow
@@ -691,9 +701,11 @@ const SettingsScreen = ({ navigation }) => {
         <SectionHeader title="About" />
         <View style={styles.aboutRow}>
           {[
-            { icon: 'information-circle-outline', label: 'About', onPress: handleAbout },
-            { icon: 'help-buoy-outline', label: 'Help', onPress: handleHelp },
-            { icon: 'shield-checkmark-outline', label: 'Privacy', onPress: handlePrivacy },
+            { icon: 'information-circle', label: 'About', onPress: handleAbout },
+            { icon: 'help-circle', label: 'Help', onPress: handleHelp },
+            { icon: 'lock-closed', label: 'Privacy', onPress: handlePrivacy },
+            // support@dagitab.site, straight to the mail app.
+            { icon: 'mail', label: 'Support', onPress: handleSupport },
           ].map((item) => (
             <TouchableOpacity
               key={item.label}
@@ -713,7 +725,7 @@ const SettingsScreen = ({ navigation }) => {
         <View style={styles.signOut}>
           <SectionCard>
             <SettingsRow
-              icon="log-out-outline"
+              icon="exit-outline"
               label={isSigningOut ? 'Signing out…' : 'Sign out'}
               isDestructive
               busy={isSigningOut}
@@ -848,7 +860,7 @@ const styles = StyleSheet.create({
   },
   aboutRow: {
     flexDirection: 'row',
-    gap: 10,
+    gap: 8,
     marginHorizontal: 16,
   },
   aboutTile: {
@@ -907,7 +919,7 @@ const styles = StyleSheet.create({
     height: 18,
     paddingHorizontal: 4,
     borderRadius: 9,
-    backgroundColor: COLORS.primary,
+    backgroundColor: COLORS.error,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,

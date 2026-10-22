@@ -122,39 +122,46 @@ const HistoryScreen = () => {
         showsVerticalScrollIndicator={false}
       >
         {activeTab === 0 ? (
-          <>
-            <ActivityLog
-              logs={activity.items}
-              loading={activityPageLoading || (loading && activityLogs.length === 0)}
-              showOfflineState={showOfflineState}
-            />
-            <Pager
-              hasPrev={activity.hasPrev}
-              hasNext={activity.hasNext}
-              busy={loading}
-              pageLabel={`Page ${activityPage + 1}`}
-              onPrev={() => goToPage(setActivityPage, Math.max(0, activityPage - 1))}
-              onNext={() => goToPage(setActivityPage, activityPage + 1)}
-            />
-          </>
+          <ActivityLog
+            style={styles.fill}
+            logs={activity.items}
+            loading={activityPageLoading || (loading && activityLogs.length === 0)}
+            showOfflineState={showOfflineState}
+          />
         ) : (
-          <>
-            <UsageHistory
-              usage={usage.items}
-              loading={usageLoading}
-              showOfflineState={showOfflineState}
-            />
-            <Pager
-              page={usage.page}
-              pageCount={usage.pageCount}
-              hasPrev={usage.hasPrev}
-              hasNext={usage.hasNext}
-              onPrev={() => goToPage(setUsagePage, usage.page - 1)}
-              onNext={() => goToPage(setUsagePage, usage.page + 1)}
-            />
-          </>
+          <UsageHistory
+            style={styles.fill}
+            usage={usage.items}
+            loading={usageLoading}
+            showOfflineState={showOfflineState}
+          />
         )}
       </ScrollView>
+
+      {/* Pinned above the tab bar rather than following the list, and the list
+          card stretches down to it - so a short page never leaves a gap
+          between the last row, the page controls and the tabs (Oct 2026). */}
+      {activeTab === 0 ? (
+        <Pager
+          style={styles.pager}
+          hasPrev={activity.hasPrev}
+          hasNext={activity.hasNext}
+          busy={loading}
+          pageLabel={`Page ${activityPage + 1}`}
+          onPrev={() => goToPage(setActivityPage, Math.max(0, activityPage - 1))}
+          onNext={() => goToPage(setActivityPage, activityPage + 1)}
+        />
+      ) : (
+        <Pager
+          style={styles.pager}
+          page={usage.page}
+          pageCount={usage.pageCount}
+          hasPrev={usage.hasPrev}
+          hasNext={usage.hasNext}
+          onPrev={() => goToPage(setUsagePage, usage.page - 1)}
+          onNext={() => goToPage(setUsagePage, usage.page + 1)}
+        />
+      )}
     </SafeAreaView>
   );
 };
@@ -210,8 +217,16 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
+    flexGrow: 1,
     paddingHorizontal: 16,
-    paddingBottom: 24,
+    paddingBottom: 12,
+  },
+  fill: {
+    flexGrow: 1,
+  },
+  pager: {
+    paddingTop: 8,
+    paddingBottom: 10,
   },
 });
 

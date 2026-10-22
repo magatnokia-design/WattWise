@@ -272,7 +272,8 @@ test('renameApplianceProfile carries the new name onto the outlet using it', asy
     assert.match(write.path, /outlets\/outlet1$/);
     assert.equal(write.value.applianceName, 'Desk Lamp');
     // Kept in step so the accepted-suggestion record does not contradict the name.
-    assert.equal(write.value['applianceSelection.name'], 'Desk Lamp');
+    assert.equal(write.value.applianceSelection.name, 'Desk Lamp');
+    assert.equal(write.value['applianceSelection.name'], undefined, 'a dotted key is a literal field under set()');
   });
 });
 

@@ -10,6 +10,7 @@ import ScheduleScreen from '../screens/Timer/ScheduleScreen';
 import SettingsScreen from '../screens/Settings/SettingsScreen';
 import OutletsScreen from '../screens/Outlets/OutletsScreen';
 import { COLORS } from '../constants/colors';
+import useUnreadCount from '../screens/Notifications/hooks/useUnreadCount';
 import PowerSafetyScreen from '../screens/PowerSafetyManagement/PowerSafetyScreen';
 import BudgetTrackingScreen from '../screens/BudgetTracking/BudgetTrackingScreen';
 import ReferenceComparisonScreen from '../screens/ReferenceComparison/ReferenceComparisonScreen';
@@ -35,18 +36,28 @@ const Stack = createStackNavigator();
  * than emoji, filled when the tab is selected and outlined otherwise.
  */
 
-const TabIcon = ({ icon, label, focused }) => (
+const TabIcon = ({ icon, label, focused, dot = false }) => (
   <View style={styles.tabIconContainer}>
-    <Ionicons
-      name={focused ? icon : `${icon}-outline`}
-      size={22}
-      color={focused ? COLORS.primary : COLORS.textLight}
-    />
+    <View>
+      <Ionicons
+        name={focused ? icon : `${icon}-outline`}
+        size={22}
+        color={focused ? COLORS.primary : COLORS.textLight}
+      />
+      {dot ? <View style={styles.tabDot} /> : null}
+    </View>
     <Text style={[styles.tabLabel, focused && styles.tabLabelFocused]} numberOfLines={1}>
       {label}
     </Text>
   </View>
 );
+
+// Settings carries the notification bell, so it carries the unread dot too:
+// a red dot on the tab whenever something has not been read (Oct 2026).
+const SettingsTabIcon = ({ focused }) => {
+  const unread = useUnreadCount();
+  return <TabIcon icon="settings" label="Settings" focused={focused} dot={unread > 0} />;
+};
 
 // The raised centre button. A custom tabBarButton so it can sit above the bar.
 const OutletsTabButton = ({ onPress, accessibilityState }) => {
@@ -125,7 +136,7 @@ const MainTabs = () => {
         name="Settings"
         component={SettingsScreen}
         options={{
-          tabBarIcon: ({ focused }) => <TabIcon icon="settings" label="Settings" focused={focused} />,
+          tabBarIcon: ({ focused }) => <SettingsTabIcon focused={focused} />,
         }}
       />
     </Tab.Navigator>
@@ -164,6 +175,17 @@ export const MainNavigator = () => {
 };
 
 const styles = StyleSheet.create({
+  tabDot: {
+    position: 'absolute',
+    top: -1,
+    right: -3,
+    width: 9,
+    height: 9,
+    borderRadius: 5,
+    backgroundColor: COLORS.error,
+    borderWidth: 1.5,
+    borderColor: COLORS.white,
+  },
   tabIconContainer: {
     alignItems: 'center',
     justifyContent: 'center',

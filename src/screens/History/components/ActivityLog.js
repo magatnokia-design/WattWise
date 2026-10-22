@@ -52,7 +52,11 @@ const ActivityLogItem = ({ item }) => {
       </View>
 
       <View style={styles.info}>
-        <Text style={styles.title} numberOfLines={1}>{item.outletName || 'Outlet --'}</Text>
+        {/* The outlet only - no appliance name (Oct 2026). The slot is the one part
+            of a log line that is always true. */}
+        <Text style={styles.title} numberOfLines={1}>
+          {item.outlet ? `Outlet ${item.outlet}` : 'Outlet'}
+        </Text>
         <Text style={styles.meta} numberOfLines={1}>
           {/* Why the outlet changed state - the backend always records this. */}
           <Text style={{ color: SOURCE_TONES[source.tone] || COLORS.textLight, fontWeight: '600' }}>
@@ -93,6 +97,7 @@ const ActivityLogItem = ({ item }) => {
  * one card. Paging lives in the screen (Pager).
  */
 const ActivityLog = ({
+  style,
   logs = EMPTY_LOGS,
   loading = false,
   // True only when nothing could be read.
@@ -141,7 +146,7 @@ const ActivityLog = ({
   });
 
   return (
-    <View style={styles.card}>
+    <View style={[styles.card, style]}>
       {groups.map((group, groupIndex) => (
         <View key={`${group.label}-${groupIndex}`}>
           <Text style={[styles.dayLabel, groupIndex > 0 && styles.dayLabelSpaced]}>{group.label}</Text>

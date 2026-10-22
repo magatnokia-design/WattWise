@@ -8,11 +8,22 @@ import {
   LayoutAnimation,
   Platform,
   UIManager,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../../constants/colors';
 import { HELP_SECTIONS } from './helpContent';
+
+export const SUPPORT_EMAIL = 'support@dagitab.site';
+
+// Icons for the sections, in place of the emoji helpContent.js carries.
+const SECTION_ICONS = {
+  bill: 'receipt-outline',
+  appliances: 'pricetags-outline',
+  measuring: 'speedometer-outline',
+  scope: 'list-outline',
+};
 
 // Height animation on the accordion. Android needs this switched on explicitly,
 // and the guard matters because the flag throws on architectures where it is
@@ -73,7 +84,7 @@ export const HelpCenterScreen = ({ navigation }) => {
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton} accessibilityLabel="Back">
           <Ionicons name="arrow-back" size={24} color={COLORS.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Help Center</Text>
@@ -85,16 +96,33 @@ export const HelpCenterScreen = ({ navigation }) => {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.intro}>
-          How Dagitab measures, what it can identify reliably, and what it
-          cannot. Where something has a limit, it is stated here rather than
-          left to be discovered.
-        </Text>
+        {/* Support first: someone opening Help may simply want a person. */}
+        <TouchableOpacity
+          style={styles.contact}
+          onPress={() => Linking.openURL(`mailto:${SUPPORT_EMAIL}?subject=Dagitab%20help`).catch(() => {})}
+          activeOpacity={0.8}
+          accessibilityRole="button"
+          accessibilityLabel={`Email support at ${SUPPORT_EMAIL}`}
+        >
+          <View style={styles.contactIcon}>
+            <Ionicons name="mail" size={20} color={COLORS.white} />
+          </View>
+          <View style={styles.contactText}>
+            <Text style={styles.contactTitle}>Message support</Text>
+            <Text style={styles.contactEmail}>{SUPPORT_EMAIL}</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={COLORS.textLight} />
+        </TouchableOpacity>
 
         {HELP_SECTIONS.map((section) => (
           <View key={section.id} style={styles.section}>
             <View style={styles.sectionHeader}>
-              <Text style={styles.sectionIcon}>{section.icon}</Text>
+              <Ionicons
+                name={SECTION_ICONS[section.id] || 'help-circle-outline'}
+                size={16}
+                color={COLORS.primary}
+                style={styles.sectionIcon}
+              />
               <Text style={styles.sectionTitle}>{section.title}</Text>
             </View>
 
@@ -153,14 +181,6 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingBottom: 32,
   },
-  intro: {
-    fontSize: 13,
-    color: COLORS.textLight,
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 4,
-    lineHeight: 19,
-  },
   section: {
     marginTop: 20,
   },
@@ -171,8 +191,40 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   sectionIcon: {
-    fontSize: 15,
     marginRight: 8,
+  },
+  contact: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 14,
+    marginHorizontal: 16,
+    marginTop: 16,
+    borderRadius: 14,
+    backgroundColor: COLORS.white,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  contactIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: COLORS.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  contactText: {
+    flex: 1,
+  },
+  contactTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: COLORS.text,
+  },
+  contactEmail: {
+    fontSize: 13,
+    color: COLORS.primary,
+    marginTop: 1,
   },
   sectionTitle: {
     fontSize: 15,
