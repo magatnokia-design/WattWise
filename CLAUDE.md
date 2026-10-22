@@ -39,7 +39,7 @@ cd functions; firebase emulators:start --only functions     # npm run serve
 cd functions; firebase functions:shell                       # npm run shell
 cd functions; firebase deploy --only functions               # npm run deploy
 
-# Deploying ALL 27 at once needs a longer discovery timeout than the 10 s default:
+# Deploying ALL 28 at once needs a longer discovery timeout than the 10 s default:
 $env:FUNCTIONS_DISCOVERY_TIMEOUT = 120; firebase deploy --only functions
 cd functions; firebase functions:log                          # npm run logs
 
@@ -50,7 +50,7 @@ gh run watch                 # ~10 min
 
 **A full functions deploy fails at 10 seconds unless you raise the discovery
 timeout.** The CLI boots `index.js` in a subprocess to work out what to deploy,
-and loading all 27 exports plus `pdfkit` takes longer than its default allows.
+and loading all 28 exports plus `pdfkit` takes longer than its default allows.
 It fails as `Cannot determine backend specification. Timeout after 10000`, which
 names neither the cause nor the fix. Set `FUNCTIONS_DISCOVERY_TIMEOUT=120`.
 Single-function deploys (`--only functions:finalizeInvoice`) stay under it, which
@@ -140,8 +140,15 @@ infrastructure exists only under `functions/`.
   `timeoutSeconds: 60`). The hardware path (ESP32 HTTP endpoints) requires strict request
   validation, fresh timestamps, and device-token checks via `functions/src/lib/deviceSecurity.js`
   - don't relax these for convenience.
-- Appliance detection is **suggestion-first** - it never auto-renames or auto-acts without user
-  confirmation. Resets go through the explicit `clearAutoDetection` callable, not ad hoc writes.
+- Appliance detection is **suggestion-first** - it never auto-acts, and never auto-renames from a
+  *generic* catalogue match. **One exception (Oct 2026, owner's request):** a confident match to
+  one of the user's OWN saved signatures names the outlet by itself (`autoApply` in
+  `applianceDetector.js`, applied in `updateOutletMetrics`), on either outlet - saved signatures
+  are per account, not per outlet, and re-confirming the same appliance every time it moved
+  outlet was a redundant step. It applies only when that saved appliance wins outright and no
+  other saved appliance is within `LEARNED_AUTO_MARGIN`; two saved appliances drawing the same
+  power (the panel's printer-and-fan case) stay a suggestion, tested. Resets go through the
+  explicit `clearAutoDetection` callable, not ad hoc writes.
 - **What identification is claimed to do, and what it must never be load-bearing for.**
   Appliance identification is reliable for steady-state loads and unreliable for loads that
   change operating regime during a run. This affects per-appliance attribution only; total
@@ -328,7 +335,7 @@ the code over that doc for data flow). Current top-level structure under `users/
   The trap it exists for: deleting the Cloud Functions does **not** delete their
   container images, and the `gcf-artifacts` Artifact Registry repository keeps
   billing per GB every month afterwards. Also note Spark is the *last* step, not
-  the first - switching plans before deleting anything breaks all 27 v2
+  the first - switching plans before deleting anything breaks all 28 v2
   functions instantly and silently.
 
 - **Rebuilding this environment from nothing:** `docs/FRESH-MACHINE.md` is the runbook -
@@ -426,6 +433,21 @@ the code over that doc for data flow). Current top-level structure under `users/
   holding exactly as designed. Do not "fix" this by making the statement use
   current names: that rewrites history on every rename.
 
+- **Statements finalize themselves (Oct 2026).** `applyPelcoRates` (daily, 09:00 Manila)
+  reads PELCO III's official generation rate from the PDF it posts each month at
+  `pelco3.org/public/rates/MMYY.pdf` (`lib/pelcoRates.js`), stores it once in
+  `pelco_rates/{YYYY-MM}`, finalizes every statement for that month still PENDING with it
+  (`finalizeForUser`, shared with the `finalizeInvoice` callable), and emails the final copy.
+  The figure read is the PDF TOTAL row's *average generation cost*, and that is the bill's
+  "Generation" line: the four real bills in `billing.test.js` (6.2295, 5.5924, 5.5719,
+  5.5034) are exactly the Feb/Apr/May/Jul 2026 PDFs' figures, checked across all 33 PDFs
+  from Jan 2024. Only Generation is published there; other Block 1 lines keep the
+  estimate's values. A 404 means "not posted yet" and is retried next day; anything that
+  does not parse to a plausible rate returns null and the month stays an estimate - a wrong
+  official rate is worse than a late one. A month the user finalized by hand is never
+  touched. Entering a rate in the app is now optional ("My bill shows a different rate").
+  **If PELCO III changes the PDF's layout, statements silently stay estimates** - check
+  `applyPelcoRates` logs for "did not parse" after the 1st of each month.
 - **An estimate and a finalized bill are two numbers for one month, and only
   one of them is in the user's inbox.** Until `finalizeInvoice` runs, a month
   is priced with whatever supply rates sit in Settings - PELCO III does not

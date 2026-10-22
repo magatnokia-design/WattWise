@@ -126,54 +126,14 @@ async function finalizeInvoice(request) {
     }
 
     const supplyRates = normalizeSupplyRates(data?.supplyRates || data);
-
     const db = admin.firestore();
-    const userId = auth.uid;
-    const invoiceRef = db.doc(`users/${userId}/invoices/${billingMonth}`);
-
-    const [existingDoc, userDoc, daysSnapshot] = await Promise.all([
-      invoiceRef.get(),
-      db.doc(`users/${userId}`).get(),
-      db.collection(`users/${userId}/history_daily`)
-        .where('date', '>=', `${billingMonth}-01`)
-        .where('date', '<=', `${billingMonth}-31`)
-        .get(),
-    ]);
-
-    const existing = existingDoc.exists ? existingDoc.data() : null;
-    const estimateTotal = resolveEstimateBaseline(existing);
-
-    const finalized = buildInvoice({
+    const { finalized, delta } = await finalizeForUser({
+      db,
+      userId: auth.uid,
       billingMonth,
-      dailyEntries: daysSnapshot.docs.map((doc) => doc.data()),
-      officialRates: supplyRates,
+      supplyRates,
       todayKey,
-      isLifeline: userDoc.data()?.isLifeline === true,
-    });
-
-    if (!finalized) {
-      throw new HttpsError('internal', 'Could not rebuild the invoice');
-    }
-
-    const delta = estimateTotal === null
-      ? null
-      : buildFinalizationDelta(estimateTotal, finalized.totalAmountDue);
-
-    await invoiceRef.set({
-      ...finalized,
-      status: STATUS.FINALIZED,
-      finalizedAt: admin.firestore.FieldValue.serverTimestamp(),
-      // Kept so the user can see how close the estimate was, month over month.
-      estimateTotalBeforeFinalize: estimateTotal,
-      finalizationDelta: delta,
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    }, { merge: true });
-
-    logger.info('Invoice finalized', {
-      userId,
-      billingMonth,
-      total: finalized.totalAmountDue,
-      difference: delta?.difference ?? null,
+      source: 'user',
     });
 
     return {
@@ -194,4 +154,67 @@ async function finalizeInvoice(request) {
   }
 }
 
-module.exports = { finalizeInvoice, resolveEstimateBaseline };
+/**
+ * Rebuilds one month with official rates and stores it FINALIZED. Shared by the
+ * finalizeInvoice callable (a rate the user typed) and applyPelcoRates (the
+ * rate read from PELCO III's own PDF), so both produce the same record.
+ *
+ * @param {object} args
+ * @param {string} args.source 'user' | 'pelco_auto' - who supplied the rate.
+ * @returns {Promise<{finalized: object, delta: object|null}>}
+ */
+async function finalizeForUser({ db, userId, billingMonth, supplyRates, todayKey, source = 'user', sourceUrl = null }) {
+  const invoiceRef = db.doc(`users/${userId}/invoices/${billingMonth}`);
+
+  const [existingDoc, userDoc, daysSnapshot] = await Promise.all([
+    invoiceRef.get(),
+    db.doc(`users/${userId}`).get(),
+    db.collection(`users/${userId}/history_daily`)
+      .where('date', '>=', `${billingMonth}-01`)
+      .where('date', '<=', `${billingMonth}-31`)
+      .get(),
+  ]);
+
+  const existing = existingDoc.exists ? existingDoc.data() : null;
+  const estimateTotal = resolveEstimateBaseline(existing);
+
+  const finalized = buildInvoice({
+    billingMonth,
+    dailyEntries: daysSnapshot.docs.map((doc) => doc.data()),
+    officialRates: supplyRates,
+    todayKey,
+    isLifeline: userDoc.data()?.isLifeline === true,
+  });
+
+  if (!finalized) {
+    throw new HttpsError('internal', 'Could not rebuild the invoice');
+  }
+
+  const delta = estimateTotal === null
+    ? null
+    : buildFinalizationDelta(estimateTotal, finalized.totalAmountDue);
+
+  await invoiceRef.set({
+    ...finalized,
+    status: STATUS.FINALIZED,
+    finalizedAt: admin.firestore.FieldValue.serverTimestamp(),
+    // Kept so the user can see how close the estimate was, month over month.
+    estimateTotalBeforeFinalize: estimateTotal,
+    finalizationDelta: delta,
+    finalizedBy: source,
+    officialRateSourceUrl: sourceUrl,
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  }, { merge: true });
+
+  logger.info('Invoice finalized', {
+    userId,
+    billingMonth,
+    source,
+    total: finalized.totalAmountDue,
+    difference: delta?.difference ?? null,
+  });
+
+  return { finalized, delta };
+}
+
+module.exports = { finalizeInvoice, finalizeForUser, resolveEstimateBaseline };

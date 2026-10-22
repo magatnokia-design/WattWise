@@ -122,7 +122,7 @@ async function processInvoiceForUser({
     title: `${formatMonthName(billingMonth)} statement ready`,
     message:
       `Your estimated bill is ${peso(invoice.totalAmountDue)} for ${invoice.totalKwh.toFixed(2)} kWh. ` +
-      'Enter the official PELCO III rate in Dagitab to finalize it.',
+      'Dagitab updates it to the official rate as soon as PELCO III posts it.',
     metadata: {
       billingMonth,
       totalKwh: invoice.totalKwh,
@@ -144,8 +144,8 @@ async function processInvoiceForUser({
     heading: `${formatMonthName(billingMonth)} statement`,
     intro:
       `Your billing period has closed. This statement is an estimate of ${peso(invoice.totalAmountDue)} ` +
-      'based on the most recent published rate - PELCO III releases each month\'s official rate after the ' +
-      'period ends. Open Dagitab and enter the official rate to finalize it.',
+      'based on the most recent rate - PELCO III releases each month\'s official rate a few days after the ' +
+      'period ends. Dagitab will update it and send you the final statement then - nothing for you to do.',
     rows: [
       ['Billing month', formatMonthName(billingMonth)],
       ['Reading period', `${invoice.readingDateFrom} to ${invoice.readingDateTo}`],
@@ -160,15 +160,12 @@ async function processInvoiceForUser({
       encoding: 'base64',
       contentType: 'application/pdf',
     }],
-    // Names the exact route, because this instruction was wrong twice: it once
-    // told the reader to tap "Update to actual rate", which never existed
-    // anywhere. Settings -> Monthly Statements is the only path to
-    // finalizeInvoice, so if that row is ever renamed, rename it here too.
+    // Finalizing is automatic since Oct 2026 (applyPelcoRates reads PELCO
+    // III's posted rate), so the note no longer sends the reader to enter it.
     note:
-      'PELCO III publishes the official generation rate a few days after the period closes. '
-      + 'In Dagitab, open Settings, tap Monthly Statements, choose this month and enter the '
-      + 'generation rate printed on your paper bill - that locks this statement to the real '
-      + 'figure. Until you do, the total above stays an estimate. Rates at pelco3.org/rates.php.',
+      'The final statement arrives by itself once PELCO III posts the month\'s rate. '
+      + 'If your paper bill shows a different generation rate, you can enter it in Dagitab: '
+      + 'Settings > Monthly statements.',
     tag: 'invoice',
   });
 

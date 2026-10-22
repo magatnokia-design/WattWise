@@ -59,6 +59,12 @@ const USER_PROFILE_MAX_SCORE = 0.45;
 // profiles on close calls without overriding a clearly better generic match.
 const LEARNED_SCORE_ADVANTAGE = 0.6;
 
+// How clearly the best saved appliance must beat the next saved one before
+// Dagitab names the outlet by itself (Oct 2026). Two saved appliances closer
+// than this - a 60 W printer and a 60 W fan, both learned - are left as a
+// suggestion: guessing between them would write the wrong name into history.
+const LEARNED_AUTO_MARGIN = 0.15;
+
 const ACTIVE_POWER_THRESHOLD_W = 15;
 const HIGH_POWER_THRESHOLD_W = 700;
 const LOW_POWER_THRESHOLD_W = 20;
@@ -847,10 +853,22 @@ const detectApplianceFromRunState = (runState, options = {}) => {
       || lowPowerSteadyOverlap
     );
 
+  // Names the outlet without asking (Oct 2026, by request: confirming an
+  // appliance the user has already saved, every time it moves outlet, was a
+  // redundant step). Only for the user's OWN saved signature, only when it is
+  // the overall winner, and only when no other saved appliance is close. A
+  // generic catalogue match is never applied on its own - that stays a
+  // suggestion, because "Electric Fan" from a wattage range is a guess and the
+  // user's saved fan is a measurement.
+  const secondLearned = learnedRanked[1] || null;
+  const autoApply = top.source === 'learned'
+    && (!secondLearned || (secondLearned.score - bestLearned.score) >= LEARNED_AUTO_MARGIN);
+
   return {
     appliance: top.label,
     confidence: Number(confidence.toFixed(2)),
     ambiguous: isAmbiguous,
+    autoApply,
     candidates,
     matchSource: top.source || 'generic',
     modelVersion: MODEL_VERSION,
@@ -869,6 +887,7 @@ const detectApplianceFromRunState = (runState, options = {}) => {
 
 module.exports = {
   MODEL_VERSION,
+  LEARNED_AUTO_MARGIN,
   MAX_USER_PROFILES,
   MAX_SIGNATURES_PER_APPLIANCE,
   mergeSignatureIntoProfiles,

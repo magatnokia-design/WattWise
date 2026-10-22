@@ -359,8 +359,8 @@ const drawFooter = (doc, { invoice }) => {
       (invoice.status === 'FINALIZED'
         ? 'Generation is priced at the official PELCO III rate entered for this month. ' +
           'This statement excludes account-specific adjustments, arrears, and penalties.'
-        : 'Generation and transmission rates change monthly - enter the official rate from your bill in Dagitab ' +
-          '(Settings > Monthly statements) or see pelco3.org/rates.php. ' +
+        : 'Generation changes monthly. Dagitab updates this statement to PELCO III\'s official rate ' +
+          '(pelco3.org/rates.php) as soon as it is posted. ' +
           'This estimate excludes account-specific adjustments, arrears, and penalties.'),
       MARGIN,
       y + 7,

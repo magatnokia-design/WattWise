@@ -358,7 +358,7 @@ async function updateOutletMetrics(req, res) {
       // is a slot number, not an appliance, and treating it as a name would have
       // every run come back "changed".
       const rawApplianceName = String(previousOutletData.applianceName || '').trim();
-      const namedAs = isPlaceholderLabel(rawApplianceName) ? '' : rawApplianceName;
+      let namedAs = isPlaceholderLabel(rawApplianceName) ? '' : rawApplianceName;
 
       if (isRunStarting) {
         outletUpdate.autoDetectedAppliance = '';
@@ -427,6 +427,30 @@ async function updateOutletMetrics(req, res) {
       // `suggestionPending` is that shared rule: offer a name when the outlet has
       // none, or when the measurements say the named appliance is no longer the
       // one running. Never when the identity is confirmed.
+      // A confident match to one of the user's OWN saved appliances names the
+      // outlet without asking (Oct 2026): the user saved it once, and confirming
+      // it again every time it moved outlet was a redundant step. The detector
+      // only sets autoApply for a learned signature that won outright with no
+      // close second saved appliance (LEARNED_AUTO_MARGIN). Generic matches stay
+      // suggestions. Nothing billed or safety-related reads this name.
+      if (
+        detectionResult?.autoApply
+        && detectionResult.appliance
+        && !detectionResult.unsupported
+        && namedAs.toLowerCase() !== String(detectionResult.appliance).toLowerCase()
+      ) {
+        outletUpdate.applianceName = detectionResult.appliance;
+        outletUpdate.applianceSelection = {
+          name: detectionResult.appliance,
+          source: 'auto_learned',
+          acceptedSuggestion: false,
+          confidencePercent: Math.round(Number(detectionResult.confidence || 0) * 100),
+          modelVersion: detectionResult.modelVersion || MODEL_VERSION,
+          selectedAtMs: now,
+        };
+        namedAs = detectionResult.appliance;
+      }
+
       if (evaluatedState) {
         const identity = matchNamedAppliance(
           evaluatedState,

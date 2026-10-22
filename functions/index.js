@@ -39,6 +39,7 @@ const { sendVerificationEmail } = require('./src/http/sendVerificationEmail');
 const { sendInvoiceEmail } = require('./src/http/sendInvoiceEmail');
 const { processDailyRollup } = require('./src/scheduled/processDailyRollup');
 const { processMonthlyInvoice } = require('./src/scheduled/processMonthlyInvoice');
+const { applyPelcoRates } = require('./src/scheduled/applyPelcoRates');
 const { finalizeInvoice } = require('./src/http/finalizeInvoice');
 const { repriceDailyRollups } = require('./src/http/repriceDailyRollups');
 const { checkScheduledTimers } = require('./src/scheduled/checkScheduledTimers');
@@ -297,6 +298,24 @@ exports.processMonthlyInvoice = onSchedule(
     memory: '512MiB',
   },
   processMonthlyInvoice
+);
+
+/**
+ * Runs daily at 09:00 Asia/Manila. Reads PELCO III's official generation rate
+ * for the last two closed months from the PDF it posts at pelco3.org (once a
+ * month is posted, the rate is stored in pelco_rates/{YYYY-MM}), finalizes
+ * every statement for that month still PENDING with it, and emails the final
+ * copy. Statements the user finalized by hand are left alone.
+ */
+exports.applyPelcoRates = onSchedule(
+  {
+    schedule: '0 9 * * *',
+    timeZone: 'Asia/Manila',
+    maxInstances: 1,
+    timeoutSeconds: 300,
+    memory: '512MiB',
+  },
+  applyPelcoRates
 );
 
 /**

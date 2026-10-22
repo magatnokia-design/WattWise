@@ -783,3 +783,45 @@ test('one correction settles the fan-or-lamp question permanently', () => {
   assert.equal(result.matchSource, 'learned');
   assert.ok(result.confidence >= 0.8, `expected a strong learned match, got ${result.confidence}`);
 });
+
+// Oct 2026: a confident match to the user's own saved appliance names the
+// outlet by itself (autoApply), on either outlet. Saved signatures are per
+// account, not per outlet - the Android Charger learned on Outlet 1 is the same
+// signature Outlet 2 is scored against.
+test('a saved appliance that wins outright is applied without asking', () => {
+  const charger = buildApplianceSignature(
+    buildRunState({ powerStart: 15.4, jitter: 0.6, sampleCount: 40 }),
+    'Android Charger'
+  );
+  const run = buildRunState({ powerStart: 15.6, jitter: 0.7, sampleCount: 44 });
+
+  const result = detectApplianceFromRunState(run, { userProfiles: [charger] });
+  assert.equal(result.appliance, 'Android Charger');
+  assert.equal(result.matchSource, 'learned');
+  assert.equal(result.autoApply, true);
+});
+
+test('two saved appliances drawing the same power are left as a suggestion', () => {
+  // The capstone panel's case, with both appliances saved: wattage cannot tell
+  // them apart, so the detector must not pick one on the user's behalf.
+  const printer = buildApplianceSignature(
+    buildRunState({ powerStart: 60, jitter: 2, sampleCount: 40 }),
+    'Printer'
+  );
+  const fan = buildApplianceSignature(
+    buildRunState({ powerStart: 60.5, jitter: 2, sampleCount: 40 }),
+    'Electric Fan'
+  );
+  const run = buildRunState({ powerStart: 60.2, jitter: 2, sampleCount: 44 });
+
+  const result = detectApplianceFromRunState(run, { userProfiles: [printer, fan] });
+  assert.equal(result.matchSource, 'learned');
+  assert.equal(result.autoApply, false);
+});
+
+test('a generic catalogue match is never applied on its own', () => {
+  const run = buildRunState({ powerStart: 74, jitter: 5, sampleCount: 45 });
+  const result = detectApplianceFromRunState(run);
+  assert.equal(result.matchSource, 'generic');
+  assert.equal(result.autoApply, false);
+});

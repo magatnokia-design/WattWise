@@ -24,9 +24,12 @@ import { useOfflineRetry } from '../../../hooks/useOfflineRetry';
 const PRIMARY_FIELD = SUPPLY_RATE_FIELDS.find((field) => field.primary);
 const ADVANCED_FIELDS = SUPPLY_RATE_FIELDS.filter((field) => !field.primary);
 
+// Since Oct 2026 a closed month finalizes itself once PELCO III posts its rate
+// (applyPelcoRates), so PENDING is "the official rate is on its way", not a
+// task for the user.
 const STATUS_COPY = {
-  DRAFT: { label: 'Estimate', tone: 'warn' },
-  PENDING: { label: 'Awaiting official rate', tone: 'warn' },
+  DRAFT: { label: 'This month', tone: 'warn' },
+  PENDING: { label: 'Estimate', tone: 'warn' },
   FINALIZED: { label: 'Final', tone: 'good' },
 };
 
@@ -82,6 +85,7 @@ const StatementsModal = ({ visible, userId, onClose }) => {
   // Which month the rate form is open for. null means the list is showing.
   const [editing, setEditing] = useState(null);
   const [values, setValues] = useState(() => buildInitialValues(null));
+  const [showRateForm, setShowRateForm] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [errors, setErrors] = useState({});
   const [formError, setFormError] = useState(null);
@@ -152,6 +156,7 @@ const StatementsModal = ({ visible, userId, onClose }) => {
     setResult(null);
     setEmailNote(null);
     setShowAdvanced(false);
+    setShowRateForm(false);
   }, []);
 
   const backToList = useCallback(() => {
@@ -302,10 +307,8 @@ const StatementsModal = ({ visible, userId, onClose }) => {
         {pendingCount > 0 ? (
           <View style={styles.notice}>
             <Text style={styles.noticeText}>
-              {pendingCount === 1
-                ? 'One statement is priced with an estimated rate.'
-                : `${pendingCount} statements are priced with estimated rates.`}
-              {' '}Open it and enter the rate from your bill.
+              {pendingCount === 1 ? 'One statement is an estimate.' : `${pendingCount} statements are estimates.`}
+              {' '}Dagitab updates them to PELCO III's official rate as soon as it is posted.
             </Text>
           </View>
         ) : null}
@@ -485,17 +488,30 @@ const StatementsModal = ({ visible, userId, onClose }) => {
             statement and its email stay available. */}
         {!canFinalize ? (
           <Text style={styles.settledNote}>
-            This period is still running. It can be finalized once the month ends.
+            This month is still running. Its statement comes out on the 1st.
           </Text>
         ) : null}
 
         {canFinalize ? (
+          <Text style={styles.formIntro}>
+            {isFinalized
+              ? (editing.finalizedBy === 'pelco_auto'
+                ? "Final - priced at PELCO III's official rate for this month."
+                : 'Final - priced at the rate you entered.')
+              : "An estimate. Dagitab finalizes it by itself once PELCO III posts this month's rate."}
+          </Text>
+        ) : null}
+
+        {/* Entering a rate is optional now (Oct 2026): only for a paper bill
+            that shows a different generation rate. */}
+        {canFinalize && !showRateForm ? (
+          <TouchableOpacity onPress={() => setShowRateForm(true)} activeOpacity={0.7} style={styles.rateLink}>
+            <Text style={styles.rateLinkText}>My bill shows a different rate</Text>
+          </TouchableOpacity>
+        ) : null}
+
+        {canFinalize && showRateForm ? (
           <>
-        <Text style={styles.formIntro}>
-          {isFinalized
-            ? 'Already final. A different rate recomputes this month.'
-            : `Enter the generation rate on your ${formatMonthName(editing.billingMonth)} bill.`}
-        </Text>
 
         {renderField(PRIMARY_FIELD)}
 
@@ -626,6 +642,8 @@ const styles = StyleSheet.create({
   offline: { marginVertical: 4 },
 
   emptyIcon: { marginBottom: 8 },
+  rateLink: { alignSelf: 'center', paddingVertical: 10 },
+  rateLinkText: { fontSize: 13, fontWeight: '600', color: COLORS.primary },
   secondaryButtonInner: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   emptyTitle: { fontSize: 15, fontWeight: '700', color: COLORS.text, marginBottom: 4 },
   emptyBody: {
