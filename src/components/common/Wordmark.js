@@ -1,43 +1,73 @@
 import React from 'react';
-import { Text, StyleSheet } from 'react-native';
+import { View } from 'react-native';
+import Svg, { Defs, LinearGradient, Stop, Path } from 'react-native-svg';
+import {
+  BRAND_VIEWBOX,
+  BRAND_MARK_VIEWBOX,
+  BRAND_D_PATH,
+  BRAND_BOLT_PATH,
+  BRAND_WORD_PATH,
+  BRAND_ASPECT,
+  BRAND_GRADIENT,
+} from '../../constants/brandMark';
 import { COLORS } from '../../constants/colors';
 
 /**
- * The WattWise wordmark: "Watt" in the text colour, "Wise" in the theme green.
+ * The Dagitab logo: the green D with its bolt, then "AGITAB" in navy. The D is
+ * the first letter - there is no separate mark beside it, so a screen that used
+ * to stack a logo disc over the wordmark now shows this alone.
  *
- * Deliberately styles nothing but the colour of the second half. Size, weight
- * and the colour of "Watt" all come from the `style` the call site passes, so
- * this drops into the dashboard header and an auth screen without either one
- * having to know about the other.
+ * Drawn from outlines (src/constants/brandMark.js), not set in a font. The
+ * supplied logo used Arial Bold Italic, which Android does not have; as live
+ * text it would have been a different shape on every phone.
  *
- * Nested <Text> is how React Native does a run of differently-styled text
- * inside one line; a <View> with two <Text> children would break the baseline.
- * Both halves stay on one source line on purpose - split across lines, JSX
- * whitespace handling is the difference between "WattWise" and "Watt Wise".
+ * Sized by `height` - the D's height in px. Width follows from the artwork's
+ * aspect, so it can sit in a row without measuring itself first.
  *
- * `accentColor` exists for the one screen that needs it: the splash, which is a
- * solid `primary` field, so the default green half would vanish into its own
- * background. That override was first used to keep the two-tone alive with a
- * deeper green - which did not work in practice. A darker shade of the
- * background is still the background as far as a phone screen in daylight is
- * concerned, and "Wise" read as a smudge. The splash now passes white and drops
- * the two-tone deliberately: on a coloured field the wordmark is one colour.
- *
- * Everywhere else sits on white or a light card, where the accent has a
- * contrasting ground and stays green.
+ * `onColor` is for a green ground (the splash): the D turns white with a green
+ * bolt and the word turns white. The gradient D on a green field is the same
+ * problem the old two-tone wordmark had - a shade of the background is not a
+ * contrast against it.
  *
  * The web client has its own copy at components/ui/Wordmark.jsx. They cannot be
- * one file - RN and DOM primitives do not overlap - so this is not a copy-rule
- * file, but the two must agree on which half is green.
+ * one file - RN and DOM primitives do not overlap - but they read the same
+ * brandMark.js, which is a copy-rule file.
  */
-export const Wordmark = ({ style, accentColor }) => (
-  <Text style={style} allowFontScaling>
-    Watt<Text style={[styles.wise, accentColor ? { color: accentColor } : null]}>Wise</Text>
-  </Text>
+export const Wordmark = ({ height = 32, onColor = false, style }) => (
+  <View
+    style={[{ height, width: height * BRAND_ASPECT }, style]}
+    accessible
+    accessibilityRole="image"
+    accessibilityLabel="Dagitab"
+  >
+    <Svg width="100%" height="100%" viewBox={BRAND_VIEWBOX}>
+      <BrandGradient />
+      <Path d={BRAND_D_PATH} fill={onColor ? COLORS.white : 'url(#dagitabGreen)'} />
+      <Path d={BRAND_BOLT_PATH} fill={onColor ? COLORS.primary : COLORS.white} />
+      <Path d={BRAND_WORD_PATH} fill={onColor ? COLORS.white : COLORS.text} />
+    </Svg>
+  </View>
 );
 
-const styles = StyleSheet.create({
-  wise: { color: COLORS.primary },
-});
+/** The D alone, square. For places that need the mark without the name. */
+export const BrandMark = ({ size = 32, onColor = false, style }) => (
+  <View style={[{ width: size, height: size }, style]} accessibilityElementsHidden importantForAccessibility="no">
+    <Svg width="100%" height="100%" viewBox={BRAND_MARK_VIEWBOX}>
+      <BrandGradient />
+      <Path d={BRAND_D_PATH} fill={onColor ? COLORS.white : 'url(#dagitabGreen)'} />
+      <Path d={BRAND_BOLT_PATH} fill={onColor ? COLORS.primary : COLORS.white} />
+    </Svg>
+  </View>
+);
+
+// Diagonal, top-left to bottom-right across the D's own box, as in the logo.
+const BrandGradient = () => (
+  <Defs>
+    <LinearGradient id="dagitabGreen" x1="0" y1="0" x2="1" y2="1">
+      <Stop offset="0" stopColor={BRAND_GRADIENT.from} />
+      <Stop offset="1" stopColor={BRAND_GRADIENT.to} />
+    </LinearGradient>
+  </Defs>
+);
 
 export default Wordmark;

@@ -163,8 +163,8 @@ const styles = StyleSheet.create({
     borderColor: '#FECACA',
   },
   noticeSuccess: {
-    backgroundColor: '#ECFDF5',
-    borderColor: '#A7F3D0',
+    backgroundColor: '#ECF8EF',
+    borderColor: '#B4E5C2',
   },
   noticeText: {
     ...FONTS.small,

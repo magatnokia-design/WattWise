@@ -112,8 +112,21 @@ infrastructure exists only under `functions/`.
   **the PZEM channels are swapped on purpose.** `outlet1` reads PZEM channel 2
   and `outlet2` reads channel 1 (`OUTLET_1_PZEM_CHANNEL = 2`), because the sensor
   wiring is crossed on this build. Sensors crossed, relays not.
-- Theme is green/white only, from `src/constants/colors.js`. Primary `#10B981`. UI is minimal:
-  white cards, rounded corners, subdued borders, dim-overlay modals, emoji bottom-tab icons.
+- Theme is the **Dagitab palette** (since 22 Oct 2026, replacing WattWise's `#10B981`), from
+  `src/constants/colors.js`: primary `#008D43`, light `#50D52B`, navy `#071B2C` text, white.
+  UI is minimal: white cards, rounded corners, subdued borders, dim-overlay modals.
+
+  **`#50D52B` is decoration only** - 1.93:1 against white, so it is never text and never a
+  ground for white text (gradient start, switch tracks, chart fills, dots). `#008D43` is the
+  green that carries white text (4.29:1).
+
+  **The logo is drawn, not typed.** `scripts/brand-geometry.js` holds the supplied paths;
+  `scripts/generate-brand.js` outlines the "AGITAB" lettering (Arial Bold Italic, which
+  Android does not ship) into `src/constants/brandMark.js`, and `scripts/generate-icons.js`
+  builds every PNG in `assets/`. `<Wordmark>` is the whole lockup - its D is the mark - so
+  never stack a separate logo above it. `brandMark.js` and `colors.js` are copy-rule files:
+  the web repo keeps byte-identical copies. After regenerating, run the web repo's
+  `scripts/generate-icons.cjs`, which derives `public/` (and `email-logo.png`) from `assets/`.
 - **No mock/dummy data with intervals.** Use `0` or real Firebase data.
 - Functions runtime is pinned to `asia-southeast1` with limited concurrency
   (`setGlobalOptions` in `functions/index.js`: `maxInstances: 10`, `memory: '256MiB'`,

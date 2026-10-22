@@ -346,7 +346,7 @@ const styles = StyleSheet.create({
   },
   // The same pill Monthly Statements and Compare Usage use for a billed month.
   historyPill: {
-    backgroundColor: '#ECFDF5',
+    backgroundColor: '#ECF8EF',
     borderRadius: 10,
     paddingHorizontal: 8,
     paddingVertical: 3,

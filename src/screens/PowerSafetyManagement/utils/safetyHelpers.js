@@ -31,7 +31,7 @@ export const getSafetyStageConfig = (stage, readingsAreStale = false) => {
       description: 'All systems operating within safe parameters',
       icon: 'shield-checkmark',
       color: COLORS.success,
-      bgColor: '#ECFDF5',
+      bgColor: '#ECF8EF',
     },
     warning: {
       label: 'Warning',
@@ -69,7 +69,7 @@ const CRITICAL_RATIO = 0.95;
 
 const CRITICAL = { label: 'Critical', color: COLORS.error, bg: '#FEF2F2' };
 const WARNING = { label: 'Warning', color: '#F59E0B', bg: '#FFFBEB' };
-const NORMAL = { label: 'Normal', color: COLORS.success, bg: '#ECFDF5' };
+const NORMAL = { label: 'Normal', color: COLORS.success, bg: '#ECF8EF' };
 
 // Severity order, so a card summarising several metrics can report the worst of
 // them rather than whichever one it happened to be written against.
@@ -146,7 +146,7 @@ export const getAlertIcon = (type) => {
     device: {
       name: 'checkmark-circle',
       color: COLORS.success,
-      bg: '#ECFDF5',
+      bg: '#ECF8EF',
     },
     warning: {
       name: 'warning',

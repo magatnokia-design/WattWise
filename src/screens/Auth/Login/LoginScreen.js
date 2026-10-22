@@ -8,7 +8,6 @@ import {
   Platform, 
   ScrollView,
   TouchableOpacity,
-  Image
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Input } from '../../../components/common/Input';
@@ -154,14 +153,9 @@ const handleLogin = async () => {
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.header}>
-            {/* The disc version: this screen is on a light background, where a
-                white bolt alone would be invisible. */}
-            <Image
-              source={require('../../../../assets/logo-mark.png')}
-              style={styles.logo}
-              resizeMode="contain"
-            />
-            <Wordmark style={styles.wordmark} />
+            {/* The logo is the whole lockup - its D is the mark, so there is
+                no separate disc above it any more. */}
+            <Wordmark height={56} style={styles.wordmark} />
             <Text style={styles.title}>Welcome Back</Text>
             <Text style={styles.subtitle}>Login to your account</Text>
           </View>
@@ -245,18 +239,8 @@ const styles = StyleSheet.create({
     marginTop: 40,
     marginBottom: 40,
   },
-  logo: {
-    width: 72,
-    height: 72,
-    marginBottom: 12,
-  },
-  // Sits tight under the disc so the two read as one lockup rather than as two
-  // separate things that happen to be stacked.
+  // Size comes from <Wordmark height>, which draws the logo; only spacing here.
   wordmark: {
-    ...FONTS.h1,
-    color: COLORS.textDark,
-    fontWeight: '800',
-    letterSpacing: -0.5,
     marginBottom: 20,
   },
   title: {

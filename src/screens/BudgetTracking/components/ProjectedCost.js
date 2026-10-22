@@ -41,7 +41,7 @@ const ProjectedCost = ({
         {hasBudget ? (
           <View style={[
             styles.statusBadge,
-            { backgroundColor: projectedOverBudget ? '#FEF2F2' : '#ECFDF5' }
+            { backgroundColor: projectedOverBudget ? '#FEF2F2' : '#ECF8EF' }
           ]}>
             <Ionicons
               name={projectedOverBudget ? 'trending-up' : 'trending-down'}

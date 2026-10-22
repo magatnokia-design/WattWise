@@ -16,7 +16,7 @@ import { formatDeviceHealthValue } from '../utils/settingsHelpers';
  * ESP32 is, and the app was the last place still calling it that.
  */
 const TONE = {
-  online: { dot: COLORS.primary, chip: '#ECFDF5', text: COLORS.primaryDark },
+  online: { dot: COLORS.primary, chip: '#ECF8EF', text: COLORS.primaryDark },
   warning: { dot: '#F59E0B', chip: '#FEF3C7', text: '#92400E' },
   offline: { dot: COLORS.textLight, chip: '#F3F4F6', text: COLORS.textLight },
 };

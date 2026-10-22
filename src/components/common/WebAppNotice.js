@@ -62,9 +62,9 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    backgroundColor: '#ECFDF5',
+    backgroundColor: '#ECF8EF',
     borderWidth: 1,
-    borderColor: '#A7F3D0',
+    borderColor: '#B4E5C2',
     borderRadius: 12,
     padding: 14,
     marginBottom: 16,
@@ -93,7 +93,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#065F46',
+    color: '#005A2B',
     marginBottom: 3,
   },
   body: {

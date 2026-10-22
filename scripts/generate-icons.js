@@ -2,20 +2,22 @@
 /**
  * Generates every app icon from one vector source.
  *
- * The mark is a single lightning bolt in white on the theme green - the shape
- * supplied in `wattwise_circle_mark_and_app_icon.svg`, reused here path-for-path
- * rather than redrawn.
+ * The mark is the Dagitab "D" - a white D with a lightning bolt cut through it,
+ * on the brand gradient - as supplied in `dagitab-app-icon.svg` (22 Oct 2026)
+ * and reproduced path-for-path from scripts/brand-geometry.js rather than
+ * redrawn. It replaces the WattWise bolt.
  *
- * It replaces a 1.46 MB owl illustration that was doing four jobs at once
- * (icon, splash, adaptive foreground and favicon). That artwork had three
- * problems an icon cannot have: fine line work that turned to mush below about
- * 64 px, a yellow accent in a theme that is green and white only, and
- * transparency outside its circle - which `expo.icon` disallows and which, as
- * an Android adaptive foreground, drew a circle inside the launcher's own
- * circular mask.
+ * The supplied file was a finished-looking 1024 icon with its own rounded
+ * corners, and could not be used as-is for any target: `expo.icon` disallows
+ * transparency (the corners), Android crops an adaptive foreground to a circle
+ * that would cut the D's corners off, and the status bar keeps only alpha. Each
+ * target below is derived from the geometry for the job it does.
  *
  * Every size here is derived, not eyeballed, and the reasoning is next to each
- * one. Re-run after changing BRAND_GREEN or the bolt path.
+ * one. Re-run after changing brand-geometry.js.
+ *
+ * The web repo's public/ icons are generated from assets/icon.png and the two
+ * adaptive layers by its own scripts/generate-icons.cjs - run that afterwards.
  *
  * Usage:
  *   node scripts/generate-icons.js
@@ -24,113 +26,131 @@
 const fs = require('fs');
 const path = require('path');
 const sharp = require('sharp');
+const { GREEN, WHITE, ICON, GRADIENT_SVG } = require('./brand-geometry');
 
 const REPO_ROOT = path.resolve(__dirname, '..');
 const ASSETS_DIR = path.join(REPO_ROOT, 'assets');
 
-// COLORS.primary from src/constants/colors.js, which is also the splash
-// background, the adaptive-icon background and the notification accent in
-// app.json. The supplied SVG used #16a34a; matching what already ships
-// everywhere else matters more than the swatch it was mocked up in.
-const BRAND_GREEN = '#10B981';
-const WHITE = '#ffffff';
+// Kept under the old name: the main loop below prints it.
+const BRAND_GREEN = GREEN;
 
-// The bolt, exactly as supplied. Native bounds are 26 wide x 44 tall.
-const BOLT_PATH = 'M17 0 L0 25 L10 25 L8 44 L26 18 L15 18 Z';
-const BOLT_WIDTH = 26;
-const BOLT_HEIGHT = 44;
+/**
+ * The D mark on a square canvas of `size`, scaled by `scale` around its own
+ * centre. `scale: 1` is the supplied icon's proportions.
+ *
+ * `knockout` cuts the bolt out of the D instead of painting it, for the targets
+ * where the platform keeps only alpha (status bar) or recolours the ground
+ * (email header) - a painted green bolt would vanish into a green bar.
+ */
+const markSvg = ({
+  size,
+  scale = 1,
+  dFill = WHITE,
+  boltFill = GREEN,
+  background = null,
+  rounded = false,
+  knockout = false,
+}) => {
+  const k = size / ICON.canvas;
+  const place = `translate(${size / 2} ${size / 2}) scale(${k * scale}) `
+    + `translate(${-ICON.centre.x} ${-ICON.centre.y})`;
 
-/** A bolt of the given height, centred on a square canvas. */
-const boltSvg = ({ size, boltHeight, fill, background = null, circleRadius = null }) => {
-  const scale = boltHeight / BOLT_HEIGHT;
-  const width = BOLT_WIDTH * scale;
-  const x = (size - width) / 2;
-  const y = (size - boltHeight) / 2;
-
+  const ground = background === 'gradient' ? 'url(#g)' : background;
   const backdrop = background
-    ? `<rect width="${size}" height="${size}" fill="${background}"/>`
+    ? `<rect width="${size}" height="${size}" ${rounded ? `rx="${size * 0.205}"` : ''} fill="${ground}"/>`
     : '';
-  const disc = circleRadius
-    ? `<circle cx="${size / 2}" cy="${size / 2}" r="${circleRadius}" fill="${BRAND_GREEN}"/>`
-    : '';
+
+  // The knockout is one even-odd path rather than an SVG <mask>: the bolt lies
+  // wholly inside the D, so even-odd makes it a hole. A mask rendered as a fully
+  // transparent image under librsvg, and the size check below cannot see that.
+  const mark = knockout
+    ? `<path d="${ICON.d} ${ICON.bolt}" transform="${place}" fill="${dFill}" fill-rule="evenodd"/>`
+    : `<path d="${ICON.d}" transform="${place}" fill="${dFill}"/>`
+      + `<path d="${ICON.bolt}" transform="${place}" fill="${boltFill}"/>`;
 
   return Buffer.from(
     `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">`
+    + `<defs>${GRADIENT_SVG('g')}</defs>`
     + backdrop
-    + disc
-    + `<path d="${BOLT_PATH}" fill="${fill}" transform="translate(${x},${y}) scale(${scale})"/>`
+    + mark
     + '</svg>'
   );
 };
 
+// Android keeps a circle of radius 33/108 of the canvas visible on every
+// launcher shape. The D's farthest corner is ICON.farthestCorner from its
+// centre, so this is the largest scale that keeps it inside, less 5% margin.
+const SAFE_RADIUS = ICON.canvas * (33 / 108);
+const ADAPTIVE_SCALE = Math.floor((SAFE_RADIUS / ICON.farthestCorner) * 0.95 * 100) / 100;
+
 const TARGETS = [
   {
     file: 'icon.png',
-    note: 'iOS + store listing. Full-bleed green, no alpha - the OS applies its own mask, '
-      + 'so baking in rounded corners would double them.',
+    note: 'iOS + store listing. Full-bleed gradient, no alpha - the OS applies its own mask, '
+      + 'so the supplied file\'s baked-in rounded corners would be doubled (and are transparent).',
     size: 1024,
-    // Half the canvas, which is the ratio the source sheet used: bolt height
-    // equal to the circle's radius.
-    svg: () => boltSvg({ size: 1024, boltHeight: 512, fill: WHITE, background: BRAND_GREEN }),
+    svg: () => markSvg({ size: 1024, background: 'gradient' }),
     flatten: BRAND_GREEN,
   },
   {
     file: 'adaptive-icon.png',
-    note: 'Android adaptive foreground. Transparent; backgroundColor in app.json paints behind it. '
-      + 'Sized to sit inside the 66% safe zone every launcher mask keeps.',
+    note: `Android adaptive foreground. Transparent, D scaled to ${ADAPTIVE_SCALE} so its corners `
+      + 'clear the safe circle every launcher mask keeps. adaptive-icon-background.png sits behind it.',
     size: 1024,
-    // Safe zone is a 676 px circle (66% of 1024), radius 338. A 460-tall bolt
-    // has a half-diagonal of 267, so it clears the mask on every launcher
-    // shape - circle, squircle or teardrop.
-    svg: () => boltSvg({ size: 1024, boltHeight: 460, fill: WHITE }),
+    svg: () => markSvg({ size: 1024, scale: ADAPTIVE_SCALE }),
+  },
+  {
+    file: 'adaptive-icon-background.png',
+    note: 'Android adaptive background: the brand gradient. app.json backgroundColor only '
+      + 'takes a flat colour, so the gradient needs its own layer (android.adaptiveIcon.backgroundImage).',
+    size: 1024,
+    svg: () => markSvg({ size: 1024, scale: 0, background: 'gradient' }),
+    flatten: BRAND_GREEN,
   },
   {
     file: 'splash-icon.png',
-    note: 'Launch screen. The circle mark on transparent, over a white background - '
-      + 'the old pairing put a green circle on a green background.',
+    note: 'Native launch screen, on the flat green of expo.splash.backgroundColor. Padded, '
+      + 'because resizeMode "contain" scales this to the screen width.',
     size: 1024,
-    // Padded rather than full-bleed: resizeMode "contain" scales this to the
-    // screen width, so the circle has to leave its own margin.
-    svg: () => boltSvg({ size: 1024, boltHeight: 300, fill: WHITE, circleRadius: 300 }),
+    svg: () => markSvg({ size: 1024, scale: 0.55 }),
   },
   {
     file: 'favicon.png',
-    note: 'Browser tab, rendered near 16 px. Keeps the disc so the white bolt has something '
-      + 'to sit on against a light tab strip.',
+    note: 'Expo web favicon, rendered near 16 px. A rounded gradient tile, so the white D has '
+      + 'a ground against a light tab strip.',
     size: 48,
-    svg: () => boltSvg({ size: 48, boltHeight: 24, fill: WHITE, circleRadius: 23 }),
+    svg: () => markSvg({ size: 48, background: 'gradient', rounded: true }),
   },
   {
     file: 'notification-icon.png',
     note: 'Android status bar. Android keeps only the alpha channel and repaints it, so this '
-      + 'is a white silhouette - anything else arrives as a solid blob.',
+      + 'is a white silhouette with the bolt cut out - a painted bolt would merge into the D.',
     size: 96,
-    svg: () => boltSvg({ size: 96, boltHeight: 62, fill: WHITE }),
+    svg: () => markSvg({ size: 96, scale: 1.1, knockout: true }),
   },
   {
     file: 'logo-mark.png',
-    note: 'In-app mark on a light background - Login and Register. Keeps the disc, since a '
-      + 'white bolt on white is nothing at all.',
+    note: 'The mark on a light background, as a raster. In-app screens draw <BrandMark> '
+      + 'as a vector instead; kept for anything that needs a PNG.',
     size: 256,
-    svg: () => boltSvg({ size: 256, boltHeight: 128, fill: WHITE, circleRadius: 128 }),
+    svg: () => markSvg({ size: 256, scale: 1.2, dFill: 'url(#g)', boltFill: WHITE }),
   },
   {
     file: 'logo-mark-white.png',
-    note: 'In-app mark on the green splash. No disc - the background is already the brand '
-      + 'green, and a green disc on green is a rectangle of nothing.',
+    note: 'The mark for a green ground, as a raster. Same caveat as logo-mark.png.',
     size: 256,
-    svg: () => boltSvg({ size: 256, boltHeight: 200, fill: WHITE }),
+    svg: () => markSvg({ size: 256, scale: 1.2 }),
   },
   {
     file: 'email-logo.png',
-    note: 'Email header, displayed at 22px. White on transparent rather than a green disc, '
-      + 'because that header bar turns red for safety mail and amber for device mail. '
-      + 'Copy to the web repo public/ - email clients need a hosted URL.',
+    note: 'Email header, displayed at 22px. White silhouette with the bolt cut out, because that '
+      + 'header bar turns red for safety mail and amber for device mail - a green bolt would '
+      + 'clash with both. Copy to the web repo public/ - email clients need a hosted URL.',
     // Exported well above its display size: email clients do not serve
     // density-specific assets, so the only way to stay sharp on a retina
     // screen is to ship the larger image and let the HTML scale it down.
     size: 120,
-    svg: () => boltSvg({ size: 120, boltHeight: 96, fill: WHITE }),
+    svg: () => markSvg({ size: 120, scale: 1.2, knockout: true }),
   },
 ];
 
@@ -168,11 +188,19 @@ const main = async () => {
       );
     }
 
+    // And check it drew something. A fully transparent PNG has the right
+    // dimensions too - that is how an empty notification icon and email logo
+    // got past the check above on 22 Oct 2026.
+    const { channels } = await sharp(outputPath).stats();
+    if (channels.length === 4 && channels[3].max === 0) {
+      throw new Error(`${target.file} is fully transparent - the artwork did not render`);
+    }
+
     console.log(`${target.file.padEnd(22)} ${`${width}x${height}`.padStart(9)}  ${(written.length / 1024).toFixed(1).padStart(6)} KB`);
     console.log(`${' '.repeat(22)} ${target.note}\n`);
   }
 
-  console.log('Done. app.json already points at these filenames.');
+  console.log('Done. Now run scripts/generate-icons.cjs in the web repo.');
 };
 
 main().catch((error) => {

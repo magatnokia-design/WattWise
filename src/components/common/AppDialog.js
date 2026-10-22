@@ -25,7 +25,7 @@ import { COLORS } from '../../constants/colors';
  * separate handler it would perform the cancel one.
  */
 const TONES = {
-  primary: { accent: COLORS.primary, tint: '#ECFDF5' },
+  primary: { accent: COLORS.primary, tint: '#ECF8EF' },
   danger: { accent: COLORS.error, tint: '#FEF2F2' },
   warning: { accent: COLORS.warning, tint: '#FFFBEB' },
 };
@@ -117,7 +117,7 @@ const styles = StyleSheet.create({
     // Android ignores shadow*, iOS ignores elevation; both are set so the card
     // lifts off the dimmed screen on either.
     elevation: 6,
-    shadowColor: '#064E3B',
+    shadowColor: '#00401F',
     shadowOpacity: 0.18,
     shadowRadius: 20,
     shadowOffset: { width: 0, height: 8 },

@@ -255,11 +255,11 @@ export const getNotificationColor = (type) => {
     case 'warning': return '#F97316';
     case 'cutoff': return '#EF4444';
     case 'budget': return '#8B5CF6';
-    case 'schedule': return '#10B981';
+    case 'schedule': return '#008D43';
     case 'device': return '#3B82F6';
     // Green: a finished charge is a good outcome, not something to act on
     // urgently. Deliberately not the amber used for high usage.
-    case 'charge': return '#10B981';
+    case 'charge': return '#008D43';
     case 'receipt': return '#14B8A6';
     case 'invoice': return '#6366F1';
     default: return '#6B7280';

@@ -667,7 +667,7 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
     borderRadius: 999,
   },
-  badgeGood: { backgroundColor: '#ECFDF5' },
+  badgeGood: { backgroundColor: '#ECF8EF' },
   badgeWarn: { backgroundColor: '#FEF3C7' },
   badgeText: { fontSize: 10.5, fontWeight: '700' },
   badgeTextGood: { color: COLORS.primaryDark },

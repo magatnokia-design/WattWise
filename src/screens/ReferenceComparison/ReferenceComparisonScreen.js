@@ -561,8 +561,8 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   verdictGood: {
-    backgroundColor: '#ECFDF5',
-    borderColor: '#A7F3D0',
+    backgroundColor: '#ECF8EF',
+    borderColor: '#B4E5C2',
   },
   verdictAlert: {
     backgroundColor: '#FEF2F2',
@@ -646,7 +646,7 @@ const styles = StyleSheet.create({
   // the other rather than wonder whether they mean different things.
   finalPill: {
     flexShrink: 0,
-    backgroundColor: '#ECFDF5',
+    backgroundColor: '#ECF8EF',
     borderRadius: 10,
     paddingHorizontal: 8,
     paddingVertical: 3,

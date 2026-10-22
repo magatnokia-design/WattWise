@@ -404,7 +404,7 @@ export const DashboardScreen = ({ navigation }) => {
       >
         {/* Header */}
         <View style={styles.header}>
-          <Wordmark style={styles.headerTitle} />
+          <Wordmark height={30} />
           <TouchableOpacity
             style={styles.notificationButton}
             onPress={() => setNotificationVisible(true)}
@@ -791,11 +791,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 20,
-  },
-  headerTitle: {
-    ...FONTS.h2,
-    color: COLORS.textDark,
-    fontWeight: 'bold',
   },
   notificationButton: {
     width: 44,

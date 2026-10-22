@@ -1,38 +1,49 @@
-// Color Constants - Green and White Theme
+// Color Constants - the Dagitab palette: the logo's greens, navy text, white.
+//
+// Copy-rule: the web repo keeps a byte-identical copy at the same path, and its
+// src/styles/theme.css mirrors these as --ww-* custom properties.
+//
+// Taken from the logo (scripts/brand-geometry.js), replacing the WattWise
+// #10B981 on 22 Oct 2026. The logo's two greens do different jobs and are not
+// interchangeable:
+//   #008D43 carries white text (4.29:1) - buttons, active states, links.
+//   #50D52B carries nothing (1.93:1 against white) - gradient start, switch
+//           tracks, chart fills, dots. Never a ground for text, never text.
 export const COLORS = {
-  primary: '#10B981', // Green
-  primaryDark: '#059669',
-  primaryLight: '#34D399',
-  // A deep step of the same green, for type that has to sit ON `primary`.
-  // The splash is a full `primary` field, so the wordmark's green half would
-  // be invisible there; primaryDark is only 1.4:1 against it and fails too.
-  // This clears 3.8:1, which large display type needs.
-  primaryDeep: '#064E3B',
-  
+  primary: '#008D43',
+  // A step darker than primary: pressed states, and green text on a pale tint,
+  // where primary itself drops to 3.9:1.
+  primaryDark: '#007A3A',
+  primaryLight: '#50D52B',
+  // The deepest step, for type that has to sit on a light-green tint and still
+  // read as green. 10:1 on white.
+  primaryDeep: '#00401F',
+
   white: '#FFFFFF',
   background: '#F9FAFB',
-  
-  text: '#111827',
-  textLight: '#6B7280',
-  textDark: '#1F2937',
-  
+
+  // The logo's navy. textLight clears 5.4:1 on both white and `background`.
+  text: '#071B2C',
+  textLight: '#5B6878',
+  textDark: '#1C2E40',
+
   border: '#E5E7EB',
   error: '#EF4444',
-  success: '#10B981',
+  success: '#008D43',
   warning: '#F59E0B',
-  
-  overlay: 'rgba(0, 0, 0, 0.5)',
+
+  overlay: 'rgba(7, 27, 44, 0.5)',
 };
 
 // Series colours for charts, in fixed order - outlet 1 always takes the first
 // slot so a filter or an empty series never repaints the other one.
 //
-// Both are steps of the theme green, keeping the green/white rule. The pair was
-// checked for colour-blind separation (deltaE 18.9 deutan, 19.3 normal) rather
-// than picked by eye; `series[1]` sits under 3:1 against white, so every mark
-// using it carries a visible text label rather than relying on colour alone.
+// The logo's dark and light greens. They differ mostly in lightness (L* 39 vs
+// 76, deltaE76 61 - the WattWise pair was 28), which is the axis colour-blind
+// viewers keep. `series[1]` is under 3:1 against white, so every mark using it
+// still carries a visible text label rather than relying on colour alone.
 export const CHART_COLORS = {
-  series: ['#047857', '#10B981'],
+  series: ['#006B33', '#50D52B'],
   track: '#E5E7EB',
   grid: '#F3F4F6',
 };
