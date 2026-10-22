@@ -94,16 +94,19 @@ jobs:
           echo "index.android.bundle: $SIZE bytes"
           test "$SIZE" -gt 1000000 || { echo "::error::bundle looks too small"; exit 1; }
 
+      # Dagitab-v* from 1.1.33. Releases up to v1.1.32 carry WattWise-v*.apk and
+      # keep it. The web's appRelease.js builds the download URL from this name
+      # for the current version only, so the two change together.
       - name: Name the APK
         run: |
           cp android/app/build/outputs/apk/release/app-release.apk \
-             "WattWise-v${{ inputs.version }}.apk"
-          sha256sum "WattWise-v${{ inputs.version }}.apk"
+             "Dagitab-v${{ inputs.version }}.apk"
+          sha256sum "Dagitab-v${{ inputs.version }}.apk"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: WattWise-v${{ inputs.version }}
-          path: WattWise-v${{ inputs.version }}.apk
+          name: Dagitab-v${{ inputs.version }}
+          path: Dagitab-v${{ inputs.version }}.apk
           retention-days: 30
 
       # Off by default. Publishing is a deliberate act, so it takes a second
@@ -113,6 +116,6 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create "v${{ inputs.version }}" "WattWise-v${{ inputs.version }}.apk" \
-            --title "WattWise v${{ inputs.version }}" \
+          gh release create "v${{ inputs.version }}" "Dagitab-v${{ inputs.version }}.apk" \
+            --title "Dagitab v${{ inputs.version }}" \
             --generate-notes
