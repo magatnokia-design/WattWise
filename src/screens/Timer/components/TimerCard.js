@@ -5,8 +5,8 @@ import {
   StyleSheet,
   TouchableOpacity,
   Switch,
-  useWindowDimensions,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../../../constants/colors';
 import {
   describeTimerState,
@@ -18,17 +18,17 @@ import {
 } from '../utils/scheduleHelpers';
 
 /*
- * The clock arrives from the screen. It used to be a second one kept here.
+ * One timer, as one compact row (Oct 2026: "the box of each timer is too big").
+ * Icon, time, a line saying what it does, a line saying when, then the switch
+ * and delete. The logic is unchanged - only the layout shrank.
  *
- * ScheduleScreen ticks once a second while any timer is active and once a
- * minute otherwise; this card ticked once a second unconditionally. Whenever
- * the two rates differed the card and the NEXT UP banner above it were reading
- * different instants, and every value on this screen is derived from "now" - so
- * they reported different numbers for the same timer and neither was obviously
- * wrong. Two clocks cannot be kept in step; one clock cannot fall out of it.
+ * The clock arrives from the screen (`nowMs`). It used to be a second one kept
+ * here, and two clocks on one screen drift: the card and the banner above it
+ * reported different numbers for the same timer. One clock cannot fall out of
+ * step with itself.
  */
 const TimerCard = ({ item, nowMs, onDelete, onToggle }) => {
-  const { width } = useWindowDimensions();
+  const isCountdown = item?.type === 'countdown';
 
   const liveCountdownText = useMemo(
     () => getLiveCountdownDisplay(item, nowMs),
@@ -42,12 +42,20 @@ const TimerCard = ({ item, nowMs, onDelete, onToggle }) => {
     [item?.scheduledTime, item?.days, nowMs]
   );
 
-  const scheduledLiveText = useMemo(() => {
-    if (item?.type !== 'scheduled') return '';
-    if (!item?.active) return 'Next run paused (timer inactive)';
-    if (!Number.isFinite(nextRunSeconds)) return 'No valid schedule day/time';
-    return `Next run in ${formatDuration(nextRunSeconds)}`;
-  }, [item?.active, item?.type, nextRunSeconds]);
+  // The "when" line. A scheduled timer says its days and when it next runs; a
+  // countdown says how long is left. A paused or finished timer says that
+  // instead, from describeTimerState, rather than a countdown that is not moving.
+  const whenText = useMemo(() => {
+    if (isCountdown) {
+      // "Paused · 00:00:10 left", "Switching now…", "Finished · ran once" -
+      // anything but plain running says what state it is in.
+      return timerState.tone === 'running' ? 'left to run' : timerState.label;
+    }
+    const days = formatDays(item?.days);
+    if (!item?.active) return `${days} · paused`;
+    if (!Number.isFinite(nextRunSeconds)) return `${days} · no valid day or time`;
+    return `${days} · in ${formatDuration(nextRunSeconds)}`;
+  }, [isCountdown, item?.active, item?.days, nextRunSeconds, timerState]);
 
   const handleToggle = useCallback((value) => {
     if (onToggle) onToggle(item.id, value);
@@ -67,134 +75,103 @@ const TimerCard = ({ item, nowMs, onDelete, onToggle }) => {
     onDelete(item.id, description);
   }, [item, onDelete]);
 
+  const turnsOn = item.action === 'ON';
+
   return (
-    <View style={[styles.card, { width: width - 32 }]}>
-      {/* Top Row */}
-      <View style={styles.topRow}>
-        <View style={styles.leftSection}>
-          <View style={[styles.typeBadge, { backgroundColor: item.type === 'countdown' ? COLORS.primary + '20' : COLORS.primaryLight + '20' }]}>
-            <Text style={[styles.typeText, { color: item.type === 'countdown' ? COLORS.primary : COLORS.primaryDark }]}>
-              {item.type === 'countdown' ? '⏱ Countdown' : '🕐 Scheduled'}
-            </Text>
-          </View>
-          {/* One phrase, not two. The card carried "Outlet 1" on the left, a
-              red "Turn OFF" on the right and a green on/off switch above it -
-              three controls that all looked like on and off, and only one of
-              them was. Saying what the timer DOES in a single line leaves the
-              switch as the only thing a tap can change. */}
-          <Text style={styles.outletName}>
-            {formatOutletName(item.outlet)}
-            <Text style={item.action === 'ON' ? styles.actionOn : styles.actionOff}>
-              {item.action === 'ON' ? ' · turns ON' : ' · turns OFF'}
-            </Text>
-          </Text>
-        </View>
-        {/*
-          A spent countdown is the one case where this control does nothing
-          good: switching it back on re-arms a timer with no seconds left, and
-          the backend fires the outlet on its next tick. describeTimerState has
-          always said so through canRun and nothing read it, so the switch sat
-          fully operable under a label reading "Finished".
-        */}
-        <Switch
-          value={item.active || false}
-          onValueChange={handleToggle}
-          disabled={!timerState.canRun}
-          trackColor={{ false: COLORS.border, true: COLORS.primaryLight }}
-          thumbColor={item.active ? COLORS.primary : COLORS.white}
+    <View style={[styles.card, !item.active && styles.cardInactive]}>
+      <View style={[styles.icon, item.active && styles.iconActive]}>
+        <Ionicons
+          name={isCountdown ? 'hourglass-outline' : 'alarm-outline'}
+          size={20}
+          color={item.active ? COLORS.white : COLORS.textLight}
         />
       </View>
 
-      {/* Time Display */}
-      <View style={styles.timeRow}>
-        <Text style={styles.timeDisplay}>
-          {item.type === 'countdown'
-            ? liveCountdownText
-            : item.scheduledTime || '--:--'}
+      <View style={styles.body}>
+        <Text style={styles.time}>
+          {isCountdown ? liveCountdownText : item.scheduledTime || '--:--'}
         </Text>
-        {/* The action now lives in the header line beside the outlet, so
-            this row carries only the time. */}
-        <Text style={styles.timeCaption}>
-          {item.type === 'countdown' ? 'left to run' : 'each week'}
+        {/* What it does, in one phrase - the switch is the only control. */}
+        <Text style={styles.what} numberOfLines={1}>
+          {formatOutletName(item.outlet)}
+          <Text style={turnsOn ? styles.actionOn : styles.actionOff}>
+            {turnsOn ? ' · turns ON' : ' · turns OFF'}
+          </Text>
         </Text>
-      </View>
-
-      {/* Days Row */}
-      {item.type === 'scheduled' && (
-        <View style={styles.daysRow}>
-          <Text style={styles.daysText}>{formatDays(item.days)}</Text>
-          <Text style={styles.nextRunText}>{scheduledLiveText}</Text>
-        </View>
-      )}
-
-      {/* Bottom Row */}
-      <View style={styles.bottomRow}>
-        {/* "Active" was wrong at both ends of a countdown's life: at 00:00:00
-            it still read Active while waiting for the once-a-minute server
-            check, and after firing it read Inactive with a toggle that offered
-            to re-run a timer with zero seconds left. describeTimerState names
-            the state instead. */}
-        <Text style={[styles.statusText, timerState.tone === 'done' && styles.statusDone]}>
-          {timerState.tone === 'done' ? '✓ ' : '● '}{timerState.label}
-        </Text>
-        <TouchableOpacity
-          style={styles.deleteBtn}
-          onPress={handleDelete}
-          activeOpacity={0.7}
+        <Text
+          style={[styles.when, timerState.tone === 'done' && styles.whenDone]}
+          numberOfLines={1}
         >
-          <Text style={styles.deleteText}>🗑 Delete</Text>
-        </TouchableOpacity>
+          {whenText}
+        </Text>
       </View>
+
+      {/*
+        A spent countdown is the one case where this control does nothing
+        good: switching it back on re-arms a timer with no seconds left, and
+        the backend fires the outlet on its next tick. describeTimerState says
+        so through canRun.
+      */}
+      <Switch
+        value={item.active || false}
+        onValueChange={handleToggle}
+        disabled={!timerState.canRun}
+        trackColor={{ false: COLORS.border, true: COLORS.primaryLight }}
+        thumbColor={item.active ? COLORS.primary : COLORS.white}
+      />
+      <TouchableOpacity
+        style={styles.delete}
+        onPress={handleDelete}
+        activeOpacity={0.7}
+        accessibilityRole="button"
+        accessibilityLabel="Delete timer"
+        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+      >
+        <Ionicons name="trash-outline" size={18} color={COLORS.error} />
+      </TouchableOpacity>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
   card: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
     backgroundColor: COLORS.white,
     borderRadius: 14,
-    padding: 16,
-    marginBottom: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    marginBottom: 10,
     borderWidth: 1,
     borderColor: COLORS.border,
-    alignSelf: 'center',
   },
-  topRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  cardInactive: {
+    opacity: 0.75,
+  },
+  icon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: COLORS.background,
     alignItems: 'center',
-    marginBottom: 10,
+    justifyContent: 'center',
   },
-  leftSection: {
+  iconActive: {
+    backgroundColor: COLORS.primary,
+  },
+  body: {
     flex: 1,
   },
-  typeBadge: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 20,
-    marginBottom: 6,
-  },
-  typeText: {
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  outletName: {
-    fontSize: 13,
-    color: COLORS.textLight,
-    fontWeight: '500',
-  },
-  timeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  timeDisplay: {
-    fontSize: 28,
+  time: {
+    fontSize: 20,
     fontWeight: '700',
     color: COLORS.text,
-    letterSpacing: 1,
+  },
+  what: {
+    marginTop: 1,
+    fontSize: 13,
+    color: COLORS.textDark,
   },
   actionOn: {
     fontWeight: '700',
@@ -204,55 +181,16 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: COLORS.error,
   },
-  timeCaption: {
+  when: {
+    marginTop: 2,
     fontSize: 12,
     color: COLORS.textLight,
   },
-  actionLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: COLORS.text,
-  },
-  daysRow: {
-    marginBottom: 10,
-  },
-  daysText: {
-    fontSize: 12,
-    color: COLORS.textLight,
-  },
-  nextRunText: {
-    marginTop: 4,
-    fontSize: 12,
-    color: COLORS.primary,
-    fontWeight: '600',
-  },
-  bottomRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    borderTopWidth: 1,
-    borderTopColor: COLORS.border,
-    paddingTop: 10,
-    marginTop: 4,
-  },
-  statusDone: {
+  whenDone: {
     color: COLORS.primaryDark,
   },
-  statusText: {
-    fontSize: 12,
-    color: COLORS.textLight,
-    fontWeight: '500',
-  },
-  deleteBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-    backgroundColor: '#FEF2F2',
-  },
-  deleteText: {
-    fontSize: 12,
-    color: '#EF4444',
-    fontWeight: '500',
+  delete: {
+    padding: 4,
   },
 });
 

@@ -326,21 +326,6 @@ const OutletsScreen = ({ navigation }) => {
             />
           ))
         )}
-
-        <TouchableOpacity
-          style={styles.scheduleCard}
-          onPress={() => navigation.navigate('Schedule')}
-          activeOpacity={0.8}
-        >
-          <View style={styles.scheduleIcon}>
-            <Ionicons name="alarm-outline" size={22} color={COLORS.primary} />
-          </View>
-          <View style={styles.scheduleCopy}>
-            <Text style={styles.scheduleTitle}>Timers &amp; schedules</Text>
-            <Text style={styles.scheduleSub}>Turn an outlet on or off automatically</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={20} color={COLORS.textLight} />
-        </TouchableOpacity>
       </ScrollView>
 
       <OutletControlModal
@@ -528,37 +513,6 @@ const styles = StyleSheet.create({
   },
   toggleTextOff: {
     color: COLORS.error,
-  },
-  scheduleCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    backgroundColor: COLORS.white,
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  scheduleIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: '#ECF8EF',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  scheduleCopy: {
-    flex: 1,
-  },
-  scheduleTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: COLORS.text,
-  },
-  scheduleSub: {
-    marginTop: 2,
-    fontSize: 13,
-    color: COLORS.textLight,
   },
 });
 

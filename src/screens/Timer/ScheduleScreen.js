@@ -17,12 +17,9 @@ import { useSchedule } from './hooks/useSchedule';
 import { OfflineState } from '../../components/common/OfflineNotice';
 import {
   countdownSecondsRemaining,
-  formatDuration,
-  formatOutletName,
   getNextScheduledRunSeconds,
 } from './utils/scheduleHelpers';
 
-const FILTERS = ['All', 'Outlet 1', 'Outlet 2'];
 
 /**
  * Seconds until a timer fires, or null if it never will.
@@ -54,7 +51,6 @@ const secondsUntilRun = (item, nowMs) => {
 const ScheduleScreen = ({ navigation }) => {
   const [modalVisible, setModalVisible] = useState(false);
   const [dialog, setDialog] = useState(null);
-  const [activeFilter, setActiveFilter] = useState('All');
 
   const {
     schedules,
@@ -117,10 +113,6 @@ const ScheduleScreen = ({ navigation }) => {
     const id = setInterval(() => setNowMs(Date.now()), hasLiveTimer ? 1000 : 60000);
     return () => clearInterval(id);
   }, [hasLiveTimer]);
-
-  const handleFilterPress = useCallback((filter) => {
-    setActiveFilter(filter);
-  }, []);
 
   const handleAddTimer = useCallback(() => {
     setModalVisible(true);
@@ -220,19 +212,9 @@ const ScheduleScreen = ({ navigation }) => {
     }
   }, [toggleSchedule]);
 
-  // Counts sit on the filter chips themselves rather than in separate stat
-  // cards. The old "O1 / O2" tile restated what the chips already say, in a
-  // form that needed decoding.
-  const filterCounts = useMemo(() => ({
-    All: schedules.length,
-    'Outlet 1': schedules.filter((item) => String(item.outlet) === '1').length,
-    'Outlet 2': schedules.filter((item) => String(item.outlet) === '2').length,
-  }), [schedules]);
-
-  const filteredSchedules = useMemo(() => {
-    const base = activeFilter === 'All'
-      ? schedules
-      : schedules.filter((item) => String(item.outlet) === activeFilter.replace('Outlet ', ''));
+  // No outlet filter (removed Oct 2026 - two outlets do not need one).
+  const sortedSchedules = useMemo(() => {
+    const base = schedules;
 
     // Soonest first, paused timers last. A schedule list is read to find out
     // what happens next, so chronological order is the useful order - the
@@ -246,25 +228,6 @@ const ScheduleScreen = ({ navigation }) => {
       if (bNext === null) return -1;
       return aNext - bNext;
     });
-  }, [activeFilter, schedules, nowMs]);
-
-  // The single thing this screen exists to answer.
-  const nextUp = useMemo(() => {
-    let best = null;
-
-    schedules.forEach((item) => {
-      const seconds = secondsUntilRun(item, nowMs);
-      if (seconds === null) return;
-      if (!best || seconds < best.seconds) best = { item, seconds };
-    });
-
-    if (!best) return null;
-
-    return {
-      seconds: best.seconds,
-      outlet: formatOutletName(best.item.outlet),
-      action: String(best.item.action || '').toLowerCase() === 'off' ? 'off' : 'on',
-    };
   }, [schedules, nowMs]);
 
   // One clock for the screen and every card on it. They ran their own intervals
@@ -329,59 +292,17 @@ const ScheduleScreen = ({ navigation }) => {
         <TouchableOpacity
           style={styles.addBtn}
           onPress={handleAddTimer}
-          activeOpacity={0.7}
+          activeOpacity={0.8}
+          accessibilityRole="button"
+          accessibilityLabel="Add timer"
         >
-          <Text style={styles.addBtnText}>+ Add</Text>
+          <Ionicons name="add" size={26} color={COLORS.white} />
         </TouchableOpacity>
-      </View>
-
-      {/* What fires next - the question this screen exists to answer. */}
-      {schedules.length > 0 && (
-        <View style={styles.nextUpCard}>
-          {nextUp ? (
-            <>
-              <Text style={styles.nextUpLabel}>NEXT UP</Text>
-              <Text style={styles.nextUpValue}>
-                {nextUp.outlet} turns {nextUp.action}
-              </Text>
-              {/* "in 00:00:00" is not a waiting message. The card says
-                  "Switching now…" in this window and the banner must not
-                  contradict it with a countdown that has stopped moving. */}
-              <Text style={styles.nextUpTime}>
-                {nextUp.seconds <= 0 ? 'Switching now…' : `in ${formatDuration(nextUp.seconds)}`}
-              </Text>
-            </>
-          ) : (
-            <>
-              <Text style={styles.nextUpLabel}>NEXT UP</Text>
-              <Text style={styles.nextUpValueMuted}>Nothing scheduled</Text>
-              <Text style={styles.nextUpTime}>
-                All timers are paused or have no upcoming run
-              </Text>
-            </>
-          )}
-        </View>
-      )}
-
-      {/* Filter Chips - counts live here rather than in separate stat cards */}
-      <View style={styles.filterRow}>
-        {FILTERS.map(filter => (
-          <TouchableOpacity
-            key={filter}
-            style={[styles.filterChip, activeFilter === filter && styles.filterChipActive]}
-            onPress={() => handleFilterPress(filter)}
-            activeOpacity={0.7}
-          >
-            <Text style={[styles.filterChipText, activeFilter === filter && styles.filterChipTextActive]}>
-              {filter} ({filterCounts[filter] ?? 0})
-            </Text>
-          </TouchableOpacity>
-        ))}
       </View>
 
       {/* Timer List */}
       <FlatList
-        data={filteredSchedules}
+        data={sortedSchedules}
         keyExtractor={(item, index) => item.id || index.toString()}
         renderItem={renderItem}
         ListEmptyComponent={renderEmpty}
@@ -440,77 +361,12 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   addBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: COLORS.primary,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-  },
-  addBtnText: {
-    color: COLORS.white,
-    fontWeight: '600',
-    fontSize: 14,
-  },
-  nextUpCard: {
-    backgroundColor: COLORS.white,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderLeftWidth: 4,
-    borderLeftColor: COLORS.primary,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    marginHorizontal: 16,
-    marginBottom: 16,
-  },
-  nextUpLabel: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: COLORS.textLight,
-    letterSpacing: 1,
-    marginBottom: 5,
-  },
-  nextUpValue: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: COLORS.text,
-  },
-  nextUpValueMuted: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: COLORS.textLight,
-  },
-  nextUpTime: {
-    fontSize: 13,
-    color: COLORS.primary,
-    fontWeight: '600',
-    marginTop: 3,
-  },
-  filterRow: {
-    flexDirection: 'row',
-    paddingHorizontal: 16,
-    marginBottom: 12,
-    gap: 8,
-  },
-  filterChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    backgroundColor: COLORS.white,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  filterChipActive: {
-    backgroundColor: COLORS.primary,
-    borderColor: COLORS.primary,
-  },
-  filterChipText: {
-    fontSize: 12,
-    color: COLORS.textLight,
-    fontWeight: '500',
-  },
-  filterChipTextActive: {
-    color: COLORS.white,
-    fontWeight: '600',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   listContent: {
     paddingHorizontal: 16,

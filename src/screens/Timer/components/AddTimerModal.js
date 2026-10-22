@@ -11,6 +11,9 @@ import {
 import { COLORS } from '../../../constants/colors';
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+// Shown two letters each so all seven fit on one line (Oct 2026). The saved
+// value stays 'Mon', 'Tue'... - checkScheduledTimers on the backend reads it.
+const DAY_LABELS = { Mon: 'Mo', Tue: 'Tu', Wed: 'We', Thu: 'Th', Fri: 'Fr', Sat: 'Sa', Sun: 'Su' };
 const OUTLETS = ['1', '2'];
 const ACTIONS = ['ON', 'OFF'];
 const TIMER_TYPES = ['countdown', 'scheduled'];
@@ -257,9 +260,11 @@ const AddTimerModal = ({ visible, onClose, onSave, saving = false }) => {
                       style={[styles.dayBtn, selectedDays.includes(day) && styles.dayBtnActive]}
                       onPress={() => handleDayToggle(day)}
                       activeOpacity={0.7}
+                      accessibilityLabel={day}
+                      accessibilityState={{ selected: selectedDays.includes(day) }}
                     >
                       <Text style={[styles.dayBtnText, selectedDays.includes(day) && styles.dayBtnTextActive]}>
-                        {day}
+                        {DAY_LABELS[day]}
                       </Text>
                     </TouchableOpacity>
                   ))}
@@ -443,13 +448,14 @@ const styles = StyleSheet.create({
   },
   daysContainer: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
+    justifyContent: 'space-between',
+    gap: 6,
   },
   dayBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    flex: 1,
+    maxWidth: 42,
+    height: 38,
+    borderRadius: 19,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
