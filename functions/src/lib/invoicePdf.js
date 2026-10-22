@@ -353,8 +353,15 @@ const drawFooter = (doc, { invoice }) => {
   doc.font('Helvetica').fontSize(6.8).fillColor(COLORS.muted)
     .text(
       `Distribution and government charges are ERC-approved rates, current as of ${invoice.bill?.rateEffectiveDate || 'the latest posting'}. ` +
-      'Generation and transmission rates change monthly - update them in Settings from the official PELCO III rate posting at pelco3.org/rates.php. ' +
-      'This estimate excludes account-specific adjustments, arrears, and penalties.',
+      // A FINALIZED statement is priced with the official rate the user
+      // entered, so it is not an estimate and has nothing left to update -
+      // the footer used to say both on a page stamped FINAL (Oct 2026).
+      (invoice.status === 'FINALIZED'
+        ? 'Generation is priced at the official PELCO III rate entered for this month. ' +
+          'This statement excludes account-specific adjustments, arrears, and penalties.'
+        : 'Generation and transmission rates change monthly - enter the official rate from your bill in Dagitab ' +
+          '(Settings > Monthly statements) or see pelco3.org/rates.php. ' +
+          'This estimate excludes account-specific adjustments, arrears, and penalties.'),
       MARGIN,
       y + 7,
       { width: CONTENT_WIDTH, lineGap: 1, height: 44 }
