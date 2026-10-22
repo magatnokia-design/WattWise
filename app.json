@@ -3,7 +3,7 @@
     "name": "Dagitab",
     "//": "slug must stay WiseWatt: it is fixed at EAS project creation and cannot be renamed. Changing it orphans the project ID, build history, and Android keystore. Users never see the slug. The package stays com.magat_nokia.WattWise for the same reason - changing it makes Android treat the rebrand as a different app, so testers could not upgrade.",
     "slug": "WiseWatt",
-    "version": "1.1.36",
+    "version": "1.1.37",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -45,7 +45,7 @@
         "backgroundColor": "#008D43"
       },
       "edgeToEdgeEnabled": true,
-      "versionCode": 10136,
+      "versionCode": 10137,
       "package": "com.magat_nokia.WattWise",
       "googleServicesFile": "./google-services.json"
     },
