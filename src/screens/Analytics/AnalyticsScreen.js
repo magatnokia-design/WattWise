@@ -91,14 +91,6 @@ const getTabRange = (tab) => {
 const formatShortDate = (date) => date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 const formatWeekday = (date) => date.toLocaleDateString('en-US', { weekday: 'short' });
 
-const formatPeakHour = (hourValue) => {
-  if (hourValue === null || hourValue === undefined || hourValue === '') return null;
-  const hour = Number(hourValue);
-  if (!Number.isFinite(hour)) return null;
-  const period = hour >= 12 ? 'PM' : 'AM';
-  return `${hour % 12 || 12} ${period}`;
-};
-
 const kwh = (value, digits = 2) => `${toNumber(value).toFixed(digits)} kWh`;
 
 /** Today's split between the two outlets, for the Daily view. */
@@ -122,20 +114,13 @@ const OutletSplit = ({ outlet1, outlet2 }) => {
                 />
               ) : null}
             </View>
-            <Text style={styles.splitValue}>{kwh(value, 3)}</Text>
+            <Text style={styles.splitValue}>{kwh(value)}</Text>
           </View>
         );
       })}
     </View>
   );
 };
-
-const Stat = ({ label, value }) => (
-  <View style={styles.stat}>
-    <Text style={styles.statValue} numberOfLines={1}>{value}</Text>
-    <Text style={styles.statLabel} numberOfLines={1}>{label}</Text>
-  </View>
-);
 
 export const AnalyticsScreen = ({ navigation }) => {
   const { user, loading: authLoading } = useAuth();
@@ -307,7 +292,6 @@ export const AnalyticsScreen = ({ navigation }) => {
         periodLabel: `Today · ${formatShortDate(entryDate)}`,
         outlet1: toNumber(dailyEntry?.outlet1Energy),
         outlet2: toNumber(dailyEntry?.outlet2Energy),
-        peakHour: formatPeakHour(dailyEntry?.peakHour),
         note: lastMeasuredLabel ? `Nothing measured yet today. Last usage: ${lastMeasuredLabel}.` : '',
         bars: null,
         bill,
@@ -339,7 +323,6 @@ export const AnalyticsScreen = ({ navigation }) => {
     });
 
     const totalEnergy = bars.reduce((sum, bar) => sum + bar.total, 0);
-    const peak = bars.reduce((best, bar) => (bar.total > (best?.total || 0) ? bar : best), null);
 
     // Monthly is the only tab that is a billing period, so it is the only one
     // that carries the period flats and reports a true effective rate.
@@ -362,8 +345,6 @@ export const AnalyticsScreen = ({ navigation }) => {
       periodLabel: days.length === 1
         ? formatShortDate(startDate)
         : `${formatShortDate(startDate)} – ${formatShortDate(endDate)} · ${days.length} days`,
-      average: days.length ? totalEnergy / days.length : 0,
-      peak,
       note: '',
       bars,
       bill,
@@ -382,7 +363,6 @@ export const AnalyticsScreen = ({ navigation }) => {
         <View style={styles.header}>
           <View style={styles.headerText}>
             <Text style={styles.title}>Analytics</Text>
-            <Text style={styles.subtitle}>Priced on the PELCO III residential tariff</Text>
           </View>
           {/* Moved here from Home when it was removed (Oct 2026). */}
           <TouchableOpacity
@@ -463,21 +443,13 @@ export const AnalyticsScreen = ({ navigation }) => {
             </View>
           </View>
           {!offline ? <Text style={styles.period}>{analytics.periodLabel}</Text> : null}
+          {/* Fewer figures (Oct 2026: "too tight"). The daily average, peak day
+              and rate chips were removed; tapping a bar reads any day, and
+              the rate is inside the bill breakdown. */}
           {analytics.note && !offline ? <Text style={styles.note}>{analytics.note}</Text> : null}
 
           {!offline && analytics.bars ? (
             <>
-              <View style={styles.stats}>
-                <Stat label="Daily average" value={kwh(analytics.average)} />
-                <Stat
-                  label={analytics.peak ? `Peak · ${analytics.peak.label.split(', ')[1]}` : 'Peak day'}
-                  value={analytics.peak ? kwh(analytics.peak.total) : '—'}
-                />
-                <Stat
-                  label={isMonthly ? 'Effective rate' : 'Per extra kWh'}
-                  value={`₱${toNumber(analytics.bill.effectiveRate).toFixed(2)}`}
-                />
-              </View>
               <View style={styles.chart}>
                 <UsageBarChart bars={analytics.bars} />
               </View>
@@ -487,9 +459,6 @@ export const AnalyticsScreen = ({ navigation }) => {
           {!offline && !analytics.bars ? (
             <>
               <OutletSplit outlet1={analytics.outlet1} outlet2={analytics.outlet2} />
-              {analytics.peakHour ? (
-                <Text style={styles.peakHour}>Busiest hour so far: {analytics.peakHour}</Text>
-              ) : null}
             </>
           ) : null}
         </View>
@@ -536,11 +505,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: COLORS.text,
   },
-  subtitle: {
-    fontSize: 12,
-    color: COLORS.textLight,
-    marginTop: 2,
-  },
   compareButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -585,10 +549,10 @@ const styles = StyleSheet.create({
   },
   usageCard: {
     backgroundColor: COLORS.white,
-    borderRadius: 14,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: COLORS.border,
-    padding: 14,
+    padding: 18,
     marginHorizontal: 16,
     marginBottom: 12,
   },
@@ -638,30 +602,8 @@ const styles = StyleSheet.create({
     color: COLORS.textLight,
     marginTop: 6,
   },
-  stats: {
-    flexDirection: 'row',
-    gap: 8,
-    marginTop: 12,
-  },
-  stat: {
-    flex: 1,
-    backgroundColor: COLORS.background,
-    borderRadius: 10,
-    paddingVertical: 8,
-    paddingHorizontal: 8,
-  },
-  statValue: {
-    fontSize: 13.5,
-    fontWeight: '700',
-    color: COLORS.text,
-  },
-  statLabel: {
-    fontSize: 10.5,
-    color: COLORS.textLight,
-    marginTop: 1,
-  },
   chart: {
-    marginTop: 14,
+    marginTop: 20,
   },
   split: {
     marginTop: 12,
@@ -700,11 +642,6 @@ const styles = StyleSheet.create({
     fontSize: 12.5,
     fontWeight: '700',
     color: COLORS.text,
-  },
-  peakHour: {
-    fontSize: 12,
-    color: COLORS.textLight,
-    marginTop: 10,
   },
 });
 

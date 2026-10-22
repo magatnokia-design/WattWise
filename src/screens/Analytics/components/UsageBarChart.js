@@ -2,15 +2,15 @@
 // Monthly views (Oct 2026, replacing a bar per value with a number printed over
 // every bar).
 //
-// Tap a bar to read it: the line above the chart names the day and its split,
-// so no bar needs a label of its own. A dashed line marks the period's daily
+// Tap a bar to read it: the line above the chart names the day and its total,
+// so no bar needs a label of its own and the chart needs no number scale
+// (both removed Oct 2026 - "too tight"). A dashed line marks the period's daily
 // average. With no selection the line reads the latest day (today).
 import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { COLORS, CHART_COLORS } from '../../../constants/colors';
 
 const CHART_HEIGHT = 132;
-const AXIS_WIDTH = 34;
 
 // A round ceiling for the axis: 1, 2 or 5 times a power of ten.
 export const niceCeiling = (value) => {
@@ -47,17 +47,8 @@ const UsageBarChart = ({ bars = [] }) => {
         <Text style={styles.readoutDay}>{activeBar.label}</Text>
         <Text style={styles.readoutValue}>{kwh(totals[active])}</Text>
       </View>
-      <Text style={styles.readoutSplit}>
-        Outlet 1 {Number(activeBar.o1 || 0).toFixed(2)} · Outlet 2 {Number(activeBar.o2 || 0).toFixed(2)} kWh
-      </Text>
 
       <View style={styles.plot}>
-        <View style={styles.axis}>
-          <Text style={styles.axisLabel}>{max >= 1 ? max.toFixed(0) : max.toFixed(2)}</Text>
-          <Text style={styles.axisLabel}>{(max / 2) >= 1 ? (max / 2).toFixed(1) : (max / 2).toFixed(2)}</Text>
-          <Text style={styles.axisLabel}>0</Text>
-        </View>
-
         <View style={styles.area}>
           {[0, 0.5, 1].map((fraction) => (
             <View key={fraction} style={[styles.gridLine, { bottom: fraction * CHART_HEIGHT }]} />
@@ -102,7 +93,7 @@ const UsageBarChart = ({ bars = [] }) => {
         </View>
       </View>
 
-      <View style={[styles.labels, { marginLeft: AXIS_WIDTH }]}>
+      <View style={styles.labels}>
         {bars.map((bar, index) => (
           // A fixed-width label centred on a slot that may be narrower than it
           // (31 days on a phone), so "25" is never clipped to "2".
@@ -127,7 +118,7 @@ const UsageBarChart = ({ bars = [] }) => {
         </View>
         <View style={styles.legendItem}>
           <View style={styles.legendDash} />
-          <Text style={styles.legendText}>Daily average {kwh(average)}</Text>
+          <Text style={styles.legendText}>Average</Text>
         </View>
       </View>
     </View>
@@ -139,6 +130,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'baseline',
+    marginBottom: 12,
   },
   readoutDay: {
     fontSize: 13,
@@ -150,26 +142,9 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: COLORS.primary,
   },
-  readoutSplit: {
-    fontSize: 11.5,
-    color: COLORS.textLight,
-    marginTop: 1,
-    marginBottom: 10,
-  },
   plot: {
     flexDirection: 'row',
     height: CHART_HEIGHT,
-  },
-  axis: {
-    width: AXIS_WIDTH,
-    justifyContent: 'space-between',
-    paddingRight: 6,
-    marginVertical: -6,
-  },
-  axisLabel: {
-    fontSize: 9.5,
-    color: COLORS.textLight,
-    textAlign: 'right',
   },
   area: {
     flex: 1,

@@ -16,6 +16,8 @@ const GROUPS = [
 ];
 
 const BillBreakdown = ({ bill, rateLabel, rate }) => {
+  // Folded to one row until tapped (Oct 2026: "a lot going on").
+  const [expanded, setExpanded] = useState(false);
   const [open, setOpen] = useState(null);
   if (!bill?.totals) return null;
 
@@ -31,11 +33,20 @@ const BillBreakdown = ({ bill, rateLabel, rate }) => {
 
   return (
     <View style={styles.card}>
-      <View style={styles.head}>
+      <TouchableOpacity
+        style={styles.head}
+        onPress={() => setExpanded((value) => !value)}
+        activeOpacity={0.7}
+        accessibilityRole="button"
+        accessibilityState={{ expanded }}
+      >
         <Text style={styles.title}>Bill breakdown</Text>
         <Text style={styles.total}>{formatCurrency(total)}</Text>
-      </View>
+        <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={18} color={COLORS.textLight} />
+      </TouchableOpacity>
 
+      {expanded ? (
+      <>
       {positive > 0 ? (
         <View style={styles.stack}>
           {groups.filter((group) => group.amount > 0).map((group) => (
@@ -79,8 +90,10 @@ const BillBreakdown = ({ bill, rateLabel, rate }) => {
 
       <View style={styles.rate}>
         <Text style={styles.rateLabel}>{rateLabel}</Text>
-        <Text style={styles.rateValue}>₱{Number(rate || 0).toFixed(4)} / kWh</Text>
+        <Text style={styles.rateValue}>₱{Number(rate || 0).toFixed(2)} / kWh</Text>
       </View>
+      </>
+      ) : null}
     </View>
   );
 };
@@ -88,20 +101,20 @@ const BillBreakdown = ({ bill, rateLabel, rate }) => {
 const styles = StyleSheet.create({
   card: {
     backgroundColor: COLORS.white,
-    borderRadius: 14,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: COLORS.border,
-    padding: 14,
+    padding: 18,
     marginHorizontal: 16,
     marginBottom: 12,
   },
   head: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 10,
+    gap: 8,
   },
   title: {
+    flex: 1,
     fontSize: 15,
     fontWeight: '700',
     color: COLORS.text,
@@ -112,6 +125,7 @@ const styles = StyleSheet.create({
     color: COLORS.primary,
   },
   stack: {
+    marginTop: 14,
     flexDirection: 'row',
     height: 8,
     borderRadius: 4,

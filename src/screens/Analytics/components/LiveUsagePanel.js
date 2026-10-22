@@ -86,10 +86,10 @@ const LiveUsagePanel = ({ appliances = [], totalPowerW = 0, costPerHour = 0, isS
 const styles = StyleSheet.create({
   card: {
     backgroundColor: COLORS.white,
-    borderRadius: 14,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: COLORS.border,
-    padding: 14,
+    padding: 18,
     marginHorizontal: 16,
     marginBottom: 12,
   },
@@ -140,7 +140,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'baseline',
     gap: 10,
-    marginTop: 6,
+    marginTop: 10,
     marginBottom: 4,
   },
   totalValue: {
@@ -157,7 +157,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginTop: 8,
+    marginTop: 12,
   },
   swatch: {
     width: 8,
