@@ -110,3 +110,17 @@ for (const { name, handler, event } of CASES) {
     assert.deepEqual(errors, [], `${name} needs a second argument v2 never passes`);
   });
 }
+
+test('handleDailyReceiptEmails sends nothing for a seeded row', async () => {
+  // A *new* row - the path that does notify. Seeded test data must stop before
+  // it: back-filling three months would otherwise send ~90 daily summaries.
+  // Reaching the notification write here throws (no Firestore in tests) and is
+  // logged, so an empty error list is the proof that it returned first.
+  const event = v2Event({
+    params: { userId: 'user-1', date: '2026-08-01' },
+    after: { date: '2026-08-01', totalEnergy: 0.5, cost: 6.1, seeded: true },
+  });
+
+  const errors = await withCapturedErrors(() => handleDailyReceiptEmails(event));
+  assert.deepEqual(errors, [], 'a seeded row reached the notification and email path');
+});

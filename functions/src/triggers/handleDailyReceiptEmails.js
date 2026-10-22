@@ -41,6 +41,14 @@ async function handleDailyReceiptEmails(event) {
       return null;
     }
 
+    // Rows written in bulk for testing (scripts/seed-sample-usage.js) carry
+    // `seeded: true`. Without this, back-filling three months for one account
+    // sends that person ~90 "daily summary" notifications, emails and pushes
+    // within a minute - and burns Brevo's 300/day quota for everyone else.
+    if (after.seeded === true) {
+      return null;
+    }
+
     const totalEnergy = toNumber(after.totalEnergy);
     const cost = toNumber(after.cost);
     const outlet1Energy = toNumber(after.outlet1Energy);
