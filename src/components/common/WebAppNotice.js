@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Linking } from 'react-native'
 import { COLORS } from '../../constants/colors';
 
 /**
- * Points at the WattWise web client for work that is genuinely easier on a
+ * Points at the Dagitab web client for work that is genuinely easier on a
  * bigger screen - wide charts, and typing rate figures off a paper bill.
  *
  * Deliberately informational rather than a warning: it is styled in the theme
@@ -32,13 +32,13 @@ export const WebAppNotice = ({ title, body, url, onDismiss, style }) => {
         onPress={handlePress}
         activeOpacity={0.7}
         accessibilityRole="link"
-        accessibilityLabel={`${title}. Opens wattwise.site in your browser.`}
+        accessibilityLabel={`${title}. Opens dagitab.site in your browser.`}
       >
         <Text style={styles.icon}>💻</Text>
         <View style={styles.textWrap}>
           <Text style={styles.title}>{title}</Text>
           <Text style={styles.body}>{body}</Text>
-          <Text style={styles.link}>Open wattwise.site →</Text>
+          <Text style={styles.link}>Open dagitab.site →</Text>
         </View>
       </TouchableOpacity>
 

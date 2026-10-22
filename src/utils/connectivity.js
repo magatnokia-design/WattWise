@@ -119,7 +119,7 @@ export const isFailedRead = (result) =>
  * `getAllOutlets` reads two documents and used to report `success: true`
  * whatever came back, mapping failures to null. Offline that is a confident
  * claim that the account has no outlets, which the Dashboard draws as "Link
- * your WattWise unit" and Settings as "Not linked".
+ * your Dagitab unit" and Settings as "Not linked".
  */
 export const bothReadsFailed = (first, second) =>
   isFailedRead(first) && isFailedRead(second);
@@ -168,7 +168,7 @@ export const isUnconfirmedEmpty = (count, meta) =>
  * behind. On a cold start that first snapshot is empty and marked `fromCache`,
  * which looks exactly like being offline.
  *
- * Reporting it straight away would flash "Can't reach WattWise" on History and
+ * Reporting it straight away would flash "Can't reach Dagitab" on History and
  * Schedule at every launch. Waiting forever would leave a genuinely offline
  * screen spinning, which is the bug this whole file exists to prevent. So the
  * empty snapshot is held, and only becomes an unreachable read if the server

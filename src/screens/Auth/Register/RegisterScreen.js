@@ -127,7 +127,7 @@ const handleRegister = async () => {
         icon: '⚠️',
         tone: 'warning',
         title: 'Account created, setup incomplete',
-        message: 'Your account exists and you are signed in, but some of its data could not be prepared. Sign out and back in first; if it persists, contact support@wattwise.site.',
+        message: 'Your account exists and you are signed in, but some of its data could not be prepared. Sign out and back in first; if it persists, contact support@dagitab.site.',
       });
     }
 
@@ -166,7 +166,7 @@ const handleRegister = async () => {
         icon: '📡',
         tone: 'warning',
         title: 'No connection',
-        message: 'WattWise could not reach the server. Check your internet connection — and any VPN or firewall — then try again. No account was created.',
+        message: 'Dagitab could not reach the server. Check your internet connection — and any VPN or firewall — then try again. No account was created.',
       });
     } else {
       setDialog({

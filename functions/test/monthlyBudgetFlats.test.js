@@ -42,7 +42,7 @@ const runBudget = async (dailyRows) => {
 test('a month with nothing measured spends nothing', async () => {
   // A brand-new account with no Hub linked used to report "spent P5.60" - the
   // P5.00 metering flat plus its VAT - before it had measured a single watt,
-  // which Compare Months then labelled "measured by WattWise".
+  // which Compare Months then labelled "measured by Dagitab".
   const budget = await runBudget([]);
 
   assert.equal(budget.currentSpending, 0);

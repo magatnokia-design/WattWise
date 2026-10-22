@@ -41,7 +41,7 @@ const chunkTokens = (tokens, size = MAX_MESSAGES_PER_REQUEST) => {
 
 const buildMessage = ({ token, title, body, data }) => ({
   to: token,
-  title: String(title || 'WattWise'),
+  title: String(title || 'Dagitab'),
   body: String(body || ''),
   sound: 'default',
   // Safety cutoffs and budget breaches are time-sensitive, so they should wake

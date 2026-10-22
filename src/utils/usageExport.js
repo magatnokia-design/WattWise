@@ -179,10 +179,10 @@ export const writeUsageXlsx = (rows = [], type = 'base64') =>
   XLSX.write(buildUsageWorkbook(rows), { bookType: 'xlsx', type });
 
 /**
- * `wattwise-usage-2026-08-01-to-2026-08-16.xlsx`
+ * `dagitab-usage-2026-08-01-to-2026-08-16.xlsx`
  *
  * The range is in the name because these get exported repeatedly and end up in
- * the same folder. "wattwise-usage (3).xlsx" tells you nothing about which one
+ * the same folder. "dagitab-usage (3).xlsx" tells you nothing about which one
  * covers which weeks.
  */
 export const buildUsageFilename = (rows = []) => {
@@ -191,14 +191,14 @@ export const buildUsageFilename = (rows = []) => {
     .filter(Boolean)
     .sort();
 
-  if (dates.length === 0) return 'wattwise-usage.xlsx';
+  if (dates.length === 0) return 'dagitab-usage.xlsx';
 
   const first = dates[0];
   const last = dates[dates.length - 1];
 
   return first === last
-    ? `wattwise-usage-${first}.xlsx`
-    : `wattwise-usage-${first}-to-${last}.xlsx`;
+    ? `dagitab-usage-${first}.xlsx`
+    : `dagitab-usage-${first}-to-${last}.xlsx`;
 };
 
 /** The MIME type both clients hand to the OS. */

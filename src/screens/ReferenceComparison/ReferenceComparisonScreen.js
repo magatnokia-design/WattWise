@@ -115,7 +115,7 @@ const ReferenceComparisonScreen = ({ navigation }) => {
         }
       >
         <Text style={styles.intro}>
-          Pick one month. Everything below is about that month - what WattWise measured,
+          Pick one month. Everything below is about that month - what Dagitab measured,
           how that compares with the month before, and how it lines up with the PELCO III
           bill covering the same electricity.
         </Text>
@@ -149,7 +149,7 @@ const ReferenceComparisonScreen = ({ navigation }) => {
         />
 
         <View style={styles.body}>
-          <Text style={styles.sectionTitle}>What WattWise measured in {label}</Text>
+          <Text style={styles.sectionTitle}>What Dagitab measured in {label}</Text>
 
           {hasUsage ? (
             <>
@@ -370,7 +370,7 @@ const ReferenceComparisonScreen = ({ navigation }) => {
               <Ionicons name="calendar-outline" size={64} color={COLORS.border} />
               <Text style={styles.emptyTitle}>Nothing recorded for {label}</Text>
               <Text style={styles.emptyText}>
-                WattWise builds a monthly total from daily usage, which is recorded
+                Dagitab builds a monthly total from daily usage, which is recorded
                 once your outlets have been reporting for a full day. You can still
                 file that month&apos;s PELCO III bill below.
               </Text>
@@ -403,19 +403,19 @@ const ReferenceComparisonScreen = ({ navigation }) => {
               </View>
               <View style={styles.accuracyDivider} />
               {/* The scope gap, stated plainly and not graded. The bill covers
-                  the apartment and WattWise covers two outlets, so this is
+                  the apartment and Dagitab covers two outlets, so this is
                   always large and always expected - colouring it as a failure
                   put a permanent warning on a card whose own paragraph
                   explained the gap was normal. */}
               <View style={styles.accuracyRow}>
-                <Text style={styles.accuracyLabel}>Not measured by WattWise</Text>
+                <Text style={styles.accuracyLabel}>Not measured by Dagitab</Text>
                 <Text style={styles.accuracyValue}>
                   {formatPeso(accuracy.absolute)} {accuracy.direction}
                   {' '}({accuracy.absolutePercent.toFixed(1)}%)
                 </Text>
               </View>
               {/* The check that can actually fail: the bill's own kWh priced
-                  with WattWise's tariff, against what the bill charged. */}
+                  with Dagitab's tariff, against what the bill charged. */}
               {accuracy.modelCheck ? (
                 <View style={styles.accuracyRow}>
                   <Text style={styles.accuracyLabel}>
@@ -442,7 +442,7 @@ const ReferenceComparisonScreen = ({ navigation }) => {
               </TouchableOpacity>
             </View>
           ) : accuracy ? (
-            // A bill on file for a month WattWise did not measure. Showing it
+            // A bill on file for a month Dagitab did not measure. Showing it
             // against an estimate of zero would read as a 100% error rather
             // than as an absence of data, so the estimate line says so instead.
             <View style={styles.accuracyCard}>
@@ -451,11 +451,11 @@ const ReferenceComparisonScreen = ({ navigation }) => {
                 <Text style={styles.accuracyValue}>{formatPeso(accuracy.actualCost)}</Text>
               </View>
               <View style={styles.accuracyRow}>
-                <Text style={styles.accuracyLabel}>WattWise measured</Text>
+                <Text style={styles.accuracyLabel}>Dagitab measured</Text>
                 <Text style={styles.accuracyValue}>Nothing yet</Text>
               </View>
               <Text style={styles.accuracyNote}>
-                Your {label} bill is saved. WattWise has no recorded usage for that
+                Your {label} bill is saved. Dagitab has no recorded usage for that
                 month, so there is nothing to grade it against yet - the check
                 appears once your outlets have reported for a full day of {label}.
               </Text>
@@ -478,7 +478,7 @@ const ReferenceComparisonScreen = ({ navigation }) => {
                 <Text style={styles.addBillTitle}>Add your {label} bill</Text>
                 <Text style={styles.addBillSub}>
                   Enter the total from your paper PELCO III bill to see how close
-                  WattWise&apos;s estimate came.
+                  Dagitab&apos;s estimate came.
                 </Text>
               </View>
               <Ionicons name="chevron-forward" size={18} color={COLORS.textLight} />
@@ -738,7 +738,7 @@ const styles = StyleSheet.create({
   },
   // space-between alone does not stop a row from overflowing: without flex on
   // either child both Texts size to their content, and once they no longer fit
-  // they simply butt together - "Not measured by WattWise" ran straight into
+  // they simply butt together - "Not measured by Dagitab" ran straight into
   // "P1172.83 under (99.1%)" with no gap at all. The short currency rows fit, so
   // the card looked correct until a long value appeared. The label is the part
   // that may wrap; the value stays on one line and keeps its right edge.

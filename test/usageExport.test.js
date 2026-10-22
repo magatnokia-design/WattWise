@@ -179,7 +179,7 @@ test('an empty export is a header and nothing else, and still opens', () => {
 
   assert.equal(sheet.A1.v, 'Date');
   assert.equal(sheet.A2, undefined);
-  assert.equal(buildUsageFilename([]), 'wattwise-usage.xlsx');
+  assert.equal(buildUsageFilename([]), 'dagitab-usage.xlsx');
   assert.equal(describeUsageRows([]), 'Nothing to export yet');
 });
 
@@ -213,12 +213,12 @@ test('there is no totals row, because summing the cost column is not the bill', 
 test('the filename carries the range it covers', () => {
   assert.equal(
     buildUsageFilename([row({ date: '2026-08-14' }), row({ date: '2026-08-16' })]),
-    'wattwise-usage-2026-08-14-to-2026-08-16.xlsx'
+    'dagitab-usage-2026-08-14-to-2026-08-16.xlsx'
   );
 
   assert.equal(
     buildUsageFilename([row({ date: '2026-08-16' })]),
-    'wattwise-usage-2026-08-16.xlsx'
+    'dagitab-usage-2026-08-16.xlsx'
   );
 });
 

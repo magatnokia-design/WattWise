@@ -117,7 +117,7 @@ export const summarizeDailyEntries = (entries, { supplyRates = null, profileId =
 
   const latest = rows[rows.length - 1] || {};
 
-  // A month WattWise measured nothing in owes it nothing measured. This figure
+  // A month Dagitab measured nothing in owes it nothing measured. This figure
   // is labelled as measured usage, so an empty month reads P0.00 rather than
   // the bare metering flat.
   const estimatedCost = calculatePelcoIIIBill(totals.kWh, {
@@ -239,7 +239,7 @@ export const describeCostBasis = (costBasis, monthLabel) => {
 
 /** How to name the row that carries the month's own cost. */
 export const labelCostBasis = (costBasis) =>
-  (costBasis === 'final' ? 'WattWise measured (final)' : 'WattWise estimated');
+  (costBasis === 'final' ? 'Dagitab measured (final)' : 'Dagitab estimated');
 
 /**
  * Signed change from `previous` to `current`.
@@ -291,7 +291,7 @@ export const compareMonths = (totalsA, totalsB) => {
  *
  * The baseline used to be a second month the user picked. That put two
  * unrelated questions behind one screen with no way to tell them apart: "am I
- * using more than last month" (needs two measured months) and "is WattWise's
+ * using more than last month" (needs two measured months) and "is Dagitab's
  * bill estimate right" (needs one month and a paper bill). Only the first
  * dropdown ever fed the bill card, so choosing a month in the second one
  * changed a comparison the user could not see the boundary of - the reasonable
@@ -399,7 +399,7 @@ export const buildTrend = (comparison, monthLabel, previousLabel, days = {}) => 
 };
 
 /**
- * How close WattWise's estimate came to the real PELCO III bill.
+ * How close Dagitab's estimate came to the real PELCO III bill.
  *
  * This is the only check in the app that grades the billing model against
  * reality rather than against another app-computed figure.
@@ -418,7 +418,7 @@ export const compareToActualBill = (totals, actualBill, options = {}) => {
   // calculatePelcoIIIBill, against the pesos the bill actually charged.
   //
   // The 5% band used to be applied to the comparison above, which grades pesos
-  // measured over different energy - the bill covers a whole apartment, WattWise
+  // measured over different energy - the bill covers a whole apartment, Dagitab
   // covers two outlets. That can never pass. The owner's card read
   // "-P1173.85 (99.2%) - Outside the expected 5% band" directly above a
   // paragraph explaining the gap is expected, and it would have read that way
@@ -484,8 +484,8 @@ export const compareToActualBill = (totals, actualBill, options = {}) => {
 /**
  * Why the estimate and the paper bill differ, in one sentence for the user.
  *
- * The 5% band assumes WattWise measures everything the bill covers. It does
- * not: the bill is for the whole apartment, WattWise is two outlets. So a large
+ * The 5% band assumes Dagitab measures everything the bill covers. It does
+ * not: the bill is for the whole apartment, Dagitab is two outlets. So a large
  * *under* reading is the expected result and says nothing about the billing
  * model - telling that user to check their generation rate sends them after a
  * fault that is not there. A large *over* reading is the one scope cannot
@@ -504,7 +504,7 @@ export const explainAccuracy = (accuracy, monthLabel) => {
   // reason worth acting on. The scope gap below is expected and permanent.
   if (accuracy.modelCheck && !accuracy.modelCheck.isClose) {
     return `Priced against the ${monthLabel} bill's own `
-      + `${accuracy.modelCheck.billedKWh.toFixed(0)} kWh, WattWise's rates come to `
+      + `${accuracy.modelCheck.billedKWh.toFixed(0)} kWh, Dagitab's rates come to `
       + `₱${accuracy.modelCheck.modelledCost.toFixed(2)} against ₱${accuracy.actualCost.toFixed(2)} `
       + `charged - ${accuracy.modelCheck.absolutePercent.toFixed(1)}% ${accuracy.modelCheck.direction}. `
       + 'Check that your generation rate in Settings matches that month\'s bill.';
@@ -512,20 +512,20 @@ export const explainAccuracy = (accuracy, monthLabel) => {
 
   if (accuracy.modelCheck) {
     return `Priced against the ${monthLabel} bill's own `
-      + `${accuracy.modelCheck.billedKWh.toFixed(0)} kWh, WattWise's rates land within `
+      + `${accuracy.modelCheck.billedKWh.toFixed(0)} kWh, Dagitab's rates land within `
       + `${accuracy.modelCheck.absolutePercent.toFixed(1)}% of what you were charged. `
       + 'It measured less than the bill because the bill covers the whole apartment '
-      + 'and WattWise covers outlet 1 and outlet 2.';
+      + 'and Dagitab covers outlet 1 and outlet 2.';
   }
 
   if (accuracy.direction === 'under') {
-    return `WattWise read ${percent}% under the ${monthLabel} bill. That is expected `
+    return `Dagitab read ${percent}% under the ${monthLabel} bill. That is expected `
       + 'unless everything you own runs through these two outlets - the bill covers the '
-      + 'whole apartment, WattWise covers outlet 1 and outlet 2. This gap is a difference '
+      + 'whole apartment, Dagitab covers outlet 1 and outlet 2. This gap is a difference '
       + 'in what is being measured, not an error in the estimate.';
   }
 
-  return `WattWise read ${percent}% over the ${monthLabel} bill. Two outlets cannot cost `
+  return `Dagitab read ${percent}% over the ${monthLabel} bill. Two outlets cannot cost `
     + 'more than the whole apartment they are in, so check that your generation rate in '
     + "Settings matches that month's bill.";
 };

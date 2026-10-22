@@ -126,7 +126,7 @@ export const outletService = {
       // This used to return `success: true` unconditionally, mapping any failed
       // read to `null` and losing the reason. Offline that produced a confident
       // "both outlets read fine, and there are none" - which the Dashboard drew
-      // as "Link your WattWise unit" and Settings as "Not linked", to users
+      // as "Link your Dagitab unit" and Settings as "Not linked", to users
       // whose Hub was linked. A missing document is still a real answer; a read
       // that could not be performed is not.
       if (bothReadsFailed(outlet1, outlet2)) {

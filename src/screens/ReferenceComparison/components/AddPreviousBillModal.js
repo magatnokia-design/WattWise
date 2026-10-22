@@ -126,12 +126,12 @@ const AddPreviousBillModal = ({ visible, selectedMonth, previousData, onClose, o
             {/* The month this is filed under is the month the electricity was
                 USED, not the month the paper arrived. Those differ by one, and
                 the old copy - "your paper bill for this month" - did not say
-                which it meant. Filing a bill a month late compares WattWise's
+                which it meant. Filing a bill a month late compares Dagitab's
                 August against PELCO's July and quietly reports the gap as
                 error. */}
             <Text style={styles.description}>
               Enter the totals printed on your bill for the electricity used in{' '}
-              <Text style={styles.descriptionStrong}>{getBillMonthLabel()}</Text>, so WattWise can
+              <Text style={styles.descriptionStrong}>{getBillMonthLabel()}</Text>, so Dagitab can
               check its estimate against the real thing.
             </Text>
 
@@ -220,7 +220,7 @@ const AddPreviousBillModal = ({ visible, selectedMonth, previousData, onClose, o
             <View style={styles.infoBox}>
               <Ionicons name="information-circle" size={16} color={COLORS.primary} />
               <Text style={styles.infoText}>
-                WattWise measures two outlets, so its total will be far below the bill. The check
+                Dagitab measures two outlets, so its total will be far below the bill. The check
                 that matters is whether its rates price the bill&apos;s own kWh correctly.
               </Text>
             </View>

@@ -20,14 +20,14 @@ const slides = [
   {
     id: '1',
     emoji: '⚡',
-    title: 'Welcome to WattWise',
+    title: 'Welcome to Dagitab',
     description: 'Your smart energy monitoring system for your apartment room. Monitor, control, and save energy efficiently.',
   },
   {
     id: '2',
     emoji: '🔌',
     title: 'Monitor Your Outlets',
-    description: 'WattWise supports 2 smart outlets. Track real-time energy usage, voltage, current, and cost per appliance.',
+    description: 'Dagitab supports 2 smart outlets. Track real-time energy usage, voltage, current, and cost per appliance.',
   },
   {
     id: '3',
@@ -46,7 +46,7 @@ const slides = [
     id: '4',
     emoji: '❌',
     title: 'Unsupported Appliances',
-    description: 'WattWise does NOT support high-voltage appliances:\n\n❌ Air Conditioner\n❌ Washing Machine\n❌ Dryer\n❌ Electric Stove\n❌ Water Heater\n❌ Refrigerator',
+    description: 'Dagitab does NOT support high-voltage appliances:\n\n❌ Air Conditioner\n❌ Washing Machine\n❌ Dryer\n❌ Electric Stove\n❌ Water Heater\n❌ Refrigerator',
   },
   {
     id: '5',
@@ -64,7 +64,7 @@ const slides = [
     id: '7',
     emoji: '🛡️',
     title: 'Power Safety Management',
-    description: 'WattWise protects your devices with 3 safety stages:\n\n⚠️ Warning Stage\n🔶 Limit Stage\n🔴 Cut-off Stage\n\nPrevents overload and unsafe power usage.',
+    description: 'Dagitab protects your devices with 3 safety stages:\n\n⚠️ Warning Stage\n🔶 Limit Stage\n🔴 Cut-off Stage\n\nPrevents overload and unsafe power usage.',
   },
   {
     id: '8',
@@ -76,7 +76,7 @@ const slides = [
     id: '9',
     emoji: '🧾',
     title: 'Set Your PELCO III Rate',
-    description: 'Every peso figure in WattWise is computed on the PELCO III residential tariff.\n\nOne last step: open Settings → Electricity Rates and enter the generation rate printed on your bill (or from pelco3.org/rates.php).\n\nUntil you do, costs are estimates based on default rates.',
+    description: 'Every peso figure in Dagitab is computed on the PELCO III residential tariff.\n\nOne last step: open Settings → Electricity Rates and enter the generation rate printed on your bill (or from pelco3.org/rates.php).\n\nUntil you do, costs are estimates based on default rates.',
   },
 ];
 

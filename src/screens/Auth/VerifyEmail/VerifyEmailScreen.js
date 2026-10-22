@@ -70,7 +70,7 @@ export const VerifyEmailScreen = ({ email, onVerified }) => {
         </Text>
 
         <Text style={styles.body}>
-          Open it to finish setting up your account. WattWise sends your bills, usage receipts,
+          Open it to finish setting up your account. Dagitab sends your bills, usage receipts,
           and safety alerts to this address, so it needs to be one you can reach.
         </Text>
 

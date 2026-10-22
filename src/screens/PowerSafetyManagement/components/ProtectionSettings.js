@@ -91,7 +91,7 @@ const ProtectionSettings = ({ enabled, onToggle, thresholds, onSaveThresholds })
         icon: '📡',
         tone: 'warning',
         title: 'Saved here, not sent yet',
-        message: 'Your new limits have not reached the server, so the Hub is still enforcing the previous ones. They will sync when you are back online — keep WattWise open, because closing it drops the change.',
+        message: 'Your new limits have not reached the server, so the Hub is still enforcing the previous ones. They will sync when you are back online — keep Dagitab open, because closing it drops the change.',
       });
       setIsEditing(false);
       return;

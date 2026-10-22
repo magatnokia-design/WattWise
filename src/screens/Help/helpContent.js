@@ -26,7 +26,7 @@ export const HELP_SECTIONS = [
         id: 'blocks',
         question: 'What are the three blocks on my bill?',
         answer: [
-          'A PELCO III residential bill is built from three groups of charges, and WattWise reproduces all three over the energy it measured.',
+          'A PELCO III residential bill is built from three groups of charges, and Dagitab reproduces all three over the energy it measured.',
           'Block 1 - Generation & Transmission is the cost of producing and moving the electricity. It changes every month, which is why it is the one block you enter yourself.',
           'Block 2 - Distribution is what it costs to deliver power through the local network. These are ERC-approved rates and they are the same for every residential customer, so they are built into the app.',
           'Block 3 - Government charges are universal charges set nationally, plus 12% VAT. Also the same for everyone, also built in.',
@@ -39,7 +39,7 @@ export const HELP_SECTIONS = [
         answer: [
           'Because it moves. The generation rate is re-computed monthly and published by PELCO III, so no figure hard-coded into an app would stay correct for long.',
           'Blocks 2 and 3 are the opposite: they change rarely, by regulatory ruling, and identically for every customer. Asking you to type those in would add work and a way to get them wrong, without making them any more accurate.',
-          'Every bill WattWise produces prints which rate set it used and the date those rates took effect, so you can always tell what a given figure was calculated from.',
+          'Every bill Dagitab produces prints which rate set it used and the date those rates took effect, so you can always tell what a given figure was calculated from.',
         ],
       },
       {
@@ -55,10 +55,10 @@ export const HELP_SECTIONS = [
         id: 'accuracy',
         question: 'How close will this be to the bill that arrives?',
         answer: [
-          'For the energy it measures, very close. The energy figure comes from the meter inside your WattWise unit, not from an estimate, and Blocks 1 and 2 are exact arithmetic on rates you can verify line by line.',
+          'For the energy it measures, very close. The energy figure comes from the meter inside your Dagitab unit, not from an estimate, and Blocks 1 and 2 are exact arithmetic on rates you can verify line by line.',
           'There is one approximation in the whole model. The VAT applied to generation and transmission is not published as a formula by PELCO III, so it is a factor fitted against real bills. Checked against four of them spanning 94 to 216 kWh, the model came within 0.71% of the printed total at worst and 0.31% on average - a few pesos on a bill of over a thousand. Every peso of that difference sits in the government charges; generation and transmission match the bill exactly.',
-          'The much bigger difference is scope, and it is not an error. WattWise measures two outlets. Your bill covers your entire connection - lights, aircon, refrigerator, every socket in the room. Unless everything you use runs through these two outlets, the WattWise total will be lower than your bill, and it should be.',
-          'Treat this as "what these two outlets cost", not "what I will be charged". Compare Usage is the screen for checking a real bill against what WattWise saw.',
+          'The much bigger difference is scope, and it is not an error. Dagitab measures two outlets. Your bill covers your entire connection - lights, aircon, refrigerator, every socket in the room. Unless everything you use runs through these two outlets, the Dagitab total will be lower than your bill, and it should be.',
+          'Treat this as "what these two outlets cost", not "what I will be charged". Compare Usage is the screen for checking a real bill against what Dagitab saw.',
         ],
       },
       {
@@ -73,7 +73,7 @@ export const HELP_SECTIONS = [
   },
   {
     id: 'appliances',
-    title: 'How WattWise identifies appliances',
+    title: 'How Dagitab identifies appliances',
     icon: '🔌',
     topics: [
       {
@@ -81,18 +81,18 @@ export const HELP_SECTIONS = [
         question: 'Why does it recognise my fan but not my phone charger?',
         answer: [
           'Because a fan holds one level and a charger does not.',
-          'WattWise identifies an appliance by how it draws power - the average, how much it swings, how long it runs. An electric fan on one speed sits near a steady wattage for its whole run, which produces a clear, repeatable signature.',
+          'Dagitab identifies an appliance by how it draws power - the average, how much it swings, how long it runs. An electric fan on one speed sits near a steady wattage for its whole run, which produces a clear, repeatable signature.',
           'A phone charger sweeps. Lithium batteries are charged by drawing hard while the battery fills, then tapering as it approaches full, then settling to almost nothing. One run can move from 30 W down to 3 W. The average of that sweep is a number the charger never actually draws, and several different appliance profiles will each fit it about equally well.',
           'This is a property of the measurement, not a fault. Steady loads identify reliably. Loads that change while they run do not, and no amount of waiting will fix a particular run.',
         ],
       },
       {
         id: 'not-sure',
-        question: 'It says "WattWise is not sure what this is". Is something broken?',
+        question: 'It says "Dagitab is not sure what this is". Is something broken?',
         answer: [
           'No. That message is the honest answer to a genuinely ambiguous measurement, and it is better than a confident guess.',
-          'It appears when several appliance profiles explain the run about equally well - close enough that the power reading alone cannot separate them. Rather than assert the top one, WattWise lists the closest matches with their scores and lets you decide.',
-          'You can pick the closest and rename it afterwards. WattWise stores how your appliance actually draws power, not the name it started from, so the label being imperfect costs you nothing.',
+          'It appears when several appliance profiles explain the run about equally well - close enough that the power reading alone cannot separate them. Rather than assert the top one, Dagitab lists the closest matches with their scores and lets you decide.',
+          'You can pick the closest and rename it afterwards. Dagitab stores how your appliance actually draws power, not the name it started from, so the label being imperfect costs you nothing.',
         ],
       },
       {
@@ -108,7 +108,7 @@ export const HELP_SECTIONS = [
         id: 'changed',
         question: 'Why does it say "Different appliance detected"?',
         answer: [
-          'Because you swapped what is plugged in without switching the outlet off, so WattWise is still measuring one continuous run.',
+          'Because you swapped what is plugged in without switching the outlet off, so Dagitab is still measuring one continuous run.',
           'A run ends when the outlet is switched off. If a 14 W lamp is replaced by a 56 W fan on a live outlet, both end up inside the same run and the average lands between them - a figure neither appliance ever drew, which then gets matched to some third thing entirely.',
           'Switch the outlet off and on again. That closes the old run and starts a clean one for the new appliance.',
         ],
@@ -119,7 +119,7 @@ export const HELP_SECTIONS = [
         answer: [
           'Rename changes the label and keeps the measurements. Use it whenever the name is wrong but the appliance is right.',
           'Forget deletes the measurement itself. Detection falls back to the built-in profiles, so that appliance is recognised only by its general shape rather than by how yours actually draws power.',
-          'Forget cannot be undone. Getting a signature back means plugging the appliance in and letting WattWise measure a full run again, so if you only meant to correct a name, use Rename.',
+          'Forget cannot be undone. Getting a signature back means plugging the appliance in and letting Dagitab measure a full run again, so if you only meant to correct a name, use Rename.',
         ],
       },
     ],
@@ -131,10 +131,10 @@ export const HELP_SECTIONS = [
     topics: [
       {
         id: 'how-measured',
-        question: 'How does WattWise know how much energy I used?',
+        question: 'How does Dagitab know how much energy I used?',
         answer: [
           'It measures it. Each outlet has an energy meter that reports voltage, current, power and an accumulating energy counter, and the app reads those figures directly.',
-          'Nothing about your energy total is inferred from which appliance WattWise thinks is plugged in. That is why an uncertain appliance name does not put your usage or your bill in doubt.',
+          'Nothing about your energy total is inferred from which appliance Dagitab thinks is plugged in. That is why an uncertain appliance name does not put your usage or your bill in doubt.',
         ],
       },
       {
@@ -142,25 +142,25 @@ export const HELP_SECTIONS = [
         question: 'What happens if an appliance draws too much power?',
         answer: [
           'The safety cut-off compares the measured wattage against the limit you set in Power Safety and switches the outlet off when it is exceeded.',
-          'It acts on the measurement, never on the appliance name, so it protects you the same whether WattWise identified the load correctly, guessed wrong, or had no idea what it was.',
-          'WattWise is built for low-voltage appliances - chargers, laptops, fans, TVs, LED lamps, consoles. It is not intended for heating appliances or anything with a large motor.',
+          'It acts on the measurement, never on the appliance name, so it protects you the same whether Dagitab identified the load correctly, guessed wrong, or had no idea what it was.',
+          'Dagitab is built for low-voltage appliances - chargers, laptops, fans, TVs, LED lamps, consoles. It is not intended for heating appliances or anything with a large motor.',
         ],
       },
       {
         id: 'charging-done',
         question: 'What is the "Charging looks finished" notification?',
         answer: [
-          'WattWise watches the wattage curve. When a charge tapers off and then rests at a low level for several minutes, it tells you the battery has most likely finished.',
+          'Dagitab watches the wattage curve. When a charge tapers off and then rests at a low level for several minutes, it tells you the battery has most likely finished.',
           'It only tells you. It never switches the outlet off by itself - that decision stays with you.',
-          'It stays quiet in two cases on purpose. If a charger rests below what the meter can detect, that looks identical to you having unplugged the device, so WattWise says nothing rather than claim something it cannot see.',
-          'And a run has to have drawn real power to count as a charge at all. Topping up a nearly full battery may never draw enough for WattWise to call it charging, so no notification follows. Missing one is the intended trade: the alternative is announcing a finished charge to someone who simply unplugged their phone.',
+          'It stays quiet in two cases on purpose. If a charger rests below what the meter can detect, that looks identical to you having unplugged the device, so Dagitab says nothing rather than claim something it cannot see.',
+          'And a run has to have drawn real power to count as a charge at all. Topping up a nearly full battery may never draw enough for Dagitab to call it charging, so no notification follows. Missing one is the intended trade: the alternative is announcing a finished charge to someone who simply unplugged their phone.',
         ],
       },
       {
         id: 'no-readings',
         question: 'Why does it say "No readings"?',
         answer: [
-          'The app has not heard from your WattWise unit recently. The figures it last saw are held back rather than shown, because a frozen number that looks live is worse than no number at all.',
+          'The app has not heard from your Dagitab unit recently. The figures it last saw are held back rather than shown, because a frozen number that looks live is worse than no number at all.',
           'Check that the unit is powered and that its Wi-Fi is in range. Readings resume on their own once it reconnects; nothing is lost while it is away, as the energy counter lives on the meter itself.',
         ],
       },
@@ -168,14 +168,14 @@ export const HELP_SECTIONS = [
   },
   {
     id: 'scope',
-    title: 'What WattWise covers',
+    title: 'What Dagitab covers',
     icon: '📋',
     topics: [
       {
         id: 'two-outlets',
         question: 'Why only two outlets?',
         answer: [
-          'WattWise is built as a two-outlet monitor: one unit, two independently metered and independently switched sockets.',
+          'Dagitab is built as a two-outlet monitor: one unit, two independently metered and independently switched sockets.',
           'Everything the app reports - usage, cost, history, budget - describes what passed through those two outlets. Anything plugged in elsewhere in the room is invisible to it.',
         ],
       },
@@ -184,12 +184,12 @@ export const HELP_SECTIONS = [
         question: 'Should my monthly budget be my whole electricity budget?',
         answer: [
           'No. Set it against what these two outlets should cost, not against your whole bill.',
-          'If you budget for your entire household but WattWise only measures two sockets, it will report you comfortably under budget every month while the real bill says otherwise.',
+          'If you budget for your entire household but Dagitab only measures two sockets, it will report you comfortably under budget every month while the real bill says otherwise.',
         ],
       },
       {
         id: 'suggestion-first',
-        question: 'Will WattWise change things on its own?',
+        question: 'Will Dagitab change things on its own?',
         answer: [
           'It will not rename an appliance, accept a suggestion, or adopt a detected identity without you confirming it. Detection proposes; you decide.',
           'The one thing that acts automatically is the safety cut-off, which switches an outlet off when the measured power exceeds the limit you configured. That is deliberate - it is a protection, and it works on measurement rather than on any guess about what is plugged in.',

@@ -21,7 +21,7 @@ import { ABOUT_SECTIONS, PRIVACY_SECTIONS, TERMS_SECTIONS } from './legalContent
  */
 
 const DOCUMENTS = {
-  about: { title: 'About WattWise', sections: ABOUT_SECTIONS },
+  about: { title: 'About Dagitab', sections: ABOUT_SECTIONS },
   privacy: { title: 'Privacy Policy', sections: PRIVACY_SECTIONS },
   terms: { title: 'Terms & Conditions', sections: TERMS_SECTIONS },
 };

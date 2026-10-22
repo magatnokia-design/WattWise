@@ -122,7 +122,7 @@ async function processInvoiceForUser({
     title: `${formatMonthName(billingMonth)} statement ready`,
     message:
       `Your estimated bill is ${peso(invoice.totalAmountDue)} for ${invoice.totalKwh.toFixed(2)} kWh. ` +
-      'Enter the official PELCO III rate in WattWise to finalize it.',
+      'Enter the official PELCO III rate in Dagitab to finalize it.',
     metadata: {
       billingMonth,
       totalKwh: invoice.totalKwh,
@@ -140,12 +140,12 @@ async function processInvoiceForUser({
 
   await enqueueEmail({
     toEmail: contact.email,
-    subject: `Your WattWise statement for ${formatMonthName(billingMonth)}`,
+    subject: `Your Dagitab statement for ${formatMonthName(billingMonth)}`,
     heading: `${formatMonthName(billingMonth)} statement`,
     intro:
       `Your billing period has closed. This statement is an estimate of ${peso(invoice.totalAmountDue)} ` +
       'based on the most recent published rate - PELCO III releases each month\'s official rate after the ' +
-      'period ends. Open WattWise and enter the official rate to finalize it.',
+      'period ends. Open Dagitab and enter the official rate to finalize it.',
     rows: [
       ['Billing month', formatMonthName(billingMonth)],
       ['Reading period', `${invoice.readingDateFrom} to ${invoice.readingDateTo}`],
@@ -155,7 +155,7 @@ async function processInvoiceForUser({
       ['Effective rate', `${peso(invoice.effectiveRate)} / kWh`],
     ],
     attachments: [{
-      filename: `WattWise-${billingMonth}.pdf`,
+      filename: `Dagitab-${billingMonth}.pdf`,
       content: pdf.toString('base64'),
       encoding: 'base64',
       contentType: 'application/pdf',
@@ -166,7 +166,7 @@ async function processInvoiceForUser({
     // finalizeInvoice, so if that row is ever renamed, rename it here too.
     note:
       'PELCO III publishes the official generation rate a few days after the period closes. '
-      + 'In WattWise, open Settings, tap Monthly Statements, choose this month and enter the '
+      + 'In Dagitab, open Settings, tap Monthly Statements, choose this month and enter the '
       + 'generation rate printed on your paper bill - that locks this statement to the real '
       + 'figure. Until you do, the total above stays an estimate. Rates at pelco3.org/rates.php.',
     tag: 'invoice',

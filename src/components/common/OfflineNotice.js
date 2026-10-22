@@ -19,7 +19,7 @@ import { COLORS } from '../../constants/colors';
  * resolves itself. Red here would be alarming out of proportion to the cause.
  */
 export const OfflineState = ({
-  title = "Can't reach WattWise",
+  title = "Can't reach Dagitab",
   body = 'Your data is safe — the app just needs a connection to load it. Check your wi-fi or mobile data, then try again.',
   onRetry,
   retryLabel = 'Try again',

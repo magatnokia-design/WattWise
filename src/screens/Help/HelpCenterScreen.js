@@ -86,7 +86,7 @@ export const HelpCenterScreen = ({ navigation }) => {
         showsVerticalScrollIndicator={false}
       >
         <Text style={styles.intro}>
-          How WattWise measures, what it can identify reliably, and what it
+          How Dagitab measures, what it can identify reliably, and what it
           cannot. Where something has a limit, it is stated here rather than
           left to be discovered.
         </Text>
@@ -114,7 +114,7 @@ export const HelpCenterScreen = ({ navigation }) => {
         ))}
 
         <Text style={styles.footer}>
-          Readings come from the meters in your WattWise unit. Rates follow the
+          Readings come from the meters in your Dagitab unit. Rates follow the
           PELCO III residential structure, and every bill states which rate set
           produced it.
         </Text>

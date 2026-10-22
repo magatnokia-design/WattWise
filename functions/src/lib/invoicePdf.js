@@ -7,17 +7,18 @@ const PDFDocument = require('pdfkit');
  * same three charge blocks, in the same order, with the same line labels.
  */
 
-// Yellow/white/green, per the requested design. Green carries the brand and the
-// totals; yellow marks anything provisional, so an estimate is never mistaken
-// for a final bill.
+// Green carries the brand and the totals, in the Dagitab palette
+// (src/constants/colors.js - PDFKit cannot import it, so change both). Yellow
+// is not brand here: it marks anything provisional, so an estimate is never
+// mistaken for a final bill, and that job outranks the theme.
 const COLORS = {
-  green: '#047857',
-  greenLight: '#10B981',
-  greenTint: '#ECFDF5',
+  green: '#006B33',
+  greenLight: '#008D43',
+  greenTint: '#ECF8EF',
   yellow: '#F59E0B',
   yellowTint: '#FEF3C7',
-  ink: '#1F2937',
-  muted: '#6B7280',
+  ink: '#1C2E40',
+  muted: '#5B6878',
   hairline: '#E5E7EB',
   white: '#FFFFFF',
 };
@@ -57,7 +58,7 @@ const drawHeader = (doc, { invoice, account }) => {
   doc.rect(0, 0, PAGE_WIDTH, 104).fill(COLORS.green);
 
   doc.fillColor(COLORS.white).font('Helvetica-Bold').fontSize(21)
-    .text('WattWise', MARGIN, 30);
+    .text('Dagitab', MARGIN, 30);
   doc.font('Helvetica').fontSize(9).fillColor(COLORS.greenTint)
     .text('Energy statement - PELCO III residential', MARGIN, 56);
 
@@ -90,7 +91,7 @@ const drawAccountBlock = (doc, { invoice, account, top }) => {
     doc.font('Helvetica-Bold').fontSize(10).fillColor(COLORS.ink).text(value, x, y + 11);
   };
 
-  field('Account', account?.name || account?.email || 'WattWise user', leftX, top + 14);
+  field('Account', account?.name || account?.email || 'Dagitab user', leftX, top + 14);
   field('Billing month', formatMonthName(invoice.billingMonth), rightX, top + 14);
   field(
     'Reading period',

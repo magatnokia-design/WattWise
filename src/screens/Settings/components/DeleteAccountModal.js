@@ -34,7 +34,7 @@ const DELETED_ITEMS = [
   ['👤', 'Your account', 'Email, name and sign-in. You will not be able to sign in again.'],
   ['⚡', 'All energy readings', 'Every voltage, current and power measurement recorded for both outlets.'],
   ['🧾', 'Usage history and bills', 'Daily records, monthly statements and any past bills you entered for comparison.'],
-  ['🔌', 'Learned appliances', 'Every appliance signature WattWise measured and you confirmed.'],
+  ['🔌', 'Learned appliances', 'Every appliance signature Dagitab measured and you confirmed.'],
   ['💰', 'Budget and alerts', 'Your monthly budget, spending records and all notifications.'],
   ['⏱️', 'Schedules and safety settings', 'Timers, countdowns and your power safety thresholds.'],
 ];
@@ -116,7 +116,7 @@ export const DeleteAccountModal = ({ visible, email, onClose, onConfirm }) => {
               <>
                 <Text style={styles.lead}>
                   This permanently deletes everything below. It cannot be undone,
-                  and WattWise keeps no copy you could ask to have restored.
+                  and Dagitab keeps no copy you could ask to have restored.
                 </Text>
 
                 <ScrollView style={styles.list} showsVerticalScrollIndicator={false}>
@@ -133,7 +133,7 @@ export const DeleteAccountModal = ({ visible, email, onClose, onConfirm }) => {
 
                 <View style={styles.notice}>
                   <Text style={styles.noticeText}>
-                    Your WattWise unit is not deleted. It is released from this
+                    Your Dagitab unit is not deleted. It is released from this
                     account so it can be paired again — the hardware keeps working
                     and nothing needs reflashing.
                   </Text>

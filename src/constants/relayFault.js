@@ -18,7 +18,7 @@
  *
  * What was wrong was the sentence, not the latch. "current is still flowing"
  * is a present-tense measurement, and it was printed while the Hub was silent -
- * four lines under a Power Safety card correctly saying "The WattWise Hub has
+ * four lines under a Power Safety card correctly saying "The Dagitab Hub has
  * stopped reporting, so nothing can be graded right now". Two cards on one
  * screen disagreeing about whether the app knows anything at all.
  *

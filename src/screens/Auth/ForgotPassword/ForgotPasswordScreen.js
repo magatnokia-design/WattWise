@@ -62,7 +62,7 @@ const handleResetPassword = async () => {
       message:
         `Sent to ${normalizedEmail}.\n\n`
         + '• The link expires in 1 hour.\n'
-        + '• Check your spam folder — it arrives from support@wattwise.site.\n'
+        + '• Check your spam folder — it arrives from support@dagitab.site.\n'
         + '• If you request another, only the newest link works.',
       confirmLabel: 'Back to sign in',
       onConfirm: () => navigation.navigate('Login'),

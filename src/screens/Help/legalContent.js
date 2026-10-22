@@ -23,10 +23,10 @@ export const MAX_TOTAL_POWER_W = 1000;
 export const ABOUT_SECTIONS = [
   {
     id: 'what',
-    title: 'What WattWise is',
+    title: 'What Dagitab is',
     body: [
-      'WattWise is a smart energy monitoring system for apartment rooms. A WattWise Hub — an ESP32 controller paired with PZEM-004T energy meters — measures and switches two outlets, and this app is how you watch and control them.',
-      'Everything the app reports is measured at those two outlets. Anything plugged in elsewhere in the room is invisible to WattWise, so its totals describe those two sockets rather than your whole electricity use.',
+      'Dagitab is a smart energy monitoring system for apartment rooms. A Dagitab Hub — an ESP32 controller paired with PZEM-004T energy meters — measures and switches two outlets, and this app is how you watch and control them.',
+      'Everything the app reports is measured at those two outlets. Anything plugged in elsewhere in the room is invisible to Dagitab, so its totals describe those two sockets rather than your whole electricity use.',
     ],
   },
   {
@@ -46,7 +46,7 @@ export const ABOUT_SECTIONS = [
     id: 'wont',
     title: 'What it will not do on its own',
     body: [
-      'WattWise never renames an appliance, accepts its own suggestion, or adopts a detected identity without you confirming it. Detection proposes; you decide.',
+      'Dagitab never renames an appliance, accepts its own suggestion, or adopts a detected identity without you confirming it. Detection proposes; you decide.',
       'The one thing that acts by itself is the safety cut-off, which switches an outlet off when the measured power passes the limit you set. That is deliberate: it is a protection, and it works from the measurement rather than from any guess about what is plugged in.',
     ],
   },
@@ -65,7 +65,7 @@ export const ABOUT_SECTIONS = [
     body: [
       `Low-voltage appliances only. Maximum ${MAX_OUTLET_POWER_W} W per outlet and ${MAX_TOTAL_POWER_W} W combined.`,
       'Not for air conditioners, heaters, irons, kettles, or anything with a large motor.',
-      'WattWise is a monitoring aid, not certified electrical protective equipment. The cut-off is a convenience layer and not a substitute for your building\'s circuit breaker or for wiring that is in good condition.',
+      'Dagitab is a monitoring aid, not certified electrical protective equipment. The cut-off is a convenience layer and not a substitute for your building\'s circuit breaker or for wiring that is in good condition.',
     ],
   },
 ];
@@ -81,7 +81,7 @@ export const TERMS_SECTIONS = [
     id: 'what',
     title: 'What you are agreeing to',
     body: [
-      'WattWise is a capstone project, provided as it is, for monitoring and switching two low-voltage outlets. Using it means accepting the limits below.',
+      'Dagitab is a capstone project, provided as it is, for monitoring and switching two low-voltage outlets. Using it means accepting the limits below.',
       'It is not a commercial product and carries no warranty or service guarantee.',
     ],
   },
@@ -91,7 +91,7 @@ export const TERMS_SECTIONS = [
     tone: 'warning',
     body: [
       `Low-voltage appliances only. Maximum ${MAX_OUTLET_POWER_W} W per outlet and ${MAX_TOTAL_POWER_W} W combined. Do not connect air conditioners, heaters, irons, kettles, or anything with a large motor.`,
-      'WattWise is a monitoring aid, not certified electrical protective equipment. The automatic cut-off is a convenience layer. It is not a substitute for your building\'s circuit breaker, for sound wiring, or for your own judgement about what is safe to plug in.',
+      'Dagitab is a monitoring aid, not certified electrical protective equipment. The automatic cut-off is a convenience layer. It is not a substitute for your building\'s circuit breaker, for sound wiring, or for your own judgement about what is safe to plug in.',
       'You remain responsible for what you connect to the outlets and for the condition of your electrical installation.',
     ],
   },
@@ -127,7 +127,7 @@ export const PRIVACY_SECTIONS = [
     id: 'summary',
     title: 'The short version',
     body: [
-      'WattWise stores what it needs to show you your own energy use, and nothing else. Your data is readable only by your own signed-in account. It is not sold, not shared with advertisers, and not used to build a profile of you.',
+      'Dagitab stores what it needs to show you your own energy use, and nothing else. Your data is readable only by your own signed-in account. It is not sold, not shared with advertisers, and not used to build a profile of you.',
       'You can delete all of it at any time from Settings.',
     ],
   },
@@ -149,7 +149,7 @@ export const PRIVACY_SECTIONS = [
     id: 'why',
     title: 'Why each of those exists',
     body: [
-      'The measurements are the product: without them there is no usage, no cost and no history. Appliance signatures are what let WattWise recognise a device you have already named. The device ID is how the app knows which hardware belongs to your account, and the push token is the address a notification is delivered to.',
+      'The measurements are the product: without them there is no usage, no cost and no history. Appliance signatures are what let Dagitab recognise a device you have already named. The device ID is how the app knows which hardware belongs to your account, and the push token is the address a notification is delivered to.',
       'None of it is collected for any purpose beyond running the features you can see.',
     ],
   },
@@ -157,7 +157,7 @@ export const PRIVACY_SECTIONS = [
     id: 'where',
     title: 'Where it is stored',
     body: [
-      'In Google Firebase, in the Singapore region. Access is scoped to the owner: the database rules allow an account to read and write only documents under its own user, so no other WattWise user can reach your data.',
+      'In Google Firebase, in the Singapore region. Access is scoped to the owner: the database rules allow an account to read and write only documents under its own user, so no other Dagitab user can reach your data.',
       'Three services handle it on the way: Google Firebase stores it, Expo delivers push notifications to your phone, and an email service sends receipts, statements and alerts to your account email.',
     ],
   },
@@ -176,7 +176,7 @@ export const PRIVACY_SECTIONS = [
     title: 'Deleting your data',
     body: [
       'Settings → Delete Account removes your account and everything stored under it: measurements, history, statements, appliance signatures, budget, notifications, schedules and safety settings. It cannot be undone and no copy is kept.',
-      'Your WattWise unit is not deleted. It is released from your account so it can be paired again — the hardware keeps working and nothing needs reflashing.',
+      'Your Dagitab unit is not deleted. It is released from your account so it can be paired again — the hardware keeps working and nothing needs reflashing.',
       'Individual items can be removed without deleting the account: Forget removes one appliance signature, and notifications can be cleared from the Notifications screen.',
     ],
   },
@@ -184,7 +184,7 @@ export const PRIVACY_SECTIONS = [
     id: 'contact',
     title: 'Questions',
     body: [
-      'WattWise is a capstone project rather than a commercial service. If you have a question about what is stored or want your data removed, contact the account that provisioned your unit.',
+      'Dagitab is a capstone project rather than a commercial service. If you have a question about what is stored or want your data removed, contact the account that provisioned your unit.',
       `App version ${formatVersion()}.`,
     ],
   },

@@ -4,14 +4,14 @@ import { COLORS } from '../../../constants/colors';
 import { formatDeviceHealthValue } from '../utils/settingsHelpers';
 
 /**
- * The WattWise Hub, at a glance.
+ * The Dagitab Hub, at a glance.
  *
  * Replaces four identical-looking rows where the only way to tell whether the
  * hardware was working was to read a value squeezed onto the right-hand edge of
  * one of them. Device state is the first thing someone checks when the app
  * looks wrong, so it gets a shape of its own rather than a row among rows.
  *
- * "Hub" rather than "ESP32" throughout. The unit is branded WattWise Hub on its
+ * "Hub" rather than "ESP32" throughout. The unit is branded Dagitab Hub on its
  * own sticker and in the setup guide; nobody outside this project knows what an
  * ESP32 is, and the app was the last place still calling it that.
  */
@@ -46,7 +46,7 @@ export const HubStatusCard = ({ settings = {} }) => {
   return (
     <View style={styles.card}>
       <View style={styles.head}>
-        <Text style={styles.title}>WattWise Hub</Text>
+        <Text style={styles.title}>Dagitab Hub</Text>
         <View style={[styles.chip, { backgroundColor: tone.chip }]}>
           <View style={[styles.dot, { backgroundColor: tone.dot }]} />
           <Text style={[styles.chipText, { color: tone.text }]}>{statusText}</Text>

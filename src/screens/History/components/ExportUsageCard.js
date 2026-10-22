@@ -21,7 +21,7 @@ import { describeUsageRows } from '../utils/historyHelpers';
  *
  * Written to a cache directory rather than Documents on purpose: the file's
  * only job is to reach whatever app the user picks from the share sheet, and
- * once it is in Drive or Gmail a second copy sitting in WattWise's storage is
+ * once it is in Drive or Gmail a second copy sitting in Dagitab's storage is
  * just a stale duplicate the system can never clear.
  *
  * Exports exactly what the screen has loaded, which is why the button says how
@@ -145,7 +145,7 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   // Yellow: this is the one action on the screen that takes data out of
-  // WattWise, and it should not read as just another green control.
+  // Dagitab, and it should not read as just another green control.
   iconBadge: {
     width: 40,
     height: 40,

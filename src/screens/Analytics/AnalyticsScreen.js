@@ -374,7 +374,7 @@ const OutletComparisonCard = ({ outlet1Energy, outlet2Energy, effectiveRate, app
         <View style={styles.comparisonEmpty}>
           <Text style={styles.comparisonEmptyText}>
             No usage recorded for this period yet. A comparison needs two periods
-            with measurements in them, so this fills in once WattWise has been
+            with measurements in them, so this fills in once Dagitab has been
             running for a second day.
           </Text>
         </View>

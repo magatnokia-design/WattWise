@@ -6,7 +6,7 @@ const logger = require('firebase-functions/logger');
  *
  * WHY IT EXISTS
  *
- * WattWise records what the *hardware* did - every switch lands in
+ * Dagitab records what the *hardware* did - every switch lands in
  * history_logs - but nothing recorded what happened to the *account*. A device
  * linked, a token guessed at, a limit tripped: all of it passed through Cloud
  * Logging and nowhere else, where it is invisible to the person it happened to
@@ -18,7 +18,7 @@ const logger = require('firebase-functions/logger');
  *
  * WHAT IS DELIBERATELY NOT RECORDED
  *
- * - **No IP addresses.** The privacy policy says WattWise does not build a
+ * - **No IP addresses.** The privacy policy says Dagitab does not build a
  *   behavioural profile, and a timestamped address history is exactly that.
  *   The rate limiter still keys on IP in memory to do its job; it just never
  *   writes one down. This is the same reasoning that ruled out reCAPTCHA.

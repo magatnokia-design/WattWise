@@ -101,10 +101,10 @@ const formatApplianceName = (
   if (unsupported) {
     if (unsupportedReason === 'over_power') {
       return typeof measuredPowerW === 'number'
-        ? `Draws more than WattWise supports · ${measuredPowerW.toFixed(0)} W`
-        : 'Draws more than WattWise supports';
+        ? `Draws more than Dagitab supports · ${measuredPowerW.toFixed(0)} W`
+        : 'Draws more than Dagitab supports';
     }
-    return 'Not something WattWise monitors';
+    return 'Not something Dagitab monitors';
   }
 
   const normalized = String(name || '').trim();
@@ -117,7 +117,7 @@ const formatApplianceName = (
   if (identityState === 'changed') return `Not ${normalized}`;
 
   // Matched against this account's own saved signature rather than a generic
-  // wattage range: WattWise knows this appliance, not just its name. The web
+  // wattage range: Dagitab knows this appliance, not just its name. The web
   // client marks it the same way, so both say the same thing about the same run.
   if (recognised) return `${normalized} · recognised`;
 
@@ -269,7 +269,7 @@ export const DashboardScreen = ({ navigation }) => {
 
         // A failed read left this card sitting at ₱0.00 / ₱0.00 with "Tap to
         // set a monthly budget" - directly below the card that had just said
-        // the app could not reach WattWise. Two panels on one screen, one of
+        // the app could not reach Dagitab. Two panels on one screen, one of
         // them confidently wrong.
         if (!result.success) {
           setBudgetKnown(false);
@@ -340,7 +340,7 @@ export const DashboardScreen = ({ navigation }) => {
         tone: 'danger',
         title: 'The outlet did not switch',
         message: result.error
-          || 'The command reached WattWise but could not be carried out. Check that the Hub is powered and online, then try again.',
+          || 'The command reached Dagitab but could not be carried out. Check that the Hub is powered and online, then try again.',
       });
     }, 300);
   };
@@ -432,7 +432,7 @@ export const DashboardScreen = ({ navigation }) => {
         {/*
           Above the snapshot strip and not dismissible. Every other notice on
           this screen describes something the user may reasonably choose to
-          ignore; this one describes an outlet that is live and that WattWise
+          ignore; this one describes an outlet that is live and that Dagitab
           cannot open, so the auto-cutoff cannot protect it either. The only
           action that ends the condition is physical, which is why the text says
           so plainly instead of pointing at a screen.
@@ -540,13 +540,13 @@ export const DashboardScreen = ({ navigation }) => {
         {hasNeverReported ? (
           <View style={styles.setupCard}>
             <Text style={styles.setupIcon}>🔌</Text>
-            <Text style={styles.setupTitle}>Link your WattWise unit</Text>
+            <Text style={styles.setupTitle}>Link your Dagitab unit</Text>
             {/* Worded to cover both cases: never scanned, and scanned but the
                 unit has not reported yet. Claiming "nothing is paired" would be
                 wrong for the second, and that is the case where a user is most
                 likely to think the app is broken. */}
             <Text style={styles.setupText}>
-              No readings have arrived from a WattWise unit yet. Scan the QR code
+              No readings have arrived from a Dagitab unit yet. Scan the QR code
               on your unit in Settings, then check it is powered and on wi-fi —
               both outlets appear here within a few seconds of it reporting.
             </Text>

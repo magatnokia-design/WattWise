@@ -35,7 +35,7 @@ export const pushNotificationService = {
     if (Platform.OS !== 'android') return;
 
     await Notifications.setNotificationChannelAsync(ANDROID_CHANNEL_ID, {
-      name: 'WattWise alerts',
+      name: 'Dagitab alerts',
       importance: Notifications.AndroidImportance.MAX,
       vibrationPattern: [0, 250, 250, 250],
       lightColor: COLORS.primary,

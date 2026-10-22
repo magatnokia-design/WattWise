@@ -86,7 +86,7 @@ export const authService = {
   // Re-sends the verification email to the signed-in account.
   //
   // Goes through a callable rather than Firebase's own sendEmailVerification:
-  // this project cannot edit Firebase's templates or point them at WattWise's
+  // this project cannot edit Firebase's templates or point them at Dagitab's
   // own page, so its mail is unbranded and lands on firebaseapp.com. The
   // callable generates the same code and sends our message instead.
   sendVerificationEmail: async () => {

@@ -112,7 +112,7 @@ const SupplyRateModal = ({ visible, currentRates, onClose, onSave }) => {
 
   const handleOpenWeb = useCallback(() => {
     Linking.openURL(WEB_APP_LINKS.settings).catch(() => {
-      setError('Could not open wattwise.site.');
+      setError('Could not open dagitab.site.');
     });
   }, []);
 
@@ -225,7 +225,7 @@ const SupplyRateModal = ({ visible, currentRates, onClose, onSave }) => {
                       keyboard genuinely helps. Every field still works here. */}
                   <TouchableOpacity onPress={handleOpenWeb} activeOpacity={0.7}>
                     <Text style={styles.webHint}>
-                      Lots to type? Enter these on wattwise.site with your bill in
+                      Lots to type? Enter these on dagitab.site with your bill in
                       hand →
                     </Text>
                   </TouchableOpacity>

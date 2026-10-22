@@ -72,10 +72,10 @@ async function sendVerificationEmail(request) {
 
   const result = await enqueueEmail({
     toEmail: email,
-    subject: 'Confirm your email for WattWise',
+    subject: 'Confirm your email for Dagitab',
     heading: displayName ? `Welcome, ${displayName}` : 'Confirm your email',
     intro:
-      'Confirm this address to finish setting up your WattWise account. '
+      'Confirm this address to finish setting up your Dagitab account. '
       + 'Your monthly statements, daily usage receipts, and safety alerts are all sent here, '
       + 'so it needs to be an address you can reach.',
     action: {

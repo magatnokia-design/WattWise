@@ -182,7 +182,7 @@ async function handleSafetyAlerts(event) {
     if (contact?.email) {
       await enqueueEmail({
         toEmail: contact.email,
-        subject: `WattWise safety alert: ${title}`,
+        subject: `Dagitab safety alert: ${title}`,
         heading: title,
         intro: message,
         rows: [

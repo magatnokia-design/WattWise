@@ -199,7 +199,7 @@ const SettingsScreen = ({ navigation }) => {
   /*
    * Two separate switches, and confusing them is the obvious trap.
    *
-   * This one is WattWise's own preference: it lives on the account and decides
+   * This one is Dagitab's own preference: it lives on the account and decides
    * whether the backend sends anything at all (handlePushNotifications reads
    * `notificationsEnabled` before dispatching). Android's per-app notification
    * permission is the other one, and it decides whether the phone is allowed to
@@ -233,7 +233,7 @@ const SettingsScreen = ({ navigation }) => {
       icon: '🔔',
       title: 'Android is blocking these',
       message:
-        'WattWise will send safety cut-offs, budget alerts and device events to this account. Android is set to hide notifications from this app, so they will not appear on your phone until you allow them.',
+        'Dagitab will send safety cut-offs, budget alerts and device events to this account. Android is set to hide notifications from this app, so they will not appear on your phone until you allow them.',
       tone: 'warning',
       confirmLabel: 'Open settings',
       cancelLabel: 'Not now',
@@ -511,7 +511,7 @@ const SettingsScreen = ({ navigation }) => {
               Billed on the PELCO III residential tariff
             </Text>
             <Text style={styles.tariffBannerBody}>
-              Every peso figure in WattWise — dashboard, analytics and your monthly
+              Every peso figure in Dagitab — dashboard, analytics and your monthly
               statement — is computed with PELCO III&apos;s published rate structure.
               Enter the generation rate from your bill so the estimate matches it.
             </Text>
@@ -548,7 +548,7 @@ const SettingsScreen = ({ navigation }) => {
         </SectionCard>
 
         {/* Device */}
-        <SectionHeader title="WattWise Hub" />
+        <SectionHeader title="Dagitab Hub" />
 
         {/* State first, controls after. Device health is what someone opens this
             section to check, and it used to be a value squeezed onto the right
@@ -629,7 +629,7 @@ const SettingsScreen = ({ navigation }) => {
             <View style={styles.emptyAppliances}>
               <Text style={styles.emptyAppliancesText}>
                 No saved appliances yet. Confirm an appliance name on the Dashboard
-                while it is running and WattWise will learn its power signature.
+                while it is running and Dagitab will learn its power signature.
               </Text>
             </View>
           ) : (
@@ -668,7 +668,7 @@ const SettingsScreen = ({ navigation }) => {
             </Text>
 
             <Text style={styles.namingGuidanceText}>
-              These eight names are all WattWise can guess from wattage alone. The
+              These eight names are all Dagitab can guess from wattage alone. The
               signature it saves is measured from your appliance, so the name it
               started from stops mattering.
             </Text>
@@ -700,7 +700,7 @@ const SettingsScreen = ({ navigation }) => {
         <SectionCard>
           <SettingsRow
             icon="ℹ️"
-            label="About WattWise"
+            label="About Dagitab"
             showArrow
             onPress={handleAbout}
           />
@@ -741,7 +741,7 @@ const SettingsScreen = ({ navigation }) => {
         <View style={styles.footer}>
           {loading ? <Text style={styles.footerSub}>Syncing settings...</Text> : null}
           {!loading && error ? <Text style={styles.errorText}>{error}</Text> : null}
-          <Text style={styles.footerText}>WattWise {formatVersion()}</Text>
+          <Text style={styles.footerText}>Dagitab {formatVersion()}</Text>
           <Text style={styles.footerSub}>Smart Energy Monitoring</Text>
         </View>
       </ScrollView>

@@ -4,13 +4,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-WattWise (repo folder `C:\App\WattWise`; Firebase project ID is still `wattwise-fe394` — an
-earlier name — see `.firebaserc` and `src/services/firebase/config.js`) is a smart energy
+**Dagitab** (renamed from WattWise on 22 Oct 2026; domain `dagitab.site`) is a smart energy
 monitoring app for apartment rooms with ESP32-based outlet control. It covers exactly 2
 outlets, live telemetry, appliance auto-detection, scheduling, safety cutoff, budget tracking,
 notifications, usage analytics, and a rate-plan/billing flow. The React Native/Expo app is the
 user-facing control plane; Firebase Cloud Functions handle trusted hardware ingestion, command
 dispatch, scheduled jobs, and notification triggers.
+
+**The old name survives where renaming would break something, and only there:** the repo
+folders (`C:\App\WattWise`, `WattWise-Web`), the Firebase project `wattwise-fe394` (an even
+earlier name; see `.firebaserc`) and every function URL derived from it, the Android package
+`com.magat_nokia.WattWise` (a new package is a new app - testers could not upgrade), the EAS
+slug `WiseWatt`, the Hub's NVS namespace `"wattwise"` (renaming wipes saved Wi-Fi), the
+`wattwise://` QR scheme printed on hardware, and the web's `wattwise_cutoff_dismissed`
+storage key. Everything a user reads says Dagitab.
 
 ## Commands
 

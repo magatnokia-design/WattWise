@@ -28,7 +28,7 @@ export const resolveOutletBadge = ({ isOn, isDrawing, telemetryFresh, switchingT
   /*
    * Outranks even a command in flight, because it is the answer to the question
    * a command in flight leaves open. Everything below this line describes an
-   * outlet WattWise still controls; this describes one it does not, and the
+   * outlet Dagitab still controls; this describes one it does not, and the
    * distinction is the whole safety claim. Said plainly rather than as a code:
    * the user's next move is to pull the plug, and "fault" does not ask for that.
    */

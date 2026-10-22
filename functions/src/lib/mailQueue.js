@@ -7,19 +7,17 @@ const logger = require('firebase-functions/logger');
 // the same document.
 const MAIL_COLLECTION = 'mail';
 
-// Must be an address the configured SMTP account is allowed to send as. Gmail
-// rewrites or rejects anything else, so a domain address here silently broke
-// delivery. Override with the MAIL_SENDER env var if the sending domain changes.
-const DEFAULT_FROM = 'WattWise <magatnokia@gmail.com>';
+// Used only when MAIL_SENDER is unset. It must be an address Brevo will send
+// as: dagitab.site is authenticated there (DKIM + DMARC), so any address on it
+// works. This used to be a personal Gmail address from the Gmail-SMTP era -
+// which Brevo does not send as - and on 22 Oct 2026 functions/.env turned out
+// to be missing from this laptop, so the next deploy would have fallen back to
+// it and silently stopped every email. A default has to be one that works.
+const DEFAULT_FROM = 'Dagitab <support@dagitab.site>';
 
-// Two senders, both opt-in through the environment.
-//
-// The domain addresses only work once they exist as verified "Send mail as"
-// aliases on the Gmail account behind SMTP_CONNECTION_URI - Gmail silently
-// rewrites or drops anything else, which is how delivery broke last time. So
-// both fall back to the address that is known to work, and setting the env vars
-// is the switch that turns the domain senders on. Until then this changes
-// nothing about what goes out.
+// Two senders, both overridable through functions/.env. Routine mail and
+// support mail can come from different addresses on the authenticated domain;
+// unset, both use DEFAULT_FROM.
 const NOTIFICATION_FROM = process.env.MAIL_SENDER || DEFAULT_FROM;
 const SUPPORT_FROM = process.env.MAIL_SENDER_SUPPORT || NOTIFICATION_FROM;
 const REPLY_TO = process.env.MAIL_REPLY_TO || null;
@@ -63,12 +61,14 @@ const resolveUserContact = async (userId) => {
 // Theme tokens, mirroring src/constants/colors.js. Repeated as literals because
 // email clients strip <style> blocks and class attributes - every rule has to be
 // inline on the element that uses it.
+// The Dagitab palette, as src/constants/colors.js. Email clients cannot read
+// that file, so the values are repeated here - change both together.
 const THEME = {
-  primary: '#10B981',
-  primaryDark: '#059669',
-  text: '#111827',
-  textBody: '#374151',
-  textLight: '#6B7280',
+  primary: '#008D43',
+  primaryDark: '#007A3A',
+  text: '#071B2C',
+  textBody: '#1C2E40',
+  textLight: '#5B6878',
   textFaint: '#9CA3AF',
   border: '#E5E7EB',
   rowTint: '#F9FAFB',
@@ -89,20 +89,18 @@ const accentFor = (tag) => ACCENTS[tag] || THEME.primary;
 
 // Where the footer points people. The web client shows the same data with room
 // to read it, which is the thing most worth saying in a footer.
-const APP_WEB_URL = (process.env.APP_WEB_URL || 'https://www.wattwise.site').trim();
+const APP_WEB_URL = (process.env.APP_WEB_URL || 'https://www.dagitab.site').trim();
 
 // The brand mark in the email header, opt-in through the environment the same
 // way the domain senders above are.
 //
 // It cannot be inlined: Gmail strips `data:` URI images, so the only thing that
 // renders is a hosted URL - and the only host this project has is the web
-// client. Defaulting it on would put a broken image in every email until that
-// file is deployed, so an unset variable keeps the lightning emoji that has
-// been shipping. Set MAIL_LOGO_URL once /email-logo.png is live.
+// client. Unset, the header is the wordmark alone.
 //
-// Deliberately the white-on-transparent bolt rather than the green disc: this
-// header turns red for safety mail and amber for device mail, and a green disc
-// would sit on both.
+// Deliberately the white D with its bolt cut out rather than the gradient mark:
+// this header turns red for safety mail and amber for device mail, and a green
+// mark would sit on both.
 const EMAIL_LOGO_URL = (process.env.MAIL_LOGO_URL || '').trim();
 
 // Password reset and address confirmation get none of the footer link, the
@@ -120,7 +118,7 @@ const visibleRows = (rows) => (Array.isArray(rows) ? rows : [])
   .filter(([, value]) => value !== null && value !== undefined && value !== '');
 
 /**
- * Renders the shared WattWise email shell. `rows` is a list of
+ * Renders the shared Dagitab email shell. `rows` is a list of
  * [label, value] pairs rendered as a detail table.
  *
  * Built as nested tables with inline styles rather than divs and CSS: Outlook
@@ -150,7 +148,7 @@ const buildEmailHtml = ({ heading, intro, rows, tag, action, note }) => {
     ? ''
     : `
             <p style="margin:0 0 8px;font-size:12px;line-height:1.5;">
-              <a href="${escapeHtml(APP_WEB_URL)}" style="color:${THEME.primaryDark};font-weight:600;text-decoration:none;">Open WattWise on the web &rarr;</a>
+              <a href="${escapeHtml(APP_WEB_URL)}" style="color:${THEME.primaryDark};font-weight:600;text-decoration:none;">Open Dagitab on the web &rarr;</a>
               <span style="color:${THEME.textFaint};"> &nbsp;Every screen the phone app has, with room to read it.</span>
             </p>`;
 
@@ -212,11 +210,11 @@ const buildEmailHtml = ({ heading, intro, rows, tag, action, note }) => {
                     style="display:block;width:22px;height:22px;border:0;outline:none;text-decoration:none;">
                 </td>
                 <td valign="middle">
-                  <span style="color:${THEME.white};font-size:17px;font-weight:700;letter-spacing:-0.2px;">WattWise</span>
+                  <span style="color:${THEME.white};font-size:17px;font-weight:700;letter-spacing:-0.2px;">Dagitab</span>
                 </td>
               </tr>
             </table>`
-    : `<span style="color:${THEME.white};font-size:17px;font-weight:700;letter-spacing:-0.2px;">&#9889; WattWise</span>`;
+    : `<span style="color:${THEME.white};font-size:17px;font-weight:700;letter-spacing:-0.2px;">Dagitab</span>`;
 
   return `<!DOCTYPE html>
 <html>
@@ -252,7 +250,7 @@ ${noteBlock}
           <td style="padding:16px 24px 22px;border-top:1px solid ${THEME.border};">
 ${footerLink}
             <p style="margin:0 0 4px;color:${THEME.textLight};font-size:12px;line-height:1.5;">
-              Sent automatically by WattWise. Energy figures are measured at your outlets; peso amounts follow the PELCO III residential tariff.
+              Sent automatically by Dagitab. Energy figures are measured at your outlets; peso amounts follow the PELCO III residential tariff.
             </p>
             <p style="margin:0;color:${THEME.textFaint};font-size:11px;line-height:1.5;">
               Reply to this email if something looks wrong.
@@ -297,11 +295,11 @@ const buildEmailText = ({ heading, intro, rows, action, tag, note }) => {
     lines.push('', noteText);
   }
 
-  lines.push('', '--', 'Sent automatically by WattWise.');
+  lines.push('', '--', 'Sent automatically by Dagitab.');
   lines.push('Peso amounts follow the PELCO III residential tariff.');
 
   if (!isAuthMail(tag)) {
-    lines.push(`Open WattWise on the web: ${APP_WEB_URL}`);
+    lines.push(`Open Dagitab on the web: ${APP_WEB_URL}`);
   }
 
   return lines.join('\n');

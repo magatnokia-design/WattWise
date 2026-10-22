@@ -61,7 +61,7 @@ const resolveOutletStatus = (previous, reportedStatus, nowMs = Date.now()) => {
 };
 
 /**
- * Whether the device is reporting a relay position WattWise never asked for.
+ * Whether the device is reporting a relay position Dagitab never asked for.
  *
  * The Activity log's subtitle promises "every switch, wherever it came from",
  * and a power-cycle slipped straight past it: the ESP32 comes back with both

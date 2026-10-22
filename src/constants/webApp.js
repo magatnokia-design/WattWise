@@ -1,5 +1,5 @@
 /**
- * Deep links into the WattWise web client (https://www.wattwise.site).
+ * Deep links into the Dagitab web client (https://www.dagitab.site).
  *
  * Phone-only, like `theme.js`: the web client has no reason to link to itself.
  * It is not part of the set of files kept byte-identical across the two repos.
@@ -19,7 +19,7 @@
  * of these are top-level routes. A path that stops existing there lands the user
  * on the web app's NotFound page, so keep them in step.
  */
-export const WEB_APP_URL = 'https://www.wattwise.site';
+export const WEB_APP_URL = 'https://www.dagitab.site';
 
 export const WEB_APP_LINKS = {
   analytics: `${WEB_APP_URL}/analytics`,

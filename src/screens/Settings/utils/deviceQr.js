@@ -5,6 +5,8 @@
  * code was produced:
  *   1. JSON      {"deviceId":"ESP32_ROOM_A","token":"abc..."}
  *   2. URI       wattwise://device?deviceId=ESP32_ROOM_A&token=abc...
+ *                (any scheme parses - codes printed before the Dagitab rename
+ *                say wattwise://, and they must keep working)
  *   3. Delimited ESP32_ROOM_A|abc...
  *
  * Returns { success, deviceId, token } or { success: false, error }.
@@ -71,7 +73,7 @@ export const parseDeviceQrPayload = (raw) => {
         parsed.token ?? parsed.deviceToken ?? parsed.device_token
       );
     } catch {
-      return { success: false, error: 'This QR code is not valid WattWise data.' };
+      return { success: false, error: 'This QR code is not valid Dagitab data.' };
     }
   }
 
@@ -93,7 +95,7 @@ export const parseDeviceQrPayload = (raw) => {
 
   return {
     success: false,
-    error: 'Unrecognised QR code. Scan the code supplied with your WattWise device.',
+    error: 'Unrecognised QR code. Scan the code supplied with your Dagitab device.',
   };
 };
 

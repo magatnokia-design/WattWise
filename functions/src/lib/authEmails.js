@@ -20,7 +20,7 @@ const logger = require('firebase-functions/logger');
 // Where the rebuilt links land. The web client serves this route; overridable so
 // a preview deployment can be pointed at without a code change.
 const ACTION_BASE_URL = (process.env.AUTH_ACTION_BASE_URL
-  || 'https://www.wattwise.site/auth/action').trim();
+  || 'https://www.dagitab.site/auth/action').trim();
 
 // One request per address per minute, per kind. Password reset is callable
 // without a session - it has to be, the user cannot sign in - so it is the one

@@ -51,7 +51,7 @@ export class ErrorBoundary extends React.Component {
           <Text style={styles.icon}>⚡</Text>
           <Text style={styles.title}>Something went wrong</Text>
           <Text style={styles.body}>
-            WattWise hit an unexpected problem on this screen. Your outlets and
+            Dagitab hit an unexpected problem on this screen. Your outlets and
             safety cutoff are unaffected - they run on the device itself, not in
             this app.
           </Text>

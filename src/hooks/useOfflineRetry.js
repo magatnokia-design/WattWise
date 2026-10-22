@@ -14,7 +14,7 @@ export const OFFLINE_RETRY_MS = 10000;
  * Retry a failed load while - and only while - a screen is admitting it failed.
  *
  * The offline states this app grew were honest but inert: they said "Can't
- * reach WattWise" with a Try again button and then waited for a tap. Turning
+ * reach Dagitab" with a Try again button and then waited for a tap. Turning
  * airplane mode off with the app open fixed nothing, and the way out was to
  * kill the app and reopen it, which is not something a user should have to
  * work out. Reported from a real handset.

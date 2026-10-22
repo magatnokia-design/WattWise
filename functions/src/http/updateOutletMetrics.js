@@ -174,7 +174,7 @@ async function updateOutletMetrics(req, res) {
     const batch = db.batch();
 
     const dispatchedOutletIds = new Set();
-    // Relay positions the device reports that WattWise never asked for; written
+    // Relay positions the device reports that Dagitab never asked for; written
     // to history after the loop so they ride the same batch.
     const uncommandedChanges = [];
     // Charges that finished on this post. Notified after the batch commits, so
@@ -376,7 +376,7 @@ async function updateOutletMetrics(req, res) {
       // three samples long against a MIN_SAMPLE_COUNT of 4:
       // detectApplianceFromRunState returns at its sample guard and never reaches
       // the branch that sets `unsupported`. So the one state built to say "this
-      // is outside what WattWise monitors" was unreachable for precisely the
+      // is outside what Dagitab monitors" was unreachable for precisely the
       // appliances most obviously outside it - an iron, a kettle, a microwave all
       // read "Detecting..." indefinitely, which is indistinguishable from a
       // measurement still in progress. It only ever fired in the 230-500 W band.
@@ -588,7 +588,7 @@ async function updateOutletMetrics(req, res) {
       }, { merge: true });
     }
 
-    // A relay moved without WattWise ordering it - a power-cycle is the ordinary
+    // A relay moved without Dagitab ordering it - a power-cycle is the ordinary
     // cause, and the ESP32 booting with both relays open is correct behaviour.
     // The log records what happened rather than claiming to know why.
     for (const change of uncommandedChanges) {
@@ -637,7 +637,7 @@ async function updateOutletMetrics(req, res) {
     }
 
     // Deliberately blunt, and deliberately tells the user to do the one thing
-    // WattWise cannot do for them. Every other safety notification this system
+    // Dagitab cannot do for them. Every other safety notification this system
     // sends can end with "the outlet was switched off"; this is the one that
     // cannot, because the relay is the thing that failed.
     for (const event of relayFaultEvents) {
@@ -648,7 +648,7 @@ async function updateOutletMetrics(req, res) {
         message: event.tripped
           ? `Outlet ${event.number} was switched off but is still drawing `
             + `${event.observedW.toFixed(1)} W. The relay may be stuck closed. `
-            + 'Unplug the appliance at the wall - WattWise cannot cut this outlet.'
+            + 'Unplug the appliance at the wall - Dagitab cannot cut this outlet.'
           : `Outlet ${event.number} responded to a switch-off and is now drawing no power.`,
         outlet: event.number,
         metadata: {

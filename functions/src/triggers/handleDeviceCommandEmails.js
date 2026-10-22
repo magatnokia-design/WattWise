@@ -74,7 +74,7 @@ async function handleDeviceCommandEmails(event) {
 
     await enqueueEmail({
       toEmail: contact.email,
-      subject: `WattWise: outlet command ${status}`,
+      subject: `Dagitab: outlet command ${status}`,
       heading: 'Outlet command did not complete',
       intro: `A command sent to ${outletId || 'your outlet'} reported status "${status}".`,
       rows: [

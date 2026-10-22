@@ -143,7 +143,7 @@ const ApplianceSuggestion = ({
 
       <View style={[styles.row, !trust.trusted && styles.rowUnsure]}>
         <Text style={styles.headline}>
-          {trust.trusted ? formatHeadline(suggestion) : 'WattWise is not sure what this is'}
+          {trust.trusted ? formatHeadline(suggestion) : 'Dagitab is not sure what this is'}
         </Text>
         <View style={styles.actions}>
           <TouchableOpacity
@@ -154,7 +154,7 @@ const ApplianceSuggestion = ({
             <Text style={styles.metaText}>Why</Text>
           </TouchableOpacity>
           {/* No primary button under a stated doubt. Offering "Accept" beneath
-              "WattWise is not sure" contradicts itself; the names below are all
+              "Dagitab is not sure" contradicts itself; the names below are all
               equally on offer, so the user picks one rather than confirming a
               guess the card has just disowned. */}
           {trust.trusted ? (
@@ -187,7 +187,7 @@ const ApplianceSuggestion = ({
           <Ionicons name="pricetag-outline" size={14} color={COLORS.textLight} />
           <Text style={styles.ambiguousText}>
             Not one of these? Pick the closest anyway, then rename it under
-            Settings. WattWise saves how <Text style={styles.emphasis}>this</Text>{' '}
+            Settings. Dagitab saves how <Text style={styles.emphasis}>this</Text>{' '}
             appliance draws power, not the name it started from.
           </Text>
         </View>

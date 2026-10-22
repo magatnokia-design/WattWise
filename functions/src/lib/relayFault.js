@@ -18,7 +18,7 @@
  * This is a safety fault, not a cosmetic one: the auto-cutoff in
  * handleSafetyAlerts drives the same relay, so an outlet that cannot be opened
  * cannot be protected either. It has to be surfaced rather than smoothed over -
- * a stuck contact is the one condition where the honest answer is that WattWise
+ * a stuck contact is the one condition where the honest answer is that Dagitab
  * has lost control of the outlet and the user should pull the plug.
  *
  * Deliberately measurement-only. Nothing here retries a command, and nothing

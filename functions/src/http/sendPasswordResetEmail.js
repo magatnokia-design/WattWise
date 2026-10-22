@@ -15,7 +15,7 @@ const {
  *
  * Replaces the client's sendPasswordResetEmail: Firebase's own message cannot be
  * edited on this project and always links to its hosted page. This one goes out
- * through the same Brevo transport as every other WattWise email.
+ * through the same Brevo transport as every other Dagitab email.
  *
  * Callable without a session by necessity - the whole point is that the user
  * cannot sign in. That makes it the one endpoint a stranger can make send mail,
@@ -57,10 +57,10 @@ async function sendPasswordResetEmail(request) {
 
   const result = await enqueueEmail({
     toEmail: email,
-    subject: 'Reset your WattWise password',
+    subject: 'Reset your Dagitab password',
     heading: 'Reset your password',
     intro:
-      'Use the button below to choose a new password for your WattWise account. '
+      'Use the button below to choose a new password for your Dagitab account. '
       + 'The link works once and expires in one hour. If you ask for another, only the newest one will work.',
     action: {
       label: 'Reset my password',

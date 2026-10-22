@@ -25,7 +25,7 @@ import { SIZES, FONTS } from '../../../constants/theme';
  * handset a dark grey slab with cyan text, a palette the app contains nowhere
  * else. It also cannot carry an icon or distinguish a network fault from a
  * wrong password, so every failure looked identical and none of them looked
- * like WattWise.
+ * like Dagitab.
  *
  * Tone does the sorting: `warning` for something outside the account that will
  * pass, `danger` for something the person has to correct. Each message ends on
@@ -61,7 +61,7 @@ const SIGN_IN_ERRORS = {
     icon: '📡',
     tone: 'warning',
     title: 'No connection',
-    message: 'WattWise could not reach the server. Check your internet connection — and any VPN or firewall — then try again. Nothing was sent.',
+    message: 'Dagitab could not reach the server. Check your internet connection — and any VPN or firewall — then try again. Nothing was sent.',
   },
 };
 

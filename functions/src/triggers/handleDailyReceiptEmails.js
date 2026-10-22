@@ -91,7 +91,7 @@ async function handleDailyReceiptEmails(event) {
 
     await enqueueEmail({
       toEmail: contact.email,
-      subject: `WattWise daily summary - ${receiptDate}`,
+      subject: `Dagitab daily summary - ${receiptDate}`,
       heading: 'Your daily energy summary',
       intro: `Here is your usage for ${receiptDate}.`,
       rows: [

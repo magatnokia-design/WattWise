@@ -58,7 +58,7 @@ const ProfileNameModal = ({ visible, currentName, onClose, onSave }) => {
           <View style={[styles.card, { width: Math.min(width - 48, 380) }]}>
             <Text style={styles.title}>Edit Profile Name</Text>
             <Text style={styles.subtitle}>
-              Shown across the app and used to address the emails WattWise sends you.
+              Shown across the app and used to address the emails Dagitab sends you.
             </Text>
 
             <TextInput

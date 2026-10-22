@@ -101,7 +101,7 @@ async function handleBudgetAlerts(event) {
 
           emailTasks.push(enqueueEmail({
             toEmail: contact.email,
-            subject: `WattWise: ${title}`,
+            subject: `Dagitab: ${title}`,
             heading: title,
             intro: emailMessage,
             rows: [

@@ -93,7 +93,7 @@ const CameraScanner = ({ visible, onClose, onScanned }) => {
           <Text style={styles.permissionIcon}>📷</Text>
           <Text style={styles.permissionTitle}>Camera access needed</Text>
           <Text style={styles.permissionText}>
-            WattWise needs the camera to scan the QR code on your device.
+            Dagitab needs the camera to scan the QR code on your device.
           </Text>
           <TouchableOpacity style={styles.primaryButton} onPress={requestPermission}>
             <Text style={styles.primaryButtonText}>Grant access</Text>

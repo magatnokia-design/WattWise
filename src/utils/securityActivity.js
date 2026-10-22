@@ -21,28 +21,28 @@ const TYPES = {
   device_auth_failed: {
     title: 'Device sign-in refused',
     body: 'Something tried to send readings using the wrong device token. '
-      + 'If this was not your WattWise unit being set up, re-link it in Settings '
+      + 'If this was not your Dagitab unit being set up, re-link it in Settings '
       + 'to issue a new token.',
     tone: 'alert',
   },
   rate_limit_exceeded: {
     title: 'Too many requests blocked',
-    body: 'WattWise refused a burst of requests from your account. Usually this '
+    body: 'Dagitab refused a burst of requests from your account. Usually this '
       + 'is an app retrying after losing connection.',
     tone: 'notice',
   },
   device_linked: {
-    title: 'WattWise unit linked',
+    title: 'Dagitab unit linked',
     body: 'A unit was linked to your account.',
     tone: 'info',
   },
   device_transferred: {
-    title: 'WattWise unit moved to this account',
+    title: 'Dagitab unit moved to this account',
     body: 'A unit that was linked to another account is now linked to yours.',
     tone: 'alert',
   },
   device_unlinked: {
-    title: 'WattWise unit removed',
+    title: 'Dagitab unit removed',
     body: 'A unit was unlinked from your account.',
     tone: 'info',
   },

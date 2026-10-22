@@ -118,7 +118,7 @@ async function recomputeMonthlyBudget({ db, userId, monthString, userData = {} }
     //
     // Without this, a brand-new account with no hub linked showed "spent P5.60"
     // (the P5.00 metering flat plus its VAT) before it had measured anything,
-    // and Compare Months labelled that figure "measured by WattWise" while the
+    // and Compare Months labelled that figure "measured by Dagitab" while the
     // Hub still read Not paired. It also started every new user partway toward
     // their first budget alert.
     //

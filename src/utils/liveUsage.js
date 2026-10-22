@@ -345,7 +345,7 @@ export const buildLiveAppliances = (
       // caller can say "Switching off..." rather than asserting either one.
       isSwitching: switchingTo !== null,
       switchingTo,
-      // WattWise has lost control of this outlet: it was told to open, it did
+      // Dagitab has lost control of this outlet: it was told to open, it did
       // not, and no command will change that. Separate from `isSwitching`
       // precisely because it is the opposite of a transition.
       relayStuck,
