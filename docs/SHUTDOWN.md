@@ -25,7 +25,7 @@ file exists.
 | Vercel (Hobby) | free | — |
 | Brevo SMTP | free tier | — |
 | **dagitab.site** | **annual, at Namecheap - expires 22 Oct 2027** | you let it lapse - keep Auto-Renew ON while the project runs |
-| wattwise.site | auto-renew turned off 23 Oct 2026; **expires 17 Apr 2027** | lapses by itself - only a 308 redirect to dagitab.site until then |
+| wattwise.site | turn Auto-Renew OFF; **expires 17 Apr 2027** | lapses by itself - only a 308 redirect to dagitab.site until then |
 
 The container images are the trap. Every deploy of all 27 functions pushes a new
 image, they accumulate, and deleting the functions does **not** delete them.
