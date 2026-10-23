@@ -75,7 +75,7 @@ continuity tester:
 
 1. Plug a real load - a fan - into **socket 1 only**. Leave socket 2 empty.
 2. Switch socket 1 on.
-3. Open the app or wattwise.site.
+3. Open the app or dagitab.site.
 
 **The watts must appear on Outlet 1.** If they appear on Outlet 2, the meters
 are swapped relative to the firmware: either the UART pairs went back onto the
