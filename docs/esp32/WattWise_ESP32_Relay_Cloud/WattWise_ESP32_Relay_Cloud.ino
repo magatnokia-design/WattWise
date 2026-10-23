@@ -110,7 +110,7 @@ const IPAddress WIFI_DNS_PRIMARY(1, 1, 1, 1);
 const IPAddress WIFI_DNS_SECONDARY(8, 8, 8, 8);
 
 // Controller metadata
-static const char* FIRMWARE_VERSION = "relay-cloud-dualpzem-1.5.1";
+static const char* FIRMWARE_VERSION = "relay-cloud-dualpzem-1.5.2";
 
 bool relay1On = false;
 bool relay2On = false;
@@ -1489,7 +1489,7 @@ void setup() {
 
   Serial.println();
   Serial.println("========================================");
-  Serial.println("WattWise ESP32 Controller Boot");
+  Serial.println("Dagitab Hub Boot");
   Serial.print("Firmware: ");
   Serial.println(FIRMWARE_VERSION);
   Serial.println("Serial commands: help");

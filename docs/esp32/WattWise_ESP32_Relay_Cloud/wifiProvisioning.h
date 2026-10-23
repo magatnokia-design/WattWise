@@ -1,7 +1,7 @@
 #pragma once
 
 /*
- * Wi-Fi provisioning for the WattWise Hub.
+ * Wi-Fi provisioning for the Dagitab Hub.
  *
  * WHY THIS EXISTS
  *
@@ -135,7 +135,12 @@ const String& provisionedPassword() { return storedPassword; }
 // ---------------------------------------------------------------------------
 
 /**
- * `WattWise-Hub-A4C1` - the suffix makes two units distinguishable in a list.
+ * `Dagitab-Hub-A4C1` - the suffix makes two units distinguishable in a list.
+ *
+ * Renamed from WattWise-Hub-XXXX with the rebrand (firmware 1.5.2, Oct 2026).
+ * Only the broadcast name changed: the setup password, the NVS namespace
+ * ("wattwise", below - renaming it would wipe saved Wi-Fi) and the pairing QR
+ * are untouched.
  *
  * Read straight from efuse rather than through WiFi.macAddress(). That call
  * answers differently depending on whether the radio has been started and which
@@ -150,7 +155,7 @@ String provisioningApName() {
   char suffix[5];
   snprintf(suffix, sizeof(suffix), "%02X%02X", mac[4], mac[5]);
 
-  return String("WattWise-Hub-") + suffix;
+  return String("Dagitab-Hub-") + suffix;
 }
 
 // ---------------------------------------------------------------------------
@@ -166,7 +171,7 @@ static const char PORTAL_STYLE[] PROGMEM =
   "<style>"
   "*{box-sizing:border-box}"
   "body{margin:0;padding:24px 16px;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;"
-  "background:#F9FAFB;color:#111827}"
+  "background:#F9FAFB;color:#071B2C}"
   ".c{max-width:420px;margin:0 auto;background:#fff;border:1px solid #E5E7EB;border-radius:12px;padding:20px}"
   "h1{margin:0 0 4px;font-size:20px}"
   ".s{margin:0 0 18px;font-size:13px;color:#6B7280}"
@@ -174,9 +179,9 @@ static const char PORTAL_STYLE[] PROGMEM =
   "select,input{width:100%;padding:11px;font-size:15px;border:1px solid #E5E7EB;"
   "border-radius:8px;background:#fff;color:#111827}"
   "button{width:100%;margin-top:18px;padding:13px;font-size:15px;font-weight:700;color:#fff;"
-  "background:#10B981;border:0;border-radius:10px}"
+  "background:#008D43;border:0;border-radius:10px}"
   ".n{margin-top:16px;padding:10px 12px;background:#FEF3C7;border-radius:8px;font-size:12px;line-height:1.5}"
-  ".r{margin-top:8px;font-size:12px}.r a{color:#059669}"
+  ".r{margin-top:8px;font-size:12px}.r a{color:#008D43}"
   "</style>";
 
 // Scan results are cached as ready-made <option> markup. Rebuilding them per
@@ -227,10 +232,10 @@ void handlePortalRoot() {
   String page;
   page.reserve(3000);
   page += F("<!DOCTYPE html><html><head><meta name='viewport' content='width=device-width,initial-scale=1'>"
-            "<title>WattWise Hub setup</title>");
+            "<title>Dagitab Hub setup</title>");
   page += FPSTR(PORTAL_STYLE);
   page += F("</head><body><div class='c'>"
-            "<h1>WattWise Hub</h1>"
+            "<h1>Dagitab Hub</h1>"
             "<p class='s'>Choose the Wi-Fi network this Hub should use.</p>"
             "<form method='POST' action='/save'>"
             "<label for='ssid'>Network</label><select id='ssid' name='ssid'>");

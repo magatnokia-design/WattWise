@@ -15,7 +15,7 @@ static const char* DEVICE_ID = "ESP32_ROOM_A";
 // Must match the deviceToken stored on the user document in Firestore.
 static const char* DEVICE_TOKEN = "YOUR_DEVICE_TOKEN";
 
-// Password for the Hub's own setup network (WattWise-Hub-XXXX), printed on the
+// Password for the Hub's own setup network (Dagitab-Hub-XXXX), printed on the
 // unit sticker. This guards the setup portal only - it is not a network
 // credential, and it is not the device token.
 //

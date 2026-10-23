@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>WattWise Hub Booklet</title>
+<title>Dagitab Hub Booklet</title>
 
 <!--
   ===========================================================================
@@ -36,9 +36,9 @@
     --muted:      #6B7280;
     --rule:       #E5E7EB;
     --rule-mid:   #D1D5DB;
-    --green:      #059669;
-    --green-deep: #047857;
-    --green-wash: #ECFDF5;
+    --green:      #008D43;
+    --green-deep: #00401F;
+    --green-wash: #ECF8EF;
     --warn-wash:  #FEF3C7;
     --warn-ink:   #92400E;
     --fill-wash:  #F3F4F6;
@@ -77,7 +77,7 @@
   .toolbar .hint { color: #9CA3AF; line-height: 1.4; }
   .toolbar button {
     font: inherit; font-weight: 650; border: 0; border-radius: 6px;
-    padding: 7px 14px; cursor: pointer; background: #10B981; color: #062B20;
+    padding: 7px 14px; cursor: pointer; background: #008D43; color: #ffffff;
   }
   .toolbar button.ghost { background: transparent; color: #E5E7EB; border: 1px solid #4B5563; }
   .toolbar button:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
@@ -191,7 +191,8 @@
   /* ---------- cover ---------- */
   .cover { align-items: center; justify-content: center; text-align: center; }
   .cover-lockup { display: flex; flex-direction: column; align-items: center; gap: 3mm; }
-  .cover-logo { width: 22mm; height: 22mm; display: block; }
+  /* The whole Dagitab lockup - its D is the mark, so nothing stacks above it. */
+  .cover-brand { width: 62mm; height: auto; display: block; }
   .wordmark { font-size: 17pt; font-weight: 800; letter-spacing: -.025em; line-height: 1; margin: 0; }
   .wordmark span { color: var(--green); }
   .cover-rule { width: 12mm; height: 1mm; background: var(--green); border-radius: 1mm; }
@@ -218,7 +219,7 @@
     [contenteditable]:empty::before { content: ""; }
     .qr-slot:not(:has(img)) { border: 1px dashed var(--rule-mid); border-radius: 1.2mm; }
 
-    .note, .note.warn, .cover-rule, .cover-logo, .wordmark span, .step-n, .kicker {
+    .note, .note.warn, .cover-rule, .cover-brand, .wordmark span, .step-n, .kicker {
       -webkit-print-color-adjust: exact; print-color-adjust: exact;
     }
   }
@@ -232,7 +233,7 @@
 <body>
 
 <div class="toolbar screen-only">
-  <strong>WattWise Hub booklet</strong>
+  <strong>Dagitab Hub booklet</strong>
   <span class="hint">Fill the two dotted fields · print at <strong>A6</strong>,
   or A4 with <strong>4 pages per sheet</strong></span>
   <span class="grow"></span>
@@ -246,20 +247,22 @@
 <!-- ============ 1 · COVER ============ -->
 <section class="page cover">
   <div class="cover-lockup">
-    <!-- The mark exactly as the brand defines it: the bolt path from
-         BoltMark.jsx on the theme green, in the circle lockup the favicon
-         uses. Vector, so it stays sharp at any size and on a mono printer. -->
-    <svg class="cover-logo" viewBox="0 0 100 100" role="img" aria-label="WattWise">
-      <circle cx="50" cy="50" r="50" fill="#10B981"/>
-      <path d="M17 0 L0 25 L10 25 L8 44 L26 18 L15 18 Z" fill="#ffffff"
-            transform="translate(35.23,25) scale(1.1364)"/>
+    <!-- The Dagitab lockup exactly as src/constants/brandMark.js defines it:
+         the gradient D with the bolt cut through it, and the outlined
+         lettering. Vector, so it stays sharp at any size and on a mono printer. -->
+    <svg class="cover-brand" viewBox="50 50 1107 310" role="img" aria-label="Dagitab">
+      <defs><linearGradient id="dagitabGreen" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stop-color="#50D52B"/><stop offset="1" stop-color="#008D43"/>
+      </linearGradient></defs>
+      <path d="M55 55 H205 C300 55 355 115 355 205 C355 295 300 355 205 355 H55 L78 245 V165 Z" fill="url(#dagitabGreen)"/>
+      <path d="M245 92 L140 215 H218 L130 323 L278 187 H203 Z" fill="#ffffff"/>
+      <path d="M482.2 243.2L419.7 243.2L400.8 278L367.5 278L456.6 120.5L492.6 120.5L518.1 278L487.4 278ZM478.2 217L469 153.6L431 217ZM616.6 193.9L687 193.9L672.9 261.5Q660.4 269.5 642.3 275.1Q624.2 280.7 605.4 280.7Q576.2 280.7 560.6 267.5Q539.3 249.4 539.3 215.2Q539.3 192.2 548.5 171.1Q559.4 145.8 579.6 131.8Q599.8 117.8 627.1 117.8Q654.4 117.8 670.9 130.5Q687.4 143.2 692.7 167.5L662.5 170.9Q658.6 157.6 649.7 150.8Q640.8 144 627.4 144Q611.7 144 598.6 152.2Q585.5 160.4 578.1 177.5Q570.7 194.5 570.7 214.7Q570.7 234.6 579.7 244.1Q588.7 253.6 606.1 253.6Q616.6 253.6 627.5 250.7Q638.5 247.7 646.4 243.6L651.3 220.2L611.1 220.2ZM689.6 278L722.6 120.5L754.9 120.5L722.1 278ZM811.7 278L779.2 278L806.7 146.8L760.6 146.8L766 120.5L890.1 120.5L884.6 146.8L839.1 146.8ZM955.3 243.2L892.9 243.2L874 278L840.7 278L929.8 120.5L965.8 120.5L991.3 278L960.6 278ZM951.4 217L942.2 153.6L904.2 217ZM1001.9 278L1034.8 120.5L1088.7 120.5Q1106.2 120.5 1113.2 121.6Q1124.8 123.2 1132.8 128Q1140.9 132.9 1145.1 140.9Q1149.3 149 1149.3 158.8Q1149.3 171.9 1141.9 181.5Q1134.6 191.1 1119.4 196Q1131.5 199.4 1138.3 207.9Q1145.2 216.5 1145.2 227.2Q1145.2 241.4 1137.1 254.1Q1129.1 266.8 1114.9 272.4Q1100.7 278 1076.1 278ZM1053.9 184.1L1078.6 184.1Q1095.2 184.1 1102.5 181.8Q1109.8 179.4 1113.5 174Q1117.1 168.6 1117.1 162.5Q1117.1 156.5 1113.7 152.6Q1110.3 148.8 1103.9 147.5Q1100.4 146.8 1086.8 146.8L1061.7 146.8ZM1039.6 252.7L1070.8 252.7Q1090.5 252.7 1097.2 250.1Q1103.9 247.6 1107.9 241.8Q1112 236 1112 229.6Q1112 221.7 1106.2 216.6Q1100.4 211.5 1086.8 211.5L1048.2 211.5Z" fill="#071B2C"/>
     </svg>
-    <p class="wordmark">Watt<span>Wise</span></p>
     <div class="cover-rule"></div>
     <p class="cover-sub"><strong>Hub</strong><br>Setup &amp; pairing guide</p>
   </div>
   <div class="cover-foot">Two parts, about ten minutes</div>
-  <div class="folio"><span>WattWise Hub</span><span>1</span></div>
+  <div class="folio"><span>Dagitab Hub</span><span>1</span></div>
 </section>
 
 <!-- ============ 2 · BEFORE YOU START ============ -->
@@ -268,9 +271,9 @@
   <h2>What you need</h2>
 
   <ul class="plain">
-    <li>The WattWise Hub</li>
+    <li>The Dagitab Hub</li>
     <li>Your 2.4&nbsp;GHz Wi-Fi name and password</li>
-    <li>A phone with the WattWise app installed</li>
+    <li>A phone with the Dagitab app installed</li>
   </ul>
 
   <div class="note warn">
@@ -308,7 +311,7 @@
     <h3>Wi-Fi credentials</h3>
     <div class="field">
       <label>Setup network name</label>
-      <span class="static">WattWise-Hub-B734</span>
+      <span class="static">Dagitab-Hub-B734</span>
     </div>
     <div class="field">
       <label>Setup network password</label>
@@ -381,7 +384,7 @@
     <div class="step-n">5</div>
     <div class="step-body">
       <h2>Open the app</h2>
-      <p class="small">Sign in, then go to <strong>Settings → WattWise Hub</strong>.</p>
+      <p class="small">Sign in, then go to <strong>Settings → Dagitab Hub</strong>.</p>
     </div>
   </div>
 
@@ -419,7 +422,7 @@
 <section class="page">
   <p class="kicker">Part 2 · Pair with your account</p>
   <h2>Pairing code</h2>
-  <p class="small">Scan from <strong>Settings → WattWise Hub → Scan QR code</strong>.</p>
+  <p class="small">Scan from <strong>Settings → Dagitab Hub → Scan QR code to link</strong>.</p>
 
   <div class="field" style="margin-top:2mm">
     <div contenteditable="true" class="qr-slot" data-field="qr-image"
