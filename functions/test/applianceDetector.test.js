@@ -868,3 +868,31 @@ test('a 312 W load on an outlet named after a 47 W fan: cleared, nameable, then 
   assert.equal(fanAgain.appliance, 'Electric Fan');
   assert.equal(fanAgain.autoApply, true);
 });
+
+// 23 Oct 2026, Fatima's account: the Android Charger was saved during its
+// taper (15.4 W mean, 47.3 W peak, 13.6 W spread). Charging steadily at 12.7 W
+// it kept its name on outlet 1, which was already named, but on unnamed
+// outlet 2 it was offered as "LED Lamp". A saved appliance close enough to
+// keep a name must also be the one that gives it.
+test('a saved appliance eligible to keep a name also wins on an unnamed outlet', () => {
+  const profiles = [{
+    label: 'Android Charger',
+    meanPower: 15.36,
+    peakPower: 47.3,
+    stdDevPower: 13.64,
+    activeRatio: 0.2,
+    lowRatio: 0.8,
+    sampleCount: 120,
+    runtimeSec: 600,
+    updatedAtMs: 1,
+  }];
+  const steady = buildRunState({ powerStart: 12.7, jitter: 0.2 });
+
+  assert.equal(matchNamedAppliance(steady, 'Android Charger', profiles).state, 'confirmed');
+  const unnamed = detectApplianceFromRunState(steady, { userProfiles: profiles });
+  assert.equal(unnamed.appliance, 'Android Charger');
+  assert.equal(unnamed.autoApply, true);
+
+  // Without a saved appliance, the same load is still the catalogue's call.
+  assert.equal(detectApplianceFromRunState(steady, {}).appliance, 'LED Lamp');
+});

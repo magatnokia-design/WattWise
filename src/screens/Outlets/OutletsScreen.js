@@ -206,7 +206,7 @@ const OutletsScreen = ({ navigation }) => {
     const pendingName = pendingNames[number];
     const liveSuggestion = one ? outlet1Suggestion : outlet2Suggestion;
     const suggestion = pendingName
-      ? { ...liveSuggestion, showBadge: false, canAccept: false, identityState: 'confirmed' }
+      ? { ...liveSuggestion, showBadge: false, canAccept: false, identityState: 'confirmed', identifying: false }
       : liveSuggestion;
     const hasLoad = one ? outlet1HasLoad : outlet2HasLoad;
     const hasReading = one ? outlet1HasReading : outlet2HasReading;
@@ -223,6 +223,7 @@ const OutletsScreen = ({ navigation }) => {
         hasReading,
         isLoading: isLoadingOutlets,
         identityState: suggestion.identityState,
+        identifying: suggestion.identifying,
         unsupported: suggestion.unsupported,
         unsupportedReason: suggestion.unsupportedReason,
         measuredPowerW: suggestion.measuredPowerW,

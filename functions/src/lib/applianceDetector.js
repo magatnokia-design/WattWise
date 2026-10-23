@@ -788,9 +788,16 @@ const detectApplianceFromRunState = (runState, options = {}) => {
     ? [bestLearned]
     : [];
 
-  // Learned signatures get an advantage, not an automatic win: they describe
-  // this account's actual hardware, but a saved fan must not hijack a run that
-  // plainly matches something else.
+  // A saved appliance close enough to be eligible wins outright (Oct 2026).
+  // It used to compete with the generic catalogue on score, which made the two
+  // paths disagree: on an outlet already named "Android Charger", a steady
+  // 12.6 W charge scored 0.42 against the saved signature and the name held
+  // (matchNamedAppliance, same USER_PROFILE_MAX_SCORE), while the same charge
+  // on an unnamed outlet lost to the generic "LED Lamp" and was offered as a
+  // lamp. Eligibility is the same threshold that confirms a name, so "would
+  // keep this name" and "would give this name" now agree. Not a hijack: a
+  // run that plainly matches something else is above that threshold and never
+  // eligible. The generic catalogue answers for appliances never saved.
   const ranked = [...eligibleLearned, ...genericRanked]
     .map((entry) => ({
       ...entry,
@@ -798,14 +805,20 @@ const detectApplianceFromRunState = (runState, options = {}) => {
         ? entry.score * LEARNED_SCORE_ADVANTAGE
         : entry.score,
     }))
-    .sort((a, b) => a.effectiveScore - b.effectiveScore)
+    .sort((a, b) => {
+      const aLearned = a.source === 'learned';
+      const bLearned = b.source === 'learned';
+      if (aLearned !== bLearned) return aLearned ? -1 : 1;
+      return a.effectiveScore - b.effectiveScore;
+    })
     // A learned label and a generic profile can share a name; keep the better.
     .filter((entry, index, all) =>
       all.findIndex((other) => other.label === entry.label) === index);
 
   const top = ranked[0];
   const second = ranked[1] || null;
-  const margin = second ? (second.effectiveScore - top.effectiveScore) : 0.35;
+  // Never negative: a saved appliance can lead a generic one that scores lower.
+  const margin = second ? Math.max(0, second.effectiveScore - top.effectiveScore) : 0.35;
 
   // Beyond the catalogue's reach. Checked separately from the score because
   // scoring is relative - it finds the *least bad* profile and will always find

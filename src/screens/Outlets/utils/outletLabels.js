@@ -20,6 +20,7 @@ export const formatApplianceName = (
     hasReading,
     isLoading,
     identityState,
+    identifying = false,
     unsupported,
     unsupportedReason,
     measuredPowerW,
@@ -40,12 +41,17 @@ export const formatApplianceName = (
   // the outlet is called, and that is the more useful thing to know.
   const normalized = String(name || '').trim();
 
+  if (unsupported && unsupportedReason === 'over_power') {
+    return typeof measuredPowerW === 'number'
+      ? `Draws more than Dagitab supports · ${measuredPowerW.toFixed(0)} W`
+      : 'Draws more than Dagitab supports';
+  }
+
+  // The run's first verdict has not landed yet, so the stored name is the
+  // previous appliance's (Oct 2026). A few seconds, then the real answer.
+  if (identifying) return 'Checking…';
+
   if (unsupported) {
-    if (unsupportedReason === 'over_power') {
-      return typeof measuredPowerW === 'number'
-        ? `Draws more than Dagitab supports · ${measuredPowerW.toFixed(0)} W`
-        : 'Draws more than Dagitab supports';
-    }
     // Outside the catalogue but under the cut-off: the user can name it, and
     // once named it is theirs (Oct 2026). Unnamed, the card below asks.
     if (!normalized) return 'New appliance';
