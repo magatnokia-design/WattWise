@@ -136,7 +136,7 @@ const useRangeUsage = () => {
     };
   }, [userId, range.startDate, range.endDate, invalidMessage, reloadKey]);
 
-  const { summary, insights } = useMemo(() => {
+  const { summary, insights, days } = useMemo(() => {
     const today = getManilaDateKey();
     const liveToday = buildLiveTodayEntry(outlets, rates);
     const coversToday = range.startDate <= today && range.endDate >= today;
@@ -145,7 +145,9 @@ const useRangeUsage = () => {
     const previous = previousRows
       ? summarizeRange(previousRows, { ...previousRange(range.startDate, range.endDate), today })
       : null;
-    return { summary: current, insights: rangeInsights(merged, current, previous) };
+    // `days`: the range's daily rows, live today included - the website draws
+    // them as a chart (Oct 2026); the phone does not read it.
+    return { summary: current, insights: rangeInsights(merged, current, previous), days: merged };
   }, [rows, previousRows, outlets, rates, range]);
 
   const reload = useCallback(() => {
@@ -195,6 +197,7 @@ const useRangeUsage = () => {
     loadCalendarMonth,
     summary,
     insights,
+    days,
     status: invalidMessage ? 'invalid' : status,
     message: invalidMessage,
     reload,
