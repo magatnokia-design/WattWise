@@ -69,7 +69,9 @@ export const notificationService = {
   },
 
   // Real-time listener for notifications
-  subscribeToNotifications: (userId, onUpdate, onError) => {
+  // `max` is how many of the newest are listened to - 20 on the phone, more
+  // on the web, which pages through them (Oct 2026).
+  subscribeToNotifications: (userId, onUpdate, onError, max = 20) => {
     if (!userId) {
       const error = new Error('User not authenticated');
       if (onError) onError(error);
@@ -80,7 +82,7 @@ export const notificationService = {
     const q = query(
       notificationsRef,
       orderBy('timestamp', 'desc'),
-      limit(20)
+      limit(max)
     );
     
     return onSnapshot(
