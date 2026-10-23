@@ -67,3 +67,6 @@ functions/firebase-debug.log
 # checklist names what to avoid doing in front of a panel. Keep your own backup
 # (phone or drive); nothing here is recoverable from the remote.
 team/
+
+# arduino-cli build output (compile and upload share this --build-path; see CLAUDE.md)
+.arduino-build/
