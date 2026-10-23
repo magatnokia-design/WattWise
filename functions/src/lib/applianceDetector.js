@@ -696,6 +696,35 @@ const buildApplianceIdentity = (match, detection, namedAs) => {
 };
 
 /**
+ * What a run's verdict does to the outlet's name (Oct 2026: "the name follows
+ * the appliance, not the outlet").
+ *
+ * The outlet used to keep its name when a different appliance was plugged in
+ * and say "Not Electric Fan" beside a banner asking the user to switch the
+ * outlet off and on - which they had just done, and which could not help: the
+ * name was never cleared, so no suggestion was ever offered for the new load.
+ *
+ * - clearName: 'changed' on the run's FIRST verdict means a different appliance
+ *   was plugged in. The name goes, and the card asks for one (or the user's own
+ *   saved signature names it, via autoApply). A 'changed' after this same run
+ *   was 'confirmed' is a swap on a live outlet - the run now blends two loads,
+ *   nothing should be renamed from it, and the switch-off banner stays.
+ * - markRecognised: 'confirmed' for the first time this run, so Settings can
+ *   say when and where each saved appliance was last recognised.
+ *
+ * @param {string} identityState This evaluation's matchNamedAppliance state.
+ * @param {string|null} previousIdentityState The state stored earlier in this
+ *   same run (null on a run's first evaluation - it is deleted at run start).
+ */
+const resolveRunNaming = (identityState, previousIdentityState) => {
+  const earlierVerdict = previousIdentityState === 'confirmed' || previousIdentityState === 'changed';
+  return {
+    clearName: identityState === 'changed' && !earlierVerdict,
+    markRecognised: identityState === 'confirmed' && previousIdentityState !== 'confirmed',
+  };
+};
+
+/**
  * The name to record on a history line for an outlet.
  *
  * A log entry is permanent, so it must not assert an appliance the system has
@@ -901,6 +930,7 @@ module.exports = {
   detectApplianceFromRunState,
   matchNamedAppliance,
   buildApplianceIdentity,
+  resolveRunNaming,
   resolveOutletLogName,
   normalizeUserProfiles,
   buildApplianceSignature,

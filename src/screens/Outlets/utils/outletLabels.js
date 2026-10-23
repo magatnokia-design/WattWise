@@ -38,16 +38,19 @@ export const formatApplianceName = (
   // Before the name, deliberately. An outlet named "LED Lamp" with a kettle on
   // it should not go on saying "LED Lamp" - the load is out of scope whatever
   // the outlet is called, and that is the more useful thing to know.
+  const normalized = String(name || '').trim();
+
   if (unsupported) {
     if (unsupportedReason === 'over_power') {
       return typeof measuredPowerW === 'number'
         ? `Draws more than Dagitab supports · ${measuredPowerW.toFixed(0)} W`
         : 'Draws more than Dagitab supports';
     }
-    return 'Not something Dagitab monitors';
+    // Outside the catalogue but under the cut-off: the user can name it, and
+    // once named it is theirs (Oct 2026). Unnamed, the card below asks.
+    if (!normalized) return 'New appliance';
   }
 
-  const normalized = String(name || '').trim();
   if (!normalized) return 'Not set';
 
   // The measurements say this is no longer the appliance the outlet is named

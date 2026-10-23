@@ -108,6 +108,16 @@ const ApplianceSuggestion = ({
     <View style={styles.wrap}>
       {suggestionIsStale ? <StaleRunNotice /> : null}
 
+      {suggestion.askName ? (
+        <View style={styles.row}>
+          <Ionicons name="help-circle-outline" size={16} color={COLORS.primary} />
+          <Text style={styles.headline} numberOfLines={1}>
+            <Text style={styles.lead}>Not in Dagitab&apos;s list · </Text>
+            <Text style={styles.name}>what is it?</Text>
+          </Text>
+        </View>
+      ) : null}
+
       {closest ? (
         <View style={[styles.row, !trust.trusted && styles.rowUnsure]}>
           <Text style={styles.headline} numberOfLines={1}>
@@ -145,7 +155,7 @@ const ApplianceSuggestion = ({
           style={styles.input}
           value={typedName}
           onChangeText={setTypedName}
-          placeholder="Or type the real name, e.g. Printer"
+          placeholder={closest ? 'Or type the real name, e.g. Printer' : 'Type its name, e.g. Rice Cooker'}
           placeholderTextColor={COLORS.textLight}
           maxLength={MAX_NAME_LENGTH}
           returnKeyType="done"

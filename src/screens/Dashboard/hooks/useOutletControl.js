@@ -194,6 +194,26 @@ const buildOutletSuggestion = (outlet = {}, applianceName = '', runtimeState = {
 
   const suggestedName = String(outlet.autoDetectedAppliance || '').trim();
   if (!suggestedName) {
+    // Measured, matched nothing in the catalogue, and the outlet has no name:
+    // ask for one (Oct 2026). A 312 W load used to get no card at all - no
+    // suggestion and nowhere to type - so it could never be learned. Typed
+    // once, it is saved as the user's own signature and names itself after.
+    // Not for over-power: the Hub opens the relay within three seconds.
+    if (
+      scope.unsupported
+      && scope.unsupportedReason === 'no_match'
+      && !String(applianceName || '').trim()
+    ) {
+      const measured = outlet.applianceDetection?.features || {};
+      return withIdentity({
+        ...EMPTY_OUTLET_SUGGESTION,
+        meanPowerW: toOptionalNumber(measured.meanPower),
+        runtimeSeconds: toOptionalNumber(measured.runtimeSec),
+        askName: true,
+        showBadge: true,
+        canAccept: true,
+      });
+    }
     return withIdentity(EMPTY_OUTLET_SUGGESTION);
   }
 

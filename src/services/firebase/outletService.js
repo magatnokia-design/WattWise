@@ -43,21 +43,47 @@ const mapOutletDocToUiOutlet = (outletId, data = {}) => {
 // showing up without needing a migration.
 const isPlaceholderApplianceLabel = (label) => /^outlet\s*\d+$/i.test(String(label || '').trim());
 
+// One row per appliance. The stored array holds up to four power patterns per
+// appliance (MAX_SIGNATURES_PER_APPLIANCE - a charger's taper, a fan's speeds),
+// and listing each one showed the same appliance several times under one React
+// key. The most recently refreshed pattern stands for it. `lastSeen` is when and
+// where it was last recognised (applianceLastSeen, written by updateOutletMetrics
+// once per run), so the user can see saved appliances actually working.
 const mapSavedAppliances = (userData = {}) => {
   const rawProfiles = userData?.applianceProfiles;
   if (!Array.isArray(rawProfiles)) return [];
+  const lastSeenMap = userData?.applianceLastSeen || {};
 
-  return rawProfiles
-    .filter((profile) => {
-      const label = String(profile?.label || '').trim();
-      return label && !isPlaceholderApplianceLabel(label);
-    })
-    .map((profile) => ({
-      label: String(profile.label).trim(),
+  const byLabel = new Map();
+  rawProfiles.forEach((profile) => {
+    const label = String(profile?.label || '').trim();
+    if (!label || isPlaceholderApplianceLabel(label)) return;
+    const entry = {
+      label,
       meanPower: Number(profile.meanPower) || 0,
       peakPower: Number(profile.peakPower) || 0,
       updatedAtMs: Number(profile.updatedAtMs) || 0,
-    }));
+      patterns: 1,
+    };
+    const key = label.toLowerCase();
+    const existing = byLabel.get(key);
+    if (!existing) {
+      byLabel.set(key, entry);
+    } else {
+      const newer = entry.updatedAtMs > existing.updatedAtMs ? entry : existing;
+      byLabel.set(key, { ...newer, patterns: existing.patterns + 1 });
+    }
+  });
+
+  return Array.from(byLabel.entries()).map(([key, entry]) => {
+    const seen = lastSeenMap[key];
+    return {
+      ...entry,
+      lastSeen: seen && Number(seen.atMs) > 0
+        ? { atMs: Number(seen.atMs), outlet: Number(seen.outlet) || null }
+        : null,
+    };
+  });
 };
 
 const isSupportedOutletId = (outletId) => outletId === 'outlet1' || outletId === 'outlet2';

@@ -149,6 +149,14 @@ infrastructure exists only under `functions/`.
   other saved appliance is within `LEARNED_AUTO_MARGIN`; two saved appliances drawing the same
   power (the panel's printer-and-fan case) stay a suggestion, tested. Resets go through the
   explicit `clearAutoDetection` callable, not ad hoc writes.
+
+  **The name follows the appliance, not the outlet (Oct 2026).** On a run's first verdict,
+  `changed` clears the outlet's name (`resolveRunNaming`), so a different appliance gets a
+  suggestion or a "what is it?" prompt instead of the old name plus a switch-off banner that
+  could not help. A `changed` after the same run was `confirmed` is a live swap and keeps the
+  banner. A load outside the catalogue but under the 500 W cut-off is nameable, and once named
+  is the user's own signature. `users/{uid}.applianceLastSeen` records when and where each saved
+  appliance was last recognised, written once per run.
 - **What identification is claimed to do, and what it must never be load-bearing for.**
   Appliance identification is reliable for steady-state loads and unreliable for loads that
   change operating regime during a run. This affects per-appliance attribution only; total

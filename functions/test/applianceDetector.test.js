@@ -13,6 +13,7 @@ const {
   APPLIANCE_PROFILES,
   matchNamedAppliance,
   buildApplianceIdentity,
+  resolveRunNaming,
   resolveOutletLogName,
   normalizeUserProfiles,
   buildApplianceSignature,
@@ -824,4 +825,46 @@ test('a generic catalogue match is never applied on its own', () => {
   const result = detectApplianceFromRunState(run);
   assert.equal(result.matchSource, 'generic');
   assert.equal(result.autoApply, false);
+});
+
+// The name follows the appliance (Oct 2026). Fatima's outlet 2 kept "Electric
+// Fan" (saved at 47 W) while a 312 W load ran on it after an off/on, with a
+// banner asking for the off/on that had just happened and no way to name it.
+test('a different appliance on a fresh run clears the name; a live swap does not', () => {
+  assert.deepEqual(resolveRunNaming('changed', null), { clearName: true, markRecognised: false });
+  assert.deepEqual(resolveRunNaming('changed', 'unknown'), { clearName: true, markRecognised: false });
+  // Confirmed earlier in this same run, then changed: a swap on a live outlet.
+  assert.deepEqual(resolveRunNaming('changed', 'confirmed'), { clearName: false, markRecognised: false });
+  assert.deepEqual(resolveRunNaming('changed', 'changed'), { clearName: false, markRecognised: false });
+  // Recognised once per run, not on every post.
+  assert.deepEqual(resolveRunNaming('confirmed', null), { clearName: false, markRecognised: true });
+  assert.deepEqual(resolveRunNaming('confirmed', 'confirmed'), { clearName: false, markRecognised: false });
+  assert.deepEqual(resolveRunNaming('unnamed', null), { clearName: false, markRecognised: false });
+});
+
+test('a 312 W load on an outlet named after a 47 W fan: cleared, nameable, then recognised', () => {
+  const fanRun = buildRunState({ powerStart: 47.2, jitter: 0.3 });
+  const profiles = mergeSignatureIntoProfiles([], buildApplianceSignature(fanRun, 'Electric Fan'), 1);
+
+  const bigRun = buildRunState({ powerStart: 312, jitter: 2 });
+  const verdict = matchNamedAppliance(bigRun, 'Electric Fan', profiles);
+  assert.equal(verdict.state, 'changed');
+  assert.equal(resolveRunNaming(verdict.state, null).clearName, true);
+  assert.equal(matchNamedAppliance(bigRun, '', profiles).state, 'unnamed');
+
+  // Beyond the catalogue, so no generic suggestion - the user types the name.
+  const generic = detectApplianceFromRunState(bigRun, { userProfiles: profiles });
+  assert.equal(generic.unsupported, true);
+
+  // Typed once, it is the user's own signature: next run names itself.
+  const learned = mergeSignatureIntoProfiles(profiles, buildApplianceSignature(bigRun, 'Rice Cooker'), 2);
+  const again = detectApplianceFromRunState(buildRunState({ powerStart: 309, jitter: 2 }), { userProfiles: learned });
+  assert.equal(again.appliance, 'Rice Cooker');
+  assert.equal(again.autoApply, true);
+  assert.equal(matchNamedAppliance(buildRunState({ powerStart: 309, jitter: 2 }), 'Rice Cooker', learned).state, 'confirmed');
+
+  // And the fan, plugged back in, is still the fan.
+  const fanAgain = detectApplianceFromRunState(buildRunState({ powerStart: 46.8, jitter: 0.3 }), { userProfiles: learned });
+  assert.equal(fanAgain.appliance, 'Electric Fan');
+  assert.equal(fanAgain.autoApply, true);
 });

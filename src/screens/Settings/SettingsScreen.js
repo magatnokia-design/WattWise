@@ -51,6 +51,24 @@ const formatApplianceSignature = (appliance) => {
   return meanPower > 0 ? `~${meanPower.toFixed(1)} W` : 'Learned';
 };
 
+// "Recognised on Outlet 2 · 8:37 AM", "· Yesterday", "· Oct 19" - proof the
+// saved appliance is actually being matched (Oct 2026).
+const formatLastSeen = (lastSeen) => {
+  if (!lastSeen?.atMs) return 'Not recognised yet';
+  const at = new Date(lastSeen.atMs);
+  const today = new Date();
+  const yesterday = new Date(today.getTime() - 86400000);
+  const sameDay = (a, b) => a.toDateString() === b.toDateString();
+  const when = sameDay(at, today)
+    ? at.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+    : sameDay(at, yesterday)
+      ? 'Yesterday'
+      : at.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  return lastSeen.outlet
+    ? `Recognised on Outlet ${lastSeen.outlet} · ${when}`
+    : `Recognised · ${when}`;
+};
+
 const SettingsScreen = ({ navigation }) => {
   const [rateModalVisible, setRateModalVisible] = useState(false);
   const [statementsVisible, setStatementsVisible] = useState(false);
@@ -693,6 +711,7 @@ const SettingsScreen = ({ navigation }) => {
                   icon={applianceIcon(appliance.label)}
                   iconSet="mci"
                   label={appliance.label}
+                  subtitle={formatLastSeen(appliance.lastSeen)}
                   value={formatApplianceSignature(appliance)}
                   showArrow
                   onPress={() => handleSavedAppliancePress(appliance.label)}

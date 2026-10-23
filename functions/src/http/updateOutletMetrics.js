@@ -16,6 +16,7 @@ const {
   detectApplianceFromRunState,
   matchNamedAppliance,
   buildApplianceIdentity,
+  resolveRunNaming,
   isPlaceholderLabel,
   resolveOutletLogName,
 } = require('../lib/applianceDetector');
@@ -184,6 +185,9 @@ async function updateOutletMetrics(req, res) {
     // Outlets whose relay has stopped opening, and outlets where that has just
     // recovered. Same after-the-commit discipline as chargeCompletions.
     const relayFaultEvents = [];
+    // Saved appliances recognised on this post, stamped on the user document
+    // once per run (resolveRunNaming) so Settings can say when each was last seen.
+    const recognisedAppliances = [];
 
     for (const outlet of validOutlets) {
       const { number, voltage, current, power, status, energy, isOverPower } = outlet;
@@ -452,11 +456,30 @@ async function updateOutletMetrics(req, res) {
       }
 
       if (evaluatedState) {
-        const identity = matchNamedAppliance(
+        let identity = matchNamedAppliance(
           evaluatedState,
           namedAs,
           userData?.applianceProfiles
         );
+
+        // The name follows the appliance (Oct 2026). See resolveRunNaming.
+        // The stored identity is the current run's only after run start, which
+        // deletes it - so on the starting post there is no earlier verdict.
+        const naming = resolveRunNaming(
+          identity.state,
+          isRunStarting ? null : String(previousOutletData.applianceIdentity?.state || '') || null
+        );
+
+        if (naming.clearName && !isRunEnding) {
+          outletUpdate.applianceName = '';
+          outletUpdate.applianceSelection = admin.firestore.FieldValue.delete();
+          namedAs = '';
+          identity = matchNamedAppliance(evaluatedState, namedAs, userData?.applianceProfiles);
+        }
+
+        if (naming.markRecognised && namedAs) {
+          recognisedAppliances.push({ label: namedAs, outlet: number });
+        }
 
         outletUpdate.applianceIdentity = {
           ...buildApplianceIdentity(identity, detectionResult, namedAs),
@@ -610,6 +633,17 @@ async function updateOutletMetrics(req, res) {
           lastSeenAt: admin.firestore.FieldValue.serverTimestamp(),
         },
       }, { merge: true });
+    }
+
+    // Once per run per appliance, so this does not make the user document hot
+    // the way a per-post heartbeat did (see the note above). A nested map, not
+    // dotted keys: set() with merge treats a dotted key as one literal field.
+    if (recognisedAppliances.length > 0) {
+      const lastSeen = {};
+      recognisedAppliances.forEach(({ label, outlet }) => {
+        lastSeen[label.toLowerCase()] = { label, outlet, atMs: now };
+      });
+      batch.set(userRef, { applianceLastSeen: lastSeen }, { merge: true });
     }
 
     // A relay moved without Dagitab ordering it - a power-cycle is the ordinary
