@@ -191,7 +191,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   stack: {
-    gap: 12,
+    gap: 8,
   },
   pending: {
     backgroundColor: COLORS.white,

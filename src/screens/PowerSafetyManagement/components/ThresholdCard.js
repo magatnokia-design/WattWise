@@ -1,6 +1,5 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../../../constants/colors';
 import { getStatusColor, getWorstStatus } from '../utils/safetyHelpers';
 
@@ -19,24 +18,19 @@ const toNumber = (value) => {
  * Only exceptions are coloured. Painting all three green on every healthy
  * reading would make the normal case shout and the exception blend in.
  */
-const Metric = ({ icon, label, value, limit, grade, isStale, last }) => (
-  <View style={[styles.metric, !last && styles.metricDivided]}>
-    <View style={styles.metricIcon}>
-      <Ionicons name={icon} size={15} color={COLORS.primary} />
-    </View>
+const Metric = ({ label, value, limit, grade, isStale }) => (
+  <View style={styles.metric}>
     <Text style={styles.metricLabel}>{label}</Text>
-    <View style={styles.metricRight}>
-      <Text
-        style={[
-          styles.metricValue,
-          !isStale && grade.label !== 'Normal' && { color: grade.color },
-        ]}
-        numberOfLines={1}
-      >
-        {value}
-      </Text>
-      <Text style={styles.metricLimit} numberOfLines={1}>{limit}</Text>
-    </View>
+    <Text
+      style={[
+        styles.metricValue,
+        !isStale && grade.label !== 'Normal' && { color: grade.color },
+      ]}
+      numberOfLines={1}
+    >
+      {value}
+    </Text>
+    <Text style={styles.metricLimit} numberOfLines={1}>{limit}</Text>
   </View>
 );
 
@@ -69,31 +63,29 @@ const ThresholdCard = ({ outletName, status, thresholds, isStale = false }) => {
         </View>
       </View>
 
-      <View>
+      <View style={styles.metrics}>
         <Metric
-          icon="speedometer-outline"
           label="Voltage"
           value={showValue(`${voltage.toFixed(0)} V`)}
-          limit={`${thresholds.voltage.min}–${thresholds.voltage.max} V allowed`}
+          limit={`${thresholds.voltage.min}–${thresholds.voltage.max} V`}
           grade={voltageStatus}
           isStale={isStale}
         />
+        <View style={styles.divider} />
         <Metric
-          icon="pulse-outline"
           label="Current"
           value={showValue(`${current.toFixed(2)} A`)}
-          limit={`up to ${thresholds.current.max} A`}
+          limit={`max ${thresholds.current.max} A`}
           grade={currentStatus}
           isStale={isStale}
         />
+        <View style={styles.divider} />
         <Metric
-          icon="flash-outline"
           label="Power"
           value={showValue(`${power.toFixed(1)} W`)}
-          limit={`up to ${thresholds.power.max} W`}
+          limit={`max ${thresholds.power.max} W`}
           grade={powerStatus}
           isStale={isStale}
-          last
         />
       </View>
     </View>
@@ -103,10 +95,9 @@ const ThresholdCard = ({ outletName, status, thresholds, isStale = false }) => {
 const styles = StyleSheet.create({
   container: {
     backgroundColor: COLORS.white,
-    borderRadius: 16,
-    paddingHorizontal: 16,
-    paddingTop: 14,
-    paddingBottom: 6,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
     borderWidth: 1,
     borderColor: COLORS.border,
   },
@@ -114,57 +105,48 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 6,
+    marginBottom: 10,
   },
   outletName: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
     color: COLORS.text,
   },
   statusBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
+    paddingHorizontal: 9,
+    paddingVertical: 3,
+    borderRadius: 10,
   },
   statusText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
   },
-  metric: {
+  metrics: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    paddingVertical: 12,
   },
-  metricDivided: {
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-  },
-  metricIcon: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: '#ECF8EF',
+  metric: {
+    flex: 1,
     alignItems: 'center',
-    justifyContent: 'center',
+  },
+  divider: {
+    width: 1,
+    alignSelf: 'stretch',
+    backgroundColor: COLORS.border,
   },
   metricLabel: {
-    flex: 1,
-    fontSize: 14,
-    color: COLORS.text,
-  },
-  metricRight: {
-    alignItems: 'flex-end',
+    fontSize: 11,
+    color: COLORS.textLight,
   },
   metricValue: {
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: '700',
     color: COLORS.text,
+    marginVertical: 1,
   },
   metricLimit: {
-    fontSize: 11.5,
+    fontSize: 10.5,
     color: COLORS.textLight,
-    marginTop: 1,
   },
 });
 

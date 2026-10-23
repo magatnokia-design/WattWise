@@ -56,6 +56,8 @@ const RangeUsageCard = ({
   status,
   message,
   onRetry,
+  calendarKwh = null,
+  onCalendarMonth,
   monthlyBudget,
   daysInMonth,
 }) => {
@@ -125,6 +127,8 @@ const RangeUsageCard = ({
         startDate={calendarMode === 'single' ? range.endDate : range.startDate}
         endDate={range.endDate}
         maxDate={today}
+        dayValues={calendarKwh || {}}
+        onMonthChange={onCalendarMonth}
         onClose={() => setCalendarMode(null)}
         onConfirm={(picked) => {
           setRange({ startDate: picked.startDate, endDate: picked.endDate });

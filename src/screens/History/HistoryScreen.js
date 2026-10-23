@@ -14,11 +14,12 @@ import Pager from './components/Pager';
 import { useHistory } from './hooks/useHistory';
 import ExportUsageCard from './components/ExportUsageCard';
 import { useAuth } from '../../hooks/useAuth';
-import { HISTORY_PAGE_SIZE, fitPageSize, paginate } from './utils/historyHelpers';
+import { buildDayKwhMap } from '../../utils/calendarGrid';
+import { HISTORY_PAGE_SIZE, fitPageSize, fitRowHeight, paginate } from './utils/historyHelpers';
 
 // Row geometry, matching the fixed heights in ActivityLog and UsageHistory.
 // Each page is sized to the space on screen so it never needs scrolling.
-const ACTIVITY_ROW = { rowHeight: 49, chrome: 22 };
+const ACTIVITY_ROW = { rowHeight: 48, chrome: 22 };
 const USAGE_ROW = { rowHeight: 40, chrome: 42 };
 const LIST_BOTTOM_PADDING = 12;
 
@@ -43,6 +44,10 @@ const HistoryScreen = () => {
   const available = listHeight - LIST_BOTTOM_PADDING;
   const activityPageSize = listHeight ? fitPageSize(available, ACTIVITY_ROW) : HISTORY_PAGE_SIZE;
   const usagePageSize = listHeight ? fitPageSize(available, USAGE_ROW) : HISTORY_PAGE_SIZE;
+  // The space left after the whole rows that fit, shared out between them, so
+  // every gap is the same instead of the leftover piling up under the last row.
+  const activityRowHeight = fitRowHeight(available, activityPageSize, ACTIVITY_ROW);
+  const usageRowHeight = fitRowHeight(available, usagePageSize, USAGE_ROW);
 
   const {
     activityLogs,
@@ -91,6 +96,9 @@ const HistoryScreen = () => {
     [usageHistory, usagePage, usagePageSize]
   );
 
+  // Each day's kWh, for the figures on the export's calendar.
+  const dayKwh = useMemo(() => buildDayKwhMap(usageHistory), [usageHistory]);
+
   // The oldest day on record, for the export's "All" choice.
   const firstUsageDate = usageHistory.length > 0
     ? usageHistory[usageHistory.length - 1].date
@@ -106,7 +114,7 @@ const HistoryScreen = () => {
       <View style={styles.header}>
         <Text style={styles.headerTitle}>History</Text>
         {activeTab === 1 ? (
-          <ExportUsageCard fetchRows={fetchUsageForExport} firstDate={firstUsageDate} />
+          <ExportUsageCard fetchRows={fetchUsageForExport} firstDate={firstUsageDate} dayKwh={dayKwh} />
         ) : null}
       </View>
 
@@ -140,6 +148,7 @@ const HistoryScreen = () => {
         {activeTab === 0 ? (
           <ActivityLog
             style={styles.fill}
+            rowHeight={activityRowHeight}
             logs={activity.items}
             loading={activityPageLoading || (loading && activityLogs.length === 0)}
             showOfflineState={showOfflineState}
@@ -147,6 +156,7 @@ const HistoryScreen = () => {
         ) : (
           <UsageHistory
             style={styles.fill}
+            rowHeight={usageRowHeight}
             usage={usage.items}
             loading={usageLoading}
             showOfflineState={showOfflineState}

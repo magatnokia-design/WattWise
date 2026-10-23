@@ -27,6 +27,20 @@ const HARD_MAX_TOTAL_POWER_W = 1000;
 const DEFAULT_VOLTAGE_MIN = 190;
 const DEFAULT_VOLTAGE_MAX = 260;
 
+// The range each stored limit is held to (Oct 2026). The app used to accept a
+// 500 V maximum or a 50 A one, and a limit the hardware can never reach
+// protects nothing. Voltage: the PZEM-004T v3 measures 80-260 V, and mains here
+// runs ~244 V. Current: the relay contacts are rated 10 A. Power: the firmware
+// ceiling. Keep in step with SAFETY_LIMITS in the app's safetyHelpers.js,
+// which refuses an out-of-range value before it is saved.
+const LIMIT_BOUNDS = {
+  voltageMin: { min: 180, max: 220 },
+  voltageMax: { min: 240, max: 260 },
+  currentMax: { min: 0.1, max: 10 },
+};
+
+const clampTo = (value, { min, max }) => Math.min(Math.max(value, min), max);
+
 // Fractions of the configured limit at which each stage begins.
 const WARNING_RATIO = 0.8;
 const LIMIT_RATIO = 0.95;
@@ -60,16 +74,18 @@ const normalizeThresholds = (raw = {}) => {
     ? toFiniteNumber(raw?.power?.max, HARD_MAX_POWER_W)
     : toFiniteNumber(raw?.powerMax, HARD_MAX_POWER_W);
 
+  // Stored values written before the bounds existed (or by an older client)
+  // are held to them here, whatever the document says.
   return {
-    voltageMin: nested
+    voltageMin: clampTo(nested
       ? toFiniteNumber(raw?.voltage?.min, DEFAULT_VOLTAGE_MIN)
-      : toFiniteNumber(raw?.voltageMin, DEFAULT_VOLTAGE_MIN),
-    voltageMax: nested
+      : toFiniteNumber(raw?.voltageMin, DEFAULT_VOLTAGE_MIN), LIMIT_BOUNDS.voltageMin),
+    voltageMax: clampTo(nested
       ? toFiniteNumber(raw?.voltage?.max, DEFAULT_VOLTAGE_MAX)
-      : toFiniteNumber(raw?.voltageMax, DEFAULT_VOLTAGE_MAX),
-    currentMax: nested
+      : toFiniteNumber(raw?.voltageMax, DEFAULT_VOLTAGE_MAX), LIMIT_BOUNDS.voltageMax),
+    currentMax: clampTo(nested
       ? toFiniteNumber(raw?.current?.max, 10)
-      : toFiniteNumber(raw?.currentMax, 10),
+      : toFiniteNumber(raw?.currentMax, 10), LIMIT_BOUNDS.currentMax),
     // Never above the hardware ceiling, whatever the stored setting says.
     powerMax: Math.min(powerMax > 0 ? powerMax : HARD_MAX_POWER_W, HARD_MAX_POWER_W),
   };
@@ -159,6 +175,7 @@ const evaluateSafety = ({ settings, outlets = [], totalPowerW = 0, nowMs = Date.
 module.exports = {
   HARD_MAX_POWER_W,
   HARD_MAX_TOTAL_POWER_W,
+  LIMIT_BOUNDS,
   DEFAULT_VOLTAGE_MIN,
   DEFAULT_VOLTAGE_MAX,
   WARNING_RATIO,

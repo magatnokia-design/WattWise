@@ -67,3 +67,52 @@ export const formatKeyShort = (key, withYear = true) => {
   const month = MONTH_NAMES[parts.monthIndex].slice(0, 3);
   return withYear ? `${month} ${parts.day}, ${parts.year}` : `${month} ${parts.day}`;
 };
+
+/**
+ * The first day any Dagitab calendar offers (Oct 2026). Nothing was measured
+ * before April 2026, so earlier months were only ever empty pages - Compare
+ * Usage's month picker starts there too (FIRST_MONTH).
+ */
+export const CALENDAR_FIRST_DAY = '2026-04-01';
+
+/** The later of two date keys, ignoring a missing one. */
+export const laterKey = (a, b) => (!a ? b : !b ? a : a > b ? a : b);
+
+const toNumber = (value) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+/**
+ * `{ 'YYYY-MM-DD': kWh }` from daily usage rows, for the figures under each
+ * day. Reads either row shape: History's normalised rows (`totalKwh`) or raw
+ * history_daily documents (`outlet1Energy` + `outlet2Energy`, else
+ * `totalEnergy`).
+ */
+export const buildDayKwhMap = (rows) => {
+  const map = {};
+  (Array.isArray(rows) ? rows : []).forEach((row) => {
+    if (!row?.date) return;
+    const kwh = row.totalKwh !== undefined
+      ? toNumber(row.totalKwh)
+      : row.outlet1Energy !== undefined || row.outlet2Energy !== undefined
+        ? toNumber(row.outlet1Energy) + toNumber(row.outlet2Energy)
+        : toNumber(row.totalEnergy);
+    map[row.date] = Math.max(0, kwh);
+  });
+  return map;
+};
+
+/**
+ * A day's kWh in the four characters a calendar cell has room for:
+ * "1.24", "12.4", "<.01". Null for a day with nothing used, which draws no
+ * figure at all rather than a column of zeros.
+ */
+export const formatDayKwh = (kwh) => {
+  const value = toNumber(kwh);
+  if (value <= 0) return null;
+  if (value < 0.01) return '<.01';
+  if (value < 10) return value.toFixed(2);
+  if (value < 100) return value.toFixed(1);
+  return String(Math.round(value));
+};

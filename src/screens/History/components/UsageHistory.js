@@ -14,7 +14,8 @@ const kwh = (value) => `${Number(value || 0).toFixed(2)} kWh`;
  * what it cost - nothing else. The per-outlet breakdown lives in the Excel
  * export, which stays detailed.
  */
-const UsageHistory = ({ usage = EMPTY_USAGE, loading = false, showOfflineState = false, style }) => {
+// rowHeight: set by HistoryScreen so a page fills the card with equal rows.
+const UsageHistory = ({ usage = EMPTY_USAGE, loading = false, showOfflineState = false, rowHeight = 40, style }) => {
   if (usage.length === 0) {
     if (loading) {
       return (
@@ -51,7 +52,7 @@ const UsageHistory = ({ usage = EMPTY_USAGE, loading = false, showOfflineState =
         <Text style={[styles.head, styles.numCol]}>Cost</Text>
       </View>
       {usage.map((item, index) => (
-        <View key={item.date || String(index)} style={[styles.row, index > 0 && styles.rowBorder]}>
+        <View key={item.date || String(index)} style={[styles.row, { height: rowHeight }, index > 0 && styles.rowBorder]}>
           <View style={[styles.dateCol, styles.dateCell]}>
             <Text style={styles.date}>{formatDayKey(item.date)}</Text>
             {/* Today is measured so far, not a closed day. */}

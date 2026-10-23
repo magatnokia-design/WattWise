@@ -3,8 +3,9 @@ import { View, Text, StyleSheet, Switch, TouchableOpacity, TextInput } from 'rea
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS } from '../../../constants/colors';
 import AppDialog from '../../../components/common/AppDialog';
+import { SAFETY_LIMITS, findLimitOutOfRange } from '../utils/safetyHelpers';
 
-const MAX_POWER_W = 500;
+const MAX_POWER_W = SAFETY_LIMITS.powerMax.max;
 
 const toFields = (thresholds) => ({
   voltageMin: String(thresholds?.voltage?.min ?? 190),
@@ -13,9 +14,15 @@ const toFields = (thresholds) => ({
   powerMax: String(thresholds?.power?.max ?? MAX_POWER_W),
 });
 
-const Field = ({ label, value, onChangeText }) => (
+// The allowed range sits under the label, so a limit outside it is never a
+// surprise at Save.
+const Field = ({ limitKey, value, onChangeText }) => {
+  const bound = SAFETY_LIMITS[limitKey];
+  return (
   <View style={styles.inputGroup}>
-    <Text style={styles.inputLabel}>{label}</Text>
+    <Text style={styles.inputLabel}>
+      {bound.label} <Text style={styles.inputRange}>{bound.min}–{bound.max} {bound.unit}</Text>
+    </Text>
     <TextInput
       style={styles.input}
       value={value}
@@ -24,7 +31,8 @@ const Field = ({ label, value, onChangeText }) => (
       maxLength={6}
     />
   </View>
-);
+  );
+};
 
 /**
  * Auto cut-off and the limits, in one compact card (Oct 2026).
@@ -110,11 +118,21 @@ const ProtectionSettings = ({ enabled, onToggle, thresholds, onSaveThresholds })
       return;
     }
 
-    const capped = rawPowerMax > MAX_POWER_W;
+    const outOfRange = findLimitOutOfRange({ voltageMin, voltageMax, currentMax, powerMax: rawPowerMax });
+    if (outOfRange) {
+      setDialog({
+        icon: '⚠️',
+        tone: 'danger',
+        title: 'That limit is out of range',
+        message: outOfRange,
+      });
+      return;
+    }
+
     const nextThresholds = {
       voltage: { min: voltageMin, max: voltageMax },
       current: { max: currentMax },
-      power: { max: Math.min(rawPowerMax, MAX_POWER_W) },
+      power: { max: rawPowerMax },
     };
 
     if (!onSaveThresholds) {
@@ -150,17 +168,6 @@ const ProtectionSettings = ({ enabled, onToggle, thresholds, onSaveThresholds })
       return;
     }
 
-    // Said after the save rather than before it. It used to be raised first
-    // and then overwritten by any later message, or shown for a save that
-    // went on to fail.
-    if (capped) {
-      setDialog({
-        icon: '🛡️',
-        tone: 'warning',
-        title: 'Power limit capped',
-        message: `The most this hardware will enforce is ${MAX_POWER_W} W per outlet, so that is what was saved.`,
-      });
-    }
     setIsEditing(false);
   };
 
@@ -197,12 +204,12 @@ const ProtectionSettings = ({ enabled, onToggle, thresholds, onSaveThresholds })
       {isEditing ? (
         <View style={styles.form}>
           <View style={styles.inputRow}>
-            <Field label="Min volts" value={fields.voltageMin} onChangeText={setField('voltageMin')} />
-            <Field label="Max volts" value={fields.voltageMax} onChangeText={setField('voltageMax')} />
+            <Field limitKey="voltageMin" value={fields.voltageMin} onChangeText={setField('voltageMin')} />
+            <Field limitKey="voltageMax" value={fields.voltageMax} onChangeText={setField('voltageMax')} />
           </View>
           <View style={styles.inputRow}>
-            <Field label="Max amps" value={fields.currentMax} onChangeText={setField('currentMax')} />
-            <Field label={`Max watts (≤${MAX_POWER_W})`} value={fields.powerMax} onChangeText={setField('powerMax')} />
+            <Field limitKey="currentMax" value={fields.currentMax} onChangeText={setField('currentMax')} />
+            <Field limitKey="powerMax" value={fields.powerMax} onChangeText={setField('powerMax')} />
           </View>
           <TouchableOpacity
             style={[styles.saveButton, saving && styles.saveButtonBusy]}
@@ -315,6 +322,11 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: COLORS.textLight,
     marginBottom: 4,
+  },
+  inputRange: {
+    color: COLORS.textLight,
+    opacity: 0.75,
+    fontWeight: '400',
   },
   input: {
     borderWidth: 1,

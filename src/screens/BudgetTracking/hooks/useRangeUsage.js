@@ -10,6 +10,7 @@ import {
   rangeInsights,
   RANGE_PRESETS,
 } from '../../../utils/rangeUsage';
+import { buildDayKwhMap } from '../../../utils/calendarGrid';
 
 /**
  * Usage and cost between two chosen dates, for the Budget screen.
@@ -37,6 +38,8 @@ import {
 // "uid|start|end" -> { rows, previousRows }. Module scope: outlives the
 // screen, not the app.
 const lastByRange = new Map();
+// "uid|YYYY-MM" -> { date: kWh }, for the calendar.
+const lastMonthKwh = new Map();
 
 const useRangeUsage = () => {
   const [userId, setUserId] = useState(null);
@@ -58,6 +61,7 @@ const useRangeUsage = () => {
       setUserId(user?.uid || null);
       if (!user?.uid) {
         lastByRange.clear();
+        lastMonthKwh.clear();
         setOutlets([]);
         return;
       }
@@ -144,11 +148,51 @@ const useRangeUsage = () => {
     return { summary: current, insights: rangeInsights(merged, current, previous) };
   }, [rows, previousRows, outlets, rates, range]);
 
-  const reload = useCallback(() => setReloadKey((key) => key + 1), []);
+  const reload = useCallback(() => {
+    // The open month gains a row every midnight, so its calendar figures are
+    // re-read on a refresh; closed months never change.
+    const openMonth = getManilaDateKey().slice(0, 7);
+    Array.from(lastMonthKwh.keys())
+      .filter((key) => key.endsWith(`|${openMonth}`))
+      .forEach((key) => lastMonthKwh.delete(key));
+    setReloadKey((key) => key + 1);
+  }, []);
+
+  // Each day's kWh for the month the calendar is showing (Oct 2026), so the
+  // calendar reads as a usage map. Kept by month for the session; a failed
+  // read leaves that month without figures rather than drawing zeros.
+  const [monthKwh, setMonthKwh] = useState({});
+  const loadCalendarMonth = useCallback(({ year, monthIndex }) => {
+    if (!userId) return;
+    const month = `${year}-${String(monthIndex + 1).padStart(2, '0')}`;
+    const cacheKey = `${userId}|${month}`;
+    if (lastMonthKwh.has(cacheKey)) {
+      setMonthKwh((prev) => ({ ...prev, ...lastMonthKwh.get(cacheKey) }));
+      return;
+    }
+    const lastDay = new Date(Date.UTC(year, monthIndex + 1, 0)).getUTCDate();
+    historyService.getUsageByDateRange(userId, `${month}-01`, `${month}-${String(lastDay).padStart(2, '0')}`)
+      .then((result) => {
+        if (!result?.success) return;
+        const map = buildDayKwhMap(result.data);
+        lastMonthKwh.set(cacheKey, map);
+        setMonthKwh((prev) => ({ ...prev, ...map }));
+      })
+      .catch(() => {});
+  }, [userId]);
+
+  // Today has no stored row until midnight, so its figure comes from live
+  // telemetry, the same entry the totals use.
+  const calendarKwh = useMemo(() => {
+    const liveToday = buildLiveTodayEntry(outlets, rates);
+    return liveToday ? { ...monthKwh, ...buildDayKwhMap([liveToday]) } : monthKwh;
+  }, [monthKwh, outlets, rates]);
 
   return {
     range,
     setRange,
+    calendarKwh,
+    loadCalendarMonth,
     summary,
     insights,
     status: invalidMessage ? 'invalid' : status,

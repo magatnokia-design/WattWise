@@ -6,22 +6,14 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Modal,
-  Platform,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import { COLORS } from '../../../constants/colors';
+import { CalendarPanel } from '../../../components/common/DagitabCalendar';
+import { CALENDAR_FIRST_DAY, laterKey } from '../../../utils/calendarGrid';
 import { getManilaDateKey } from '../../../utils/liveUsage';
 import { addDaysToKey, countDays, MAX_RANGE_DAYS, validateRange } from '../../../utils/rangeUsage';
 import { formatDayKey } from '../utils/historyHelpers';
-
-// The picker works in phone-local time; a date key is a calendar day.
-const keyToLocalDate = (key) => {
-  const [y, m, d] = String(key).split('-').map(Number);
-  return new Date(y, m - 1, d);
-};
-const localDateToKey = (date) =>
-  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 
 const thisMonth = (today) => ({ startDate: `${today.slice(0, 7)}-01`, endDate: today });
 const lastMonth = (today) => {
@@ -29,9 +21,10 @@ const lastMonth = (today) => {
   return { startDate: `${end.slice(0, 7)}-01`, endDate: end };
 };
 // Everything recorded, back to the oldest day on the account - capped at the
-// one-year limit every range read shares.
+// one-year limit every range read shares, and never before April 2026, the
+// first day any calendar here offers.
 const everything = (today, firstDate) => {
-  const earliest = addDaysToKey(today, -(MAX_RANGE_DAYS - 1));
+  const earliest = laterKey(addDaysToKey(today, -(MAX_RANGE_DAYS - 1)), CALENDAR_FIRST_DAY);
   const start = firstDate && firstDate > earliest ? firstDate : earliest;
   return { startDate: start, endDate: today };
 };
@@ -51,13 +44,18 @@ const everything = (today, firstDate) => {
  * stacks one Modal on another (see CLAUDE.md on Alert.alert).
  *
  * @param {(start: string, end: string) => Promise<{success: boolean, rows?: Array, error?: string}>} fetchRows
+ * The dates are picked on the Dagitab calendar, drawn inside this sheet in
+ * place of its body (CalendarPanel) - the phone's own date dialog looked
+ * nothing like the app, and a second Modal over this one is not done here.
+ *
  * @param {string|null} firstDate Oldest day on record, for "All".
+ * @param {Object<string, number>} [dayKwh] kWh by day, shown on the calendar.
  */
-export const ExportUsageCard = ({ fetchRows, firstDate = null }) => {
+export const ExportUsageCard = ({ fetchRows, firstDate = null, dayKwh = null }) => {
   const today = getManilaDateKey();
   const [open, setOpen] = useState(false);
   const [range, setRange] = useState(() => thisMonth(today));
-  const [iosField, setIosField] = useState(null);
+  const [picking, setPicking] = useState(false);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState(null);
 
@@ -73,30 +71,10 @@ export const ExportUsageCard = ({ fetchRows, firstDate = null }) => {
   const invalid = validateRange(range.startDate, range.endDate, today);
   const dayCount = invalid ? 0 : countDays(range.startDate, range.endDate > today ? today : range.endDate);
 
-  const setField = (field, key) => {
-    setProblem(null);
-    setRange((current) => ({ ...current, [field]: key }));
-  };
-
-  const openPicker = (field) => {
-    if (Platform.OS === 'android') {
-      DateTimePickerAndroid.open({
-        value: keyToLocalDate(range[field]),
-        mode: 'date',
-        maximumDate: keyToLocalDate(today),
-        onChange: (event, date) => {
-          if (event.type === 'set' && date) setField(field, localDateToKey(date));
-        },
-      });
-    } else {
-      setIosField(field);
-    }
-  };
-
   const close = () => {
     if (busy) return;
     setOpen(false);
-    setIosField(null);
+    setPicking(false);
     setProblem(null);
   };
 
@@ -166,6 +144,24 @@ export const ExportUsageCard = ({ fetchRows, firstDate = null }) => {
       <Modal visible={open} transparent animationType="fade" onRequestClose={close}>
         <View style={styles.overlay}>
           <TouchableOpacity style={styles.backdrop} onPress={close} activeOpacity={1} />
+          {picking ? (
+            <View style={styles.calendarSheet}>
+              <CalendarPanel
+                mode="range"
+                title="Dates to export"
+                startDate={range.startDate}
+                endDate={range.endDate}
+                maxDate={today}
+                dayValues={dayKwh}
+                onClose={() => setPicking(false)}
+                onConfirm={(picked) => {
+                  setProblem(null);
+                  setRange({ startDate: picked.startDate, endDate: picked.endDate });
+                  setPicking(false);
+                }}
+              />
+            </View>
+          ) : (
           <View style={styles.sheet}>
             <View style={styles.sheetHead}>
               <View style={styles.sheetIcon}>
@@ -199,8 +195,8 @@ export const ExportUsageCard = ({ fetchRows, firstDate = null }) => {
               {[['startDate', 'From'], ['endDate', 'To']].map(([field, label]) => (
                 <TouchableOpacity
                   key={field}
-                  style={[styles.dateField, iosField === field && styles.dateFieldActive]}
-                  onPress={() => openPicker(field)}
+                  style={styles.dateField}
+                  onPress={() => setPicking(true)}
                   accessibilityRole="button"
                   accessibilityLabel={`${label} date`}
                 >
@@ -212,19 +208,6 @@ export const ExportUsageCard = ({ fetchRows, firstDate = null }) => {
                 </TouchableOpacity>
               ))}
             </View>
-
-            {Platform.OS !== 'android' && iosField ? (
-              <DateTimePicker
-                value={keyToLocalDate(range[iosField])}
-                mode="date"
-                display="inline"
-                maximumDate={keyToLocalDate(today)}
-                onChange={(event, date) => {
-                  if (date) setField(iosField, localDateToKey(date));
-                  setIosField(null);
-                }}
-              />
-            ) : null}
 
             {invalid || problem ? (
               <View style={styles.problem}>
@@ -254,6 +237,7 @@ export const ExportUsageCard = ({ fetchRows, firstDate = null }) => {
               )}
             </TouchableOpacity>
           </View>
+          )}
         </View>
       </Modal>
     </>
@@ -352,8 +336,13 @@ const styles = StyleSheet.create({
     paddingVertical: 9,
     backgroundColor: COLORS.background,
   },
-  dateFieldActive: {
-    borderColor: COLORS.primary,
+  calendarSheet: {
+    alignSelf: 'center',
+    width: '100%',
+    maxWidth: 360,
+    backgroundColor: COLORS.white,
+    borderRadius: 20,
+    overflow: 'hidden',
   },
   dateLabel: {
     fontSize: 11,

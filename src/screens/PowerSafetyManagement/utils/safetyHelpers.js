@@ -109,6 +109,38 @@ export const SAFETY_STAGES = ['normal', 'warning', 'limit', 'cutoff'].map((key) 
   color: getSafetyStageConfig(key).color,
 }));
 
+// What each limit may be set to (Oct 2026). A 500 V or 50 A limit used to be
+// accepted, and a limit the hardware can never reach protects nothing.
+// - Voltage: the PZEM-004T v3 measures 80-260 V, so a maximum above 260 V is a
+//   reading the meter cannot produce. Mains here is 230 V nominal and runs
+//   ~244 V, so a maximum under 240 V would alarm on a healthy supply.
+// - Current: the relay contacts (SRD-05VDC-SL-C) are rated 10 A.
+// - Power: the firmware's own 500 W per-outlet cut-off (MAX_OUTLET_POWER_W).
+// Keep in step with LIMIT_BOUNDS in functions/src/lib/powerSafety.js, which
+// clamps whatever is stored.
+export const SAFETY_LIMITS = {
+  voltageMin: { label: 'Min volts', min: 180, max: 220, unit: 'V' },
+  voltageMax: { label: 'Max volts', min: 240, max: 260, unit: 'V' },
+  currentMax: { label: 'Max amps', min: 0.1, max: 10, unit: 'A' },
+  powerMax: { label: 'Max watts', min: 1, max: 500, unit: 'W' },
+};
+
+/**
+ * The first limit outside its allowed range, as a sentence, or null.
+ *
+ * @param {{voltageMin:number, voltageMax:number, currentMax:number, powerMax:number}} values
+ * @returns {string|null}
+ */
+export const findLimitOutOfRange = (values = {}) => {
+  for (const [key, bound] of Object.entries(SAFETY_LIMITS)) {
+    const value = Number(values[key]);
+    if (!Number.isFinite(value) || value < bound.min || value > bound.max) {
+      return `${bound.label} has to be between ${bound.min} and ${bound.max} ${bound.unit}.`;
+    }
+  }
+  return null;
+};
+
 // The ratios evaluateSafety grades by, duplicated here for the same reason
 // billing.js is: the chips render directly beneath the banner the backend
 // grades, and the two disagreeing about one reading is worse than either rule

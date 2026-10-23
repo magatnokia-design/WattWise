@@ -290,3 +290,18 @@ export const fitPageSize = (availableHeight, { rowHeight, chrome = 0, min = 5, m
   const rows = Math.floor((height - chrome) / row);
   return Math.max(min, Math.min(max, rows));
 };
+
+/**
+ * The height each of `pageSize` rows gets so the page fills the space, with
+ * the leftover (always less than one row) shared out evenly instead of left
+ * as a gap under the last row. Never below the row's own height, and never
+ * more than 30% above it, so a capped page size cannot stretch rows apart.
+ */
+export const fitRowHeight = (availableHeight, pageSize, { rowHeight, chrome = 0 } = {}) => {
+  const row = Number(rowHeight) || 0;
+  const height = Number(availableHeight);
+  const count = Number(pageSize);
+  if (!(height > 0) || !(count > 0) || !(row > 0)) return row;
+  const shared = Math.floor((height - chrome) / count);
+  return Math.max(row, Math.min(Math.round(row * 1.3), shared));
+};

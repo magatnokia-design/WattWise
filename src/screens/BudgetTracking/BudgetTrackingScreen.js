@@ -134,6 +134,8 @@ const BudgetTrackingScreen = () => {
           insights={rangeUsage.insights}
           message={rangeUsage.message}
           onRetry={rangeUsage.reload}
+          calendarKwh={rangeUsage.calendarKwh}
+          onCalendarMonth={rangeUsage.loadCalendarMonth}
           monthlyBudget={monthlyBudget}
           daysInMonth={daysInMonth}
         />

@@ -251,3 +251,25 @@ test('combined draw still escalates as it approaches the total ceiling', () => {
 
   assert.equal(atCutoff.stage, 'cutoff');
 });
+
+test('stored voltage and current limits are held to what the hardware can read', () => {
+  // A 500 V maximum and a 50 A one were accepted by the app until Oct 2026.
+  const high = normalizeThresholds({ voltage: { min: 10, max: 500 }, current: { max: 50 } });
+  assert.equal(high.voltageMin, 180);
+  assert.equal(high.voltageMax, 260);
+  assert.equal(high.currentMax, 10);
+
+  const low = normalizeThresholds({ voltage: { min: 230, max: 200 }, current: { max: 0 } });
+  assert.equal(low.voltageMin, 220);
+  assert.equal(low.voltageMax, 240);
+  assert.equal(low.currentMax, 0.1);
+});
+
+test('an over-voltage beyond a 500 V setting is still caught at the clamped 260 V', () => {
+  const result = evaluateSafety({
+    settings: { thresholds: { voltage: { min: 190, max: 500 }, current: { max: 10 }, power: { max: 500 } } },
+    outlets: [{ number: 1, status: 'on', voltage: 262, current: 0.1, power: 20 }],
+    totalPowerW: 20,
+  });
+  assert.equal(result.stage, 'limit');
+});

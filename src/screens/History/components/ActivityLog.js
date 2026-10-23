@@ -7,8 +7,6 @@ import {
   activityDayLabel,
   describeLogDelivery,
   describeLogSource,
-  formatWatts,
-  powerAtSwitch,
 } from '../utils/historyHelpers';
 
 const EMPTY_LOGS = [];
@@ -22,6 +20,7 @@ const SOURCE_TONES = {
 
 /**
  * One switch, on one line (compact, Oct 2026): what switched, why, and when.
+ * No wattage (Oct 2026, on request) - the outlet, the source and the time.
  */
 const ActivityLogItem = ({ item }) => {
   const isOn = item.status === 'ON';
@@ -29,10 +28,6 @@ const ActivityLogItem = ({ item }) => {
   // Null on every ordinary row. Only set when the hub never confirmed the
   // switch, which is the one case where the ON/OFF beside it is not a fact.
   const delivery = describeLogDelivery(item);
-  // Only a switch-off carries a wattage. Rows written before this was fixed
-  // backend-side can hold the previous session's reading against a switch-on,
-  // so the rule is applied here too rather than trusted from the document.
-  const watts = formatWatts(powerAtSwitch(item));
 
   return (
     <View style={styles.row}>
@@ -62,7 +57,6 @@ const ActivityLogItem = ({ item }) => {
           <Text style={{ color: SOURCE_TONES[source.tone] || COLORS.textLight, fontWeight: '600' }}>
             {source.label}
           </Text>
-          {watts ? ` · ${watts}` : ''}
           {/* The day, in the row rather than as a heading over a group: one
               row is always one height, so the screen can fit a whole page
               without scrolling (Oct 2026). */}
@@ -73,9 +67,6 @@ const ActivityLogItem = ({ item }) => {
             </Text>
           ) : null}
         </Text>
-        {/* Spelled out rather than left to the label. "Not confirmed" beside an
-            OFF still reads as OFF unless the row says what is actually unknown. */}
-        {delivery ? <Text style={styles.deliveryNote}>{delivery.note}</Text> : null}
       </View>
 
       <View style={styles.right}>
@@ -102,6 +93,9 @@ const ActivityLogItem = ({ item }) => {
  */
 const ActivityLog = ({
   style,
+  // Set by HistoryScreen so a page of rows fills the card exactly, with the
+  // same gap between every pair (Oct 2026).
+  rowHeight = 48,
   logs = EMPTY_LOGS,
   loading = false,
   // True only when nothing could be read.
@@ -143,7 +137,10 @@ const ActivityLog = ({
   return (
     <View style={[styles.card, style]}>
       {logs.map((item, index) => (
-        <View key={item.id || `${item.timestamp || 'log'}-${index}`}>
+        <View
+          key={item.id || `${item.timestamp || 'log'}-${index}`}
+          style={[styles.slot, { height: rowHeight }]}
+        >
           {index > 0 ? <View style={styles.separator} /> : null}
           <ActivityLogItem item={item} />
         </View>
@@ -161,18 +158,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
   },
-  // A fixed height so HistoryScreen can size a page to fit (ACTIVITY_ROW_HEIGHT).
+  // Every row is one height, set by HistoryScreen (ACTIVITY_ROW), and the
+  // separator sits inside it - so the gaps are equal however many rows fit.
+  slot: {
+    justifyContent: 'center',
+  },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    minHeight: 48,
-    paddingVertical: 4,
   },
   separator: {
+    position: 'absolute',
+    top: 0,
+    left: 38,
+    right: 0,
     height: 1,
     backgroundColor: COLORS.border,
-    marginLeft: 38,
   },
   statusIcon: {
     width: 28,
@@ -193,12 +195,6 @@ const styles = StyleSheet.create({
     fontSize: 11.5,
     color: COLORS.textLight,
     marginTop: 1,
-  },
-  deliveryNote: {
-    fontSize: 11,
-    lineHeight: 15,
-    color: COLORS.textLight,
-    marginTop: 3,
   },
   right: {
     alignItems: 'flex-end',
