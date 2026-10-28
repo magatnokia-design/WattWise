@@ -1,12 +1,4 @@
 {
   "//": "Read by scripts/audit-gate.js. Each entry excuses ONE advisory by ID, with the reason it cannot reach this backend and the condition for removing it. Keep it short: an allowlist that grows is a gate that has been switched off.",
-  "allow": [
-    {
-      "id": "GHSA-86w9-cpqp-85rv",
-      "package": "node-forge",
-      "added": "2026-10-22",
-      "reason": "RSA signature VERIFICATION flaw. firebase-admin 12 uses node-forge only for forge.pki.privateKeyFromPem in ServiceAccountCredential (parsing a key, never verifying a signature), and index.js calls admin.initializeApp() with no key file, so on Cloud Functions that credential is never constructed. No fixed node-forge exists (<=1.4.0 is all of them).",
-      "remove_when": "The backend moves to firebase-admin 14+, which drops node-forge. That needs the namespaced API (admin.firestore.FieldValue..., ~74 calls in 34 files) migrated to the modular imports first - v14 removed admin.firestore entirely."
-    }
-  ]
+  "allow": []
 }
