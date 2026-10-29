@@ -110,6 +110,31 @@ const resolveOutletPeakForDate = (outlet = {}, dateKey) => {
   return 0;
 };
 
+/**
+ * Seconds the outlet ran on `dateKey` (updateOutletMetrics, Oct 2026), or null
+ * when the slot carries none - a document from before run time was tracked.
+ * Null is "not measured" and must not be averaged in as a day spent off.
+ * Mirrors resolveOnSecondsForDate in functions/src/lib/energyAccounting.js.
+ */
+const resolveOutletOnSecondsForDate = (outlet = {}, dateKey) => {
+  const readSlot = (value) => {
+    const parsed = Number(value);
+    return value === undefined || value === null || !Number.isFinite(parsed)
+      ? null
+      : Math.max(0, parsed);
+  };
+
+  if (String(outlet.energyPreviousDateKey || '') === dateKey) {
+    return readSlot(outlet.onSecondsPreviousDay);
+  }
+
+  if (String(outlet.energyDateKey || '') === dateKey) {
+    return readSlot(outlet.onSecondsToday);
+  }
+
+  return null;
+};
+
 const resolveApplianceName = (outlet = {}, outletNumber) => {
   const name = String(outlet.applianceName || '').trim();
   const fallback = `Outlet ${outletNumber}`;
@@ -176,14 +201,20 @@ export const buildLiveTodayEntry = (outlets, { rateProfileId = null, supplyRates
   const outlet1Name = resolveApplianceName(outlet1, 1);
   const outlet2Name = resolveApplianceName(outlet2, 2);
 
+  const outlet1OnSeconds = resolveOutletOnSecondsForDate(outlet1, dateKey);
+  const outlet2OnSeconds = resolveOutletOnSecondsForDate(outlet2, dateKey);
+
+  // Same shape as processDailyRollup's upsertApplianceBreakdown, run time
+  // included, so a live day and a rolled-up day read the same way.
   const applianceBreakdown = [];
-  const addAppliance = (name, energyKwh, appliedCost, outletNumber) => {
+  const addAppliance = (name, energyKwh, appliedCost, outletNumber, onSeconds) => {
     if (energyKwh <= 0) return;
 
     const existing = applianceBreakdown.find((item) => item.applianceName === name);
     if (existing) {
       existing.energyKwh += energyKwh;
       existing.cost += appliedCost;
+      if (onSeconds !== null) existing.onSeconds = (existing.onSeconds || 0) + onSeconds;
       if (!existing.outlets.includes(outletNumber)) existing.outlets.push(outletNumber);
       return;
     }
@@ -193,11 +224,12 @@ export const buildLiveTodayEntry = (outlets, { rateProfileId = null, supplyRates
       energyKwh,
       cost: appliedCost,
       outlets: [outletNumber],
+      onSeconds,
     });
   };
 
-  addAppliance(outlet1Name, outlet1Energy, outlet1Cost, 1);
-  addAppliance(outlet2Name, outlet2Energy, outlet2Cost, 2);
+  addAppliance(outlet1Name, outlet1Energy, outlet1Cost, 1, outlet1OnSeconds);
+  addAppliance(outlet2Name, outlet2Energy, outlet2Cost, 2, outlet2OnSeconds);
 
   return {
     id: dateKey,
@@ -208,6 +240,8 @@ export const buildLiveTodayEntry = (outlets, { rateProfileId = null, supplyRates
     outlet2Name,
     outlet1Cost,
     outlet2Cost,
+    outlet1OnSeconds,
+    outlet2OnSeconds,
     totalEnergy,
     cost,
     bill,

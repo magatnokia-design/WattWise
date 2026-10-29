@@ -14,6 +14,7 @@ import useUnreadCount from '../screens/Notifications/hooks/useUnreadCount';
 import PowerSafetyScreen from '../screens/PowerSafetyManagement/PowerSafetyScreen';
 import BudgetTrackingScreen from '../screens/BudgetTracking/BudgetTrackingScreen';
 import ReferenceComparisonScreen from '../screens/ReferenceComparison/ReferenceComparisonScreen';
+import ApplianceCostsScreen from '../screens/ApplianceCosts/ApplianceCostsScreen';
 import HelpCenterScreen from '../screens/Help/HelpCenterScreen';
 import DocumentScreen from '../screens/Help/DocumentScreen';
 
@@ -157,6 +158,12 @@ export const MainNavigator = () => {
       <Stack.Screen
         name="ReferenceComparison"
         component={ReferenceComparisonScreen}
+        options={{ headerShown: false }}
+      />
+      {/* Opened from the Analytics appliance cost card. */}
+      <Stack.Screen
+        name="ApplianceCosts"
+        component={ApplianceCostsScreen}
         options={{ headerShown: false }}
       />
       <Stack.Screen

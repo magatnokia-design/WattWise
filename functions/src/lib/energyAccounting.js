@@ -27,11 +27,29 @@ const { getManilaDateKey } = require('./manilaTime');
  * Tracking it here makes it a maximum over every telemetry sample, and it rides
  * the same day boundary as the energy accumulator rather than growing a second
  * date key that could drift from it.
+ *
+ * Run time (Oct 2026) rides it too, for the same reason. "How many hours a day
+ * does it run" was the one input the appliance cost calculator had to ask the
+ * user for, and it is the one people guess worst. It is measured here instead:
+ * the interval since the previous sample counts as "on" when that sample drew
+ * at least RUNNING_THRESHOLD_W. Display only - like the appliance name it sits
+ * beside, nothing billed, budgeted or cut off may read it.
  */
 
 // A single sample cannot plausibly represent more than this much energy at the
 // telemetry cadence. A larger jump means the counter was replaced, not consumed.
 const MAX_PLAUSIBLE_SAMPLE_DELTA_KWH = 5;
+
+// The detector's own line between "something is running" and "nothing is":
+// a run ends when the draw stays under 3 W (applianceDetector.js). An idle
+// charger brick or a relay's leakage reads below it.
+const RUNNING_THRESHOLD_W = 3;
+
+// The Hub posts every 1.5 s while active and every 5 s idle, and one slow post
+// can take up to its 12 s HTTP timeout. A longer silence is a Hub that dropped
+// off, and nothing is known about the outlet during it - so it is not counted,
+// rather than assumed to have run at the last value seen.
+const MAX_ON_TIME_GAP_MS = 30000;
 
 const toFiniteNumber = (value, fallback = 0) => {
   const parsed = Number(value);
@@ -52,6 +70,17 @@ const round = (value) => Number(Math.max(0, value).toFixed(4));
 // Watts are displayed to one decimal on both clients; storing more precision
 // than is ever shown just invites two screens to disagree in the last digit.
 const roundWatts = (value) => Number(Math.max(0, value).toFixed(1));
+
+const roundSeconds = (value) => Number(Math.max(0, value).toFixed(1));
+
+// A closed-out day keeps "never measured" as null rather than turning it into
+// a measured zero on the way through.
+const carrySeconds = (value) => {
+  const parsed = Number(value);
+  return value === undefined || value === null || !Number.isFinite(parsed)
+    ? null
+    : roundSeconds(parsed);
+};
 
 /**
  * @param {object} previous Stored outlet document fields.
@@ -131,6 +160,17 @@ const deriveOutletEnergy = (
   // peak hour forward and report whenever it was switched off.
   const peakAdvances = samplePowerW > carriedPeakW;
 
+  // The interval belongs to the state that held during it, which is the
+  // previous sample's. One that straddles midnight is booked to the new day -
+  // at most 30 s, and splitting it is not worth a second clock.
+  const carriedOnSeconds = isSameDay ? Math.max(0, toFiniteNumber(previous.onSecondsToday, 0)) : 0;
+  const previousSampleAtMs = toFiniteNumber(previous.onTimeSampleAtMs, 0);
+  const gapMs = timestampMs - previousSampleAtMs;
+  const intervalWasRunning = previousSampleAtMs > 0
+    && gapMs > 0
+    && gapMs <= MAX_ON_TIME_GAP_MS
+    && toFiniteNumber(previous.onTimeSampleW, 0) >= RUNNING_THRESHOLD_W;
+
   const result = {
     energyMeterKwh: round(baselineKwh),
     energyDateKey: dateKey,
@@ -140,6 +180,12 @@ const deriveOutletEnergy = (
     meterRebased,
     peakPowerTodayW: roundWatts(peakAdvances ? samplePowerW : carriedPeakW),
     peakPowerTodayAtMs: peakAdvances ? timestampMs : carriedPeakAtMs,
+    onSecondsToday: roundSeconds(carriedOnSeconds + (intervalWasRunning ? gapMs / 1000 : 0)),
+    // This sample opens the next interval. Stored here rather than read back
+    // from the outlet's `power` so the accounting needs nothing but its own
+    // fields.
+    onTimeSampleAtMs: timestampMs,
+    onTimeSampleW: roundWatts(samplePowerW),
   };
 
   if (isSameDay || !previousDateKey) {
@@ -149,6 +195,7 @@ const deriveOutletEnergy = (
     result.energyPreviousDayKwh = round(toFiniteNumber(previous.energyPreviousDayKwh, 0));
     result.peakPowerPreviousDayW = roundWatts(toFiniteNumber(previous.peakPowerPreviousDayW, 0));
     result.peakPowerPreviousDayAtMs = toFiniteNumber(previous.peakPowerPreviousDayAtMs, 0);
+    result.onSecondsPreviousDay = carrySeconds(previous.onSecondsPreviousDay);
     return result;
   }
 
@@ -159,6 +206,7 @@ const deriveOutletEnergy = (
   result.energyPreviousDayKwh = round(toFiniteNumber(previous.energyTodayKwh, 0));
   result.peakPowerPreviousDayW = roundWatts(toFiniteNumber(previous.peakPowerTodayW, 0));
   result.peakPowerPreviousDayAtMs = toFiniteNumber(previous.peakPowerTodayAtMs, 0);
+  result.onSecondsPreviousDay = carrySeconds(previous.onSecondsToday);
   return result;
 };
 
@@ -208,9 +256,45 @@ const resolvePeakForDate = (outletData = {}, dateKey) => {
   return { powerW: 0, atMs: 0 };
 };
 
+/**
+ * Seconds the outlet spent running on `dateKey`, from the same two slots as the
+ * energy beside it.
+ *
+ * Null, not zero, when the slot carries no run time - a day closed out before
+ * run-time tracking existed. That is "not measured", and a reader averaging
+ * hours a day must skip it rather than count it as a day spent off. (The day
+ * the tracking was deployed is measured from the deploy onward only, so it
+ * reads short; it is one day, and it ages out of every average.)
+ *
+ * @returns {number|null}
+ */
+const resolveOnSecondsForDate = (outletData = {}, dateKey) => {
+  if (!dateKey) return null;
+
+  const readSlot = (value) => {
+    const parsed = Number(value);
+    return value === undefined || value === null || !Number.isFinite(parsed)
+      ? null
+      : Math.max(0, parsed);
+  };
+
+  if (String(outletData.energyPreviousDateKey || '') === dateKey) {
+    return readSlot(outletData.onSecondsPreviousDay);
+  }
+
+  if (String(outletData.energyDateKey || '') === dateKey) {
+    return readSlot(outletData.onSecondsToday);
+  }
+
+  return null;
+};
+
 module.exports = {
   MAX_PLAUSIBLE_SAMPLE_DELTA_KWH,
+  RUNNING_THRESHOLD_W,
+  MAX_ON_TIME_GAP_MS,
   deriveOutletEnergy,
   resolveEnergyForDate,
   resolvePeakForDate,
+  resolveOnSecondsForDate,
 };

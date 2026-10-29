@@ -49,6 +49,9 @@ const isPlaceholderApplianceLabel = (label) => /^outlet\s*\d+$/i.test(String(lab
 // key. The most recently refreshed pattern stands for it. `lastSeen` is when and
 // where it was last recognised (applianceLastSeen, written by updateOutletMetrics
 // once per run), so the user can see saved appliances actually working.
+// `minPower`/`maxPower` span every saved pattern, so a fan's speeds or a
+// charger's taper can be costed as a range rather than as whichever pattern
+// happened to be refreshed last (Appliance costs, Oct 2026).
 const mapSavedAppliances = (userData = {}) => {
   const rawProfiles = userData?.applianceProfiles;
   if (!Array.isArray(rawProfiles)) return [];
@@ -58,10 +61,13 @@ const mapSavedAppliances = (userData = {}) => {
   rawProfiles.forEach((profile) => {
     const label = String(profile?.label || '').trim();
     if (!label || isPlaceholderApplianceLabel(label)) return;
+    const meanPower = Number(profile.meanPower) || 0;
     const entry = {
       label,
-      meanPower: Number(profile.meanPower) || 0,
+      meanPower,
       peakPower: Number(profile.peakPower) || 0,
+      minPower: meanPower,
+      maxPower: meanPower,
       updatedAtMs: Number(profile.updatedAtMs) || 0,
       patterns: 1,
     };
@@ -71,7 +77,12 @@ const mapSavedAppliances = (userData = {}) => {
       byLabel.set(key, entry);
     } else {
       const newer = entry.updatedAtMs > existing.updatedAtMs ? entry : existing;
-      byLabel.set(key, { ...newer, patterns: existing.patterns + 1 });
+      byLabel.set(key, {
+        ...newer,
+        minPower: Math.min(existing.minPower, meanPower),
+        maxPower: Math.max(existing.maxPower, meanPower),
+        patterns: existing.patterns + 1,
+      });
     }
   });
 

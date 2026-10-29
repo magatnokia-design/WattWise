@@ -334,6 +334,11 @@ async function updateOutletMetrics(req, res) {
         peakPowerTodayAtMs: energyState.peakPowerTodayAtMs,
         peakPowerPreviousDayW: energyState.peakPowerPreviousDayW,
         peakPowerPreviousDayAtMs: energyState.peakPowerPreviousDayAtMs,
+        // Run time - display only (the appliance cost calculator's hours a day).
+        onSecondsToday: energyState.onSecondsToday,
+        onSecondsPreviousDay: energyState.onSecondsPreviousDay,
+        onTimeSampleAtMs: energyState.onTimeSampleAtMs,
+        onTimeSampleW: energyState.onTimeSampleW,
         totalEnergy: energyState.totalEnergy,
         deviceId: normalizedDeviceId,
         detectionState: nextDetectionState,

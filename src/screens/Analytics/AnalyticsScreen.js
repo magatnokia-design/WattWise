@@ -17,10 +17,16 @@ import {
 } from '../../services/firebase';
 import { calculatePelcoIIIBill } from '../../utils/billing';
 import { buildLiveAppliances, buildLiveTodayEntry, withLiveToday } from '../../utils/liveUsage';
+import {
+  aggregateApplianceUsage,
+  foldApplianceRows,
+  priceByEnergyShare,
+} from '../../utils/applianceBreakdown';
 import { formatCurrency } from '../BudgetTracking/utils/budgetHelpers';
 import LiveUsagePanel from './components/LiveUsagePanel';
 import UsageBarChart from './components/UsageBarChart';
 import BillBreakdown from './components/BillBreakdown';
+import ApplianceCostCard from './components/ApplianceCostCard';
 import { WebAppNotice } from '../../components/common/WebAppNotice';
 import { WEB_APP_LINKS } from '../../constants/webApp';
 import { useDismissibleNotice } from '../../hooks/useDismissibleNotice';
@@ -34,11 +40,24 @@ import { OfflineBanner } from '../../components/common/OfflineNotice';
  *
  * Removed on request: Usage by Appliance, Outlet Comparison, Budget Progress
  * and Insights. The per-outlet split lives in the chart (Outlet 1 under
- * Outlet 2), budget lives on the Budget tab, and the per-appliance breakdown
- * on the monthly statement.
+ * Outlet 2) and budget lives on the Budget tab.
+ *
+ * Per-appliance came back (Oct 2026, on request) as a three-row cost card,
+ * not the old list: the period's cost split by energy share, with the full
+ * list, cost per hour and a calculator on the Appliance costs screen.
  */
 
 const TABS = ['Daily', 'Weekly', 'Monthly'];
+
+// Rows on the Analytics card; the Appliance costs screen shows the rest.
+const CARD_APPLIANCE_ROWS = 3;
+
+// The period's cost, split across its appliances by the statement's rule.
+const buildApplianceCostRows = (entries, totalCost, totalEnergy) => priceByEnergyShare(
+  foldApplianceRows(aggregateApplianceUsage(entries), CARD_APPLIANCE_ROWS),
+  totalCost,
+  totalEnergy
+);
 
 // Matches the Outlets tab's staleness window, so both screens agree on whether
 // the hardware is currently reporting.
@@ -290,6 +309,11 @@ export const AnalyticsScreen = ({ navigation }) => {
         note: lastMeasuredLabel ? `Nothing measured yet today. Last usage: ${lastMeasuredLabel}.` : '',
         bars: null,
         bill,
+        applianceRows: buildApplianceCostRows(
+          dailyEntry ? [dailyEntry] : [],
+          bill.totals.total,
+          totalEnergy
+        ),
       };
     }
 
@@ -343,6 +367,13 @@ export const AnalyticsScreen = ({ navigation }) => {
       note: '',
       bars,
       bill,
+      // Only days inside the charted window, so the rows and the total above
+      // them cover the same stretch of time.
+      applianceRows: buildApplianceCostRows(
+        entries.filter((entry) => entry.date >= toDateKey(startDate) && entry.date <= toDateKey(endDate)),
+        bill.totals.total,
+        totalEnergy
+      ),
     };
   }, [selectedTab, rangeEntries, fallbackDaily, liveTodayEntry, rateProfileId, supplyRates]);
 
@@ -450,6 +481,14 @@ export const AnalyticsScreen = ({ navigation }) => {
             </>
           ) : null}
         </View>
+
+        {!offline && analytics.applianceRows.length > 0 ? (
+          <ApplianceCostCard
+            rows={analytics.applianceRows}
+            costLabel={isMonthly ? 'estimated bill' : 'estimated cost'}
+            onOpen={() => navigation?.navigate?.('ApplianceCosts')}
+          />
+        ) : null}
 
         {!offline && analytics.totalEnergy > 0 ? (
           <BillBreakdown

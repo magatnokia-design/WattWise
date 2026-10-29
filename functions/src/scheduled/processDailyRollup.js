@@ -8,11 +8,18 @@ const {
   getManilaPreviousDateKey,
   getDaysInManilaMonth,
 } = require('../lib/manilaTime');
-const { resolveEnergyForDate, resolvePeakForDate } = require('../lib/energyAccounting');
+const {
+  resolveEnergyForDate,
+  resolvePeakForDate,
+  resolveOnSecondsForDate,
+} = require('../lib/energyAccounting');
 const { upsertInvoice } = require('./processMonthlyInvoice');
 const { repriceUserDailyRows } = require('../lib/repriceDaily');
 
-const upsertApplianceBreakdown = (items, applianceName, energyKwh, cost, outletNumber) => {
+// `onSeconds` is null, not 0, for a day measured before run time was tracked:
+// readers average hours over the days that have it, and a missing day counted
+// as zero hours would drag every average down.
+const upsertApplianceBreakdown = (items, applianceName, energyKwh, cost, outletNumber, onSeconds = null) => {
   const normalizedName = String(applianceName || '').trim();
   if (!normalizedName || energyKwh <= 0) return;
 
@@ -20,6 +27,9 @@ const upsertApplianceBreakdown = (items, applianceName, energyKwh, cost, outletN
   if (existing) {
     existing.energyKwh += energyKwh;
     existing.cost += cost;
+    if (onSeconds !== null) {
+      existing.onSeconds = (existing.onSeconds || 0) + onSeconds;
+    }
     if (!existing.outlets.includes(outletNumber)) {
       existing.outlets.push(outletNumber);
     }
@@ -31,6 +41,7 @@ const upsertApplianceBreakdown = (items, applianceName, energyKwh, cost, outletN
     energyKwh,
     cost,
     outlets: [outletNumber],
+    onSeconds,
   });
 };
 
@@ -218,6 +229,17 @@ async function processDailyRollup() {
         );
         const totalEnergy = outlet1Energy + outlet2Energy;
 
+        // Run time, for the appliance cost calculator. Null for a day measured
+        // before it was tracked - see resolveOnSecondsForDate.
+        const outlet1OnSeconds = resolveOnSecondsForDate(
+          outlet1Doc.exists ? outlet1Doc.data() : {},
+          dateString
+        );
+        const outlet2OnSeconds = resolveOnSecondsForDate(
+          outlet2Doc.exists ? outlet2Doc.data() : {},
+          dateString
+        );
+
         // Nothing linked and nothing measured: write no row, so no receipt
         // trigger fires and no budget or invoice is opened for an account that
         // has never drawn a watt. See shouldRollUpUser for why both halves.
@@ -306,8 +328,8 @@ async function processDailyRollup() {
           : 0;
 
         const applianceBreakdown = [];
-        upsertApplianceBreakdown(applianceBreakdown, outlet1Name, outlet1Energy, outlet1Cost, 1);
-        upsertApplianceBreakdown(applianceBreakdown, outlet2Name, outlet2Energy, outlet2Cost, 2);
+        upsertApplianceBreakdown(applianceBreakdown, outlet1Name, outlet1Energy, outlet1Cost, 1, outlet1OnSeconds);
+        upsertApplianceBreakdown(applianceBreakdown, outlet2Name, outlet2Energy, outlet2Cost, 2, outlet2OnSeconds);
 
         // Create history_daily document
         const dailyRef = db.doc(`users/${userId}/history_daily/${dateString}`);
@@ -319,6 +341,8 @@ async function processDailyRollup() {
           outlet2Name,
           outlet1Cost,
           outlet2Cost,
+          outlet1OnSeconds,
+          outlet2OnSeconds,
           totalEnergy,
           cost,
           bill,

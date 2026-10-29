@@ -44,8 +44,14 @@ export const APPLIANCE_ROW_LIMIT = 6;
  * nameless or zero-energy entry is dropped - it would print as "0.00 kWh"
  * under a blank label and explain nothing.
  *
+ * Run time rides along (Oct 2026): `onSeconds` sums the measured seconds and
+ * `runDays` counts only the days that carried a measurement. A day rolled up
+ * before run time was tracked has `onSeconds: null` or no field at all, and it
+ * is left out of `runDays` - averaging it in would read as a day spent off.
+ *
  * @param {Array} entries `history_daily` documents.
- * @returns {Array<{applianceName: string, energyKwh: number, cost: number}>}
+ * @returns {Array<{applianceName: string, energyKwh: number, cost: number,
+ *   onSeconds: number, runDays: number}>}
  */
 export const aggregateApplianceUsage = (entries) => {
   const totals = new Map();
@@ -58,14 +64,55 @@ export const aggregateApplianceUsage = (entries) => {
       const energyKwh = toNumber(item?.energyKwh);
       if (!name || energyKwh <= 0) return;
 
-      const existing = totals.get(name) || { applianceName: name, energyKwh: 0, cost: 0 };
+      const existing = totals.get(name)
+        || { applianceName: name, energyKwh: 0, cost: 0, onSeconds: 0, runDays: 0 };
       existing.energyKwh += energyKwh;
       existing.cost += toNumber(item?.cost);
+      if (item?.onSeconds !== undefined && item?.onSeconds !== null && Number.isFinite(Number(item.onSeconds))) {
+        existing.onSeconds += Math.max(0, Number(item.onSeconds));
+        existing.runDays += 1;
+      }
       totals.set(name, existing);
     });
   });
 
   return Array.from(totals.values()).sort((a, b) => b.energyKwh - a.energyKwh);
+};
+
+/**
+ * Measured hours a day, averaged over the days the appliance actually ran and
+ * had run time recorded. Null when no such day exists - the calculator then
+ * asks rather than guessing.
+ *
+ * "Days it ran", not calendar days: a fan used on 10 of 30 days for 8 hours
+ * runs 8 hours a day when used, and that is the figure a person can check
+ * against what they remember. The monthly projection multiplies by days used.
+ */
+export const averageHoursPerRunDay = (row) => {
+  const runDays = toNumber(row?.runDays);
+  if (runDays <= 0) return null;
+  return toNumber(row?.onSeconds) / 3600 / runDays;
+};
+
+/**
+ * Prices each appliance as its share of `totalCost` by energy - the emailed
+ * statement's rule (`functions/src/lib/invoice.js`), so the rows always add up
+ * to the total printed above them rather than each being re-priced at an
+ * average rate. Rounded per row, exactly as the statement rounds.
+ *
+ * @param {Array} rows From `aggregateApplianceUsage` or `foldApplianceRows`.
+ * @param {number} totalCost The period's cost, as shown on the same screen.
+ * @param {number} totalKwh The period's energy, all outlets.
+ */
+export const priceByEnergyShare = (rows, totalCost, totalKwh) => {
+  const total = toNumber(totalCost);
+  const kWh = toNumber(totalKwh);
+
+  return (Array.isArray(rows) ? rows : []).map((row) => ({
+    ...row,
+    cost: kWh > 0 ? Number((total * (toNumber(row?.energyKwh) / kWh)).toFixed(2)) : 0,
+    share: kWh > 0 ? toNumber(row?.energyKwh) / kWh : 0,
+  }));
 };
 
 /**

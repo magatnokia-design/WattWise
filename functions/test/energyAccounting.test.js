@@ -182,3 +182,77 @@ test('a caller that passes no power still accounts energy correctly', () => {
   assert.equal(state.energyTodayKwh, 2);
   assert.equal(state.peakPowerTodayW, 0);
 });
+
+// --- Run time (the appliance cost calculator's measured hours a day) ---
+
+const { resolveOnSecondsForDate, MAX_ON_TIME_GAP_MS } = require('../src/lib/energyAccounting');
+
+// Feeds samples [msOffset, watts] through the accumulator on one meter reading.
+const runSamples = (samples, start = {}) => samples.reduce(
+  (state, [offsetMs, watts]) => deriveOutletEnergy(state, 10, MANILA_MORNING_MS + offsetMs, watts),
+  start
+);
+
+test('run time counts the intervals that follow a running sample', () => {
+  // A fan at 56 W, sampled every 1.5 s for a minute.
+  const samples = Array.from({ length: 41 }, (_, i) => [i * 1500, 56]);
+  const state = runSamples(samples);
+
+  assert.equal(state.onSecondsToday, 60);
+});
+
+test('an idle outlet accrues no run time', () => {
+  // Below the 3 W line: an idle charger brick, or nothing plugged in.
+  const state = runSamples([[0, 0], [5000, 1.2], [10000, 2.9], [15000, 0]]);
+
+  assert.equal(state.onSecondsToday, 0);
+});
+
+test('the interval belongs to the sample that opened it', () => {
+  // On for the first 3 s, then switched off: the 3 s after the off sample
+  // must not be counted, and the 3 s after the last on sample must.
+  const state = runSamples([[0, 56], [3000, 56], [6000, 0], [9000, 0]]);
+
+  assert.equal(state.onSecondsToday, 6);
+});
+
+test('a silence longer than the gap limit is not assumed to be running', () => {
+  // The Hub dropped off for ten minutes with the fan last seen running.
+  const state = runSamples([[0, 56], [1500, 56], [1500 + (10 * 60 * 1000), 56]]);
+
+  assert.equal(state.onSecondsToday, 1.5);
+  assert.ok(10 * 60 * 1000 > MAX_ON_TIME_GAP_MS);
+});
+
+test('a sample with an earlier timestamp adds nothing', () => {
+  const state = runSamples([[0, 56], [3000, 56], [2000, 56]]);
+
+  assert.equal(state.onSecondsToday, 3);
+});
+
+test('the day rollover closes out run time and starts the new day at zero', () => {
+  let state = runSamples([[0, 56], [3000, 56], [6000, 56]]);
+  assert.equal(state.onSecondsToday, 6);
+
+  // Midnight Manila; the fan was last seen running more than 30 s earlier, so
+  // the straddling interval is a gap, not run time.
+  const nextDayMs = MANILA_MORNING_MS + (17 * HOUR_MS);
+  state = deriveOutletEnergy(state, 10, nextDayMs, 56);
+
+  assert.equal(state.onSecondsToday, 0);
+  assert.equal(state.onSecondsPreviousDay, 6);
+  assert.equal(state.energyPreviousDateKey, '2026-03-10');
+  assert.equal(resolveOnSecondsForDate(state, '2026-03-10'), 6);
+  assert.equal(resolveOnSecondsForDate(state, '2026-03-11'), 0);
+});
+
+test('a day closed out before run time existed reads as unmeasured, not as zero hours', () => {
+  // An outlet document written by the previous build: energy, no run time.
+  const legacy = { energyMeterKwh: 10, energyDateKey: '2026-03-10', energyTodayKwh: 0.4 };
+  const nextDayMs = MANILA_MORNING_MS + (17 * HOUR_MS);
+  const state = deriveOutletEnergy(legacy, 10, nextDayMs, 56);
+
+  assert.equal(state.onSecondsPreviousDay, null);
+  assert.equal(resolveOnSecondsForDate(state, '2026-03-10'), null);
+  assert.equal(resolveOnSecondsForDate({}, '2026-03-10'), null);
+});
