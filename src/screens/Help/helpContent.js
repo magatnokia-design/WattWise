@@ -118,7 +118,7 @@ export const HELP_SECTIONS = [
         answer: [
           'Plug something in and switch the outlet on. Within a few seconds Dagitab either suggests a name or, for anything not in its list, asks you to type one.',
           'Whatever name you save is stored with that appliance\'s power pattern. From then on it is recognised by itself, on either outlet, and named without asking.',
-          'If a different appliance is plugged in, the old name is cleared and you are asked again. Settings > Saved appliances shows when and where each one was last recognised.',
+          'If a different appliance is plugged in, the old name is cleared and you are asked again.',
           'Dagitab only sees power, so two appliances that draw the same steady wattage look alike to it.',
         ],
       },

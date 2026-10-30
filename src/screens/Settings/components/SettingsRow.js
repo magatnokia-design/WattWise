@@ -32,6 +32,11 @@ const SettingsRow = ({
   // An action is running. Shows a spinner in place of the arrow and stops the
   // row being tapped again while it does.
   busy,
+  // Dark, bold value - for a figure the row is about (an appliance's watts).
+  strongValue,
+  // Small icon buttons, e.g. rename and delete. A row with actions is not
+  // itself tappable, so pass no onPress alongside them.
+  actions,
 }) => {
   // `disabled` used to select a dimmed style and nothing else - the
   // TouchableOpacity computed its own disabled state from whether an onPress
@@ -63,7 +68,23 @@ const SettingsRow = ({
 
       <View style={styles.rightSide}>
         {value ? (
-          <Text style={styles.value} numberOfLines={1}>{value}</Text>
+          <Text style={[styles.value, strongValue && styles.valueStrong]} numberOfLines={1}>{value}</Text>
+        ) : null}
+        {actions ? (
+          <View style={styles.actions}>
+            {actions.map(({ icon: actionIcon, label: actionLabel, onPress: onAction, danger }) => (
+              <TouchableOpacity
+                key={actionIcon}
+                onPress={onAction}
+                style={styles.actionButton}
+                hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+                accessibilityRole="button"
+                accessibilityLabel={actionLabel}
+              >
+                <Ionicons name={actionIcon} size={18} color={danger ? COLORS.error : COLORS.primary} />
+              </TouchableOpacity>
+            ))}
+          </View>
         ) : null}
         {busy ? (
           <ActivityIndicator size="small" color={tint} />
@@ -128,6 +149,18 @@ const styles = StyleSheet.create({
     color: COLORS.textLight,
     fontWeight: '500',
     flexShrink: 1,
+  },
+  valueStrong: {
+    color: COLORS.text,
+    fontWeight: '700',
+    marginRight: 4,
+  },
+  actions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  actionButton: {
+    padding: 6,
   },
 });
 

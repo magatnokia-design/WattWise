@@ -45,28 +45,10 @@ const SectionCard = ({ children }) => (
 
 const Separator = () => <View style={styles.separator} />;
 
-// Short "how it was learned" summary shown next to each saved appliance.
+// The power each saved appliance was learned at, in whole watts as on the web.
 const formatApplianceSignature = (appliance) => {
   const meanPower = Number(appliance?.meanPower) || 0;
-  return meanPower > 0 ? `~${meanPower.toFixed(1)} W` : 'Learned';
-};
-
-// "Recognised on Outlet 2 · 8:37 AM", "· Yesterday", "· Oct 19" - proof the
-// saved appliance is actually being matched (Oct 2026).
-const formatLastSeen = (lastSeen) => {
-  if (!lastSeen?.atMs) return 'Not recognised yet';
-  const at = new Date(lastSeen.atMs);
-  const today = new Date();
-  const yesterday = new Date(today.getTime() - 86400000);
-  const sameDay = (a, b) => a.toDateString() === b.toDateString();
-  const when = sameDay(at, today)
-    ? at.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
-    : sameDay(at, yesterday)
-      ? 'Yesterday'
-      : at.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-  return lastSeen.outlet
-    ? `Recognised on Outlet ${lastSeen.outlet} · ${when}`
-    : `Recognised · ${when}`;
+  return meanPower > 0 ? `~${meanPower.toFixed(0)} W` : 'Learned';
 };
 
 const SettingsScreen = ({ navigation }) => {
@@ -145,11 +127,9 @@ const SettingsScreen = ({ navigation }) => {
   // Tapping a saved appliance offers both actions. Renaming used to mean
   // forgetting and re-teaching, which discards the measured run the signature
   // was built from - so the non-destructive option is offered first.
-  // Three outcomes, two buttons: Rename takes the accent slot because it is the
-  // one that keeps the measured run, Forget takes the outline slot and opens its
-  // own confirmation, and backing out does neither. That last part is why
-  // `onDismiss` is passed - here the cancel slot is a real choice, not an exit.
-  const handleSavedAppliancePress = useCallback((label) => {
+  // The row's delete button (Oct 2026: rename and delete are icon buttons on the
+  // row, as on the web, instead of one dialog offering both). Still confirmed.
+  const handleForgetSavedAppliance = useCallback((label) => {
     const forget = async () => {
       setDialog(null);
       const result = await removeSavedAppliance(label);
@@ -164,27 +144,13 @@ const SettingsScreen = ({ navigation }) => {
     };
 
     setDialog({
-      icon: '🔌',
-      title: label,
-      message: 'Rename keeps the measured power signature. Forget deletes it, and detection falls back to the built-in appliance profiles.',
-      confirmLabel: 'Rename',
-      cancelLabel: 'Forget',
-      onConfirm: () => {
-        setDialog(null);
-        setRenamingAppliance(label);
-      },
-      onCancel: () => {
-        setDialog({
-          icon: '🗑️',
-          tone: 'danger',
-          title: `Forget ${label}?`,
-          message: `Dagitab forgets how ${label} draws power, and any outlet named ${label} goes back to unnamed - so the next time it runs, Dagitab suggests a name again.`,
-          confirmLabel: 'Forget',
-          cancelLabel: 'Keep',
-          onConfirm: forget,
-        });
-      },
-      onDismiss: () => setDialog(null),
+      icon: '🗑️',
+      tone: 'danger',
+      title: `Forget ${label}?`,
+      message: `Dagitab forgets how ${label} draws power, and any outlet named ${label} goes back to unnamed - so the next time it runs, Dagitab suggests a name again.`,
+      confirmLabel: 'Forget',
+      cancelLabel: 'Keep',
+      onConfirm: forget,
     });
   }, [removeSavedAppliance]);
 
@@ -711,10 +677,12 @@ const SettingsScreen = ({ navigation }) => {
                   icon={applianceIcon(appliance.label)}
                   iconSet="mci"
                   label={appliance.label}
-                  subtitle={formatLastSeen(appliance.lastSeen)}
                   value={formatApplianceSignature(appliance)}
-                  showArrow
-                  onPress={() => handleSavedAppliancePress(appliance.label)}
+                  strongValue
+                  actions={[
+                    { icon: 'create-outline', label: `Rename ${appliance.label}`, onPress: () => setRenamingAppliance(appliance.label) },
+                    { icon: 'trash-outline', label: `Forget ${appliance.label}`, onPress: () => handleForgetSavedAppliance(appliance.label), danger: true },
+                  ]}
                 />
               </React.Fragment>
             ))
