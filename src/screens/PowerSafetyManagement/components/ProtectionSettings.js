@@ -66,13 +66,13 @@ const ProtectionSettings = ({ enabled, onToggle, thresholds, onSaveThresholds })
         icon: '📡',
         tone: 'warning',
         title: 'Saved here, not sent yet',
-        message: `Auto cut-off will be ${value ? 'on' : 'off'} once you are back online. Keep Dagitab open until then.`,
+        message: `Auto shut-off will be ${value ? 'on' : 'off'} once you are back online. Keep Dagitab open until then.`,
       });
     } else if (result && !result.success) {
       setDialog({
         icon: '⚠️',
         tone: 'danger',
-        title: 'Auto cut-off did not change',
+        title: 'Auto shut-off did not change',
         message: result.error || 'It kept its previous setting. Please try again.',
       });
     }
@@ -152,7 +152,7 @@ const ProtectionSettings = ({ enabled, onToggle, thresholds, onSaveThresholds })
         icon: '📡',
         tone: 'warning',
         title: 'Saved here, not sent yet',
-        message: 'Your new limits have not reached the server, so the Hub is still enforcing the previous ones. They will sync when you are back online — keep Dagitab open, because closing it drops the change.',
+        message: "The Hub keeps your old limits until you're online. Keep Dagitab open.",
       });
       setIsEditing(false);
       return;
@@ -175,7 +175,7 @@ const ProtectionSettings = ({ enabled, onToggle, thresholds, onSaveThresholds })
     <View style={styles.card}>
       <View style={styles.row}>
         <Ionicons name="shield-checkmark" size={18} color={COLORS.primary} />
-        <Text style={styles.rowTitle}>Auto cut-off</Text>
+        <Text style={styles.rowTitle}>Auto shut-off</Text>
         <Switch
           value={enabled}
           onValueChange={handleToggle}

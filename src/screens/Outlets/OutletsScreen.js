@@ -259,13 +259,13 @@ const OutletsScreen = ({ navigation }) => {
         icon: '📡',
         tone: 'warning',
         title: 'No connection',
-        message: 'The command could not leave this phone, so the outlet has not changed. Check your wi-fi or mobile data and try again — the Hub is fine.',
+        message: "No internet. The outlet didn't change.",
       } : {
         icon: '⚠️',
         tone: 'danger',
         title: 'The outlet did not switch',
         message: result.error
-          || 'The command reached Dagitab but could not be carried out. Check that the Hub is powered and online, then try again.',
+          || "Hub didn't respond. Check it's on and try again.",
       });
     }, 300);
   };
@@ -308,7 +308,7 @@ const OutletsScreen = ({ navigation }) => {
           icon: '🗑️',
           tone: 'danger',
           title: `Forget ${name}?`,
-          message: `Outlet ${number} goes back to unnamed, and any power signature saved as ${name} is deleted.`,
+          message: `Dagitab will forget ${name}.`,
           confirmLabel: 'Forget',
           cancelLabel: 'Keep',
           onConfirm: () => forgetApplianceName(number, name),
@@ -356,7 +356,7 @@ const OutletsScreen = ({ navigation }) => {
           tone: 'warning',
           title: 'Saved as a name only',
           message: result.learnError
-            || 'The outlet is named, but its power signature was not learned yet. Keep the appliance running for a few seconds and confirm again.',
+            || 'Not learned yet. Keep it running a few seconds, then try again.',
         });
       }
     } finally {

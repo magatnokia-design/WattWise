@@ -59,7 +59,7 @@ export const splitDailyDate = (dateString) => {
 const SOURCE_LABELS = {
   manual: { label: 'Manual', tone: 'neutral' },
   schedule: { label: 'Schedule', tone: 'info' },
-  auto_cutoff: { label: 'Auto-cutoff', tone: 'danger' },
+  auto_cutoff: { label: 'Auto shut-off', tone: 'danger' },
   timer: { label: 'Timer', tone: 'info' },
   // A relay moved without Dagitab ordering it - a power-cycle is the ordinary
   // cause, since the ESP32 boots with both relays open. Named for what is known

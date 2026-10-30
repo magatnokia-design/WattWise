@@ -45,7 +45,7 @@ export const getSafetyStageConfig = (stage, readingsAreStale = false) => {
     return {
       label: 'No readings',
       short: 'No reading',
-      description: 'The Dagitab Hub has stopped reporting, so nothing can be graded right now',
+      description: 'Hub offline. No readings.',
       icon: 'help-circle',
       color: COLORS.textLight,
       textColor: COLORS.textLight,

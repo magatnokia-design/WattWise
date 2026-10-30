@@ -110,7 +110,7 @@ const ScheduleScreen = ({ navigation }) => {
         icon: '📡',
         tone: 'warning',
         title: 'Saved here, not sent yet',
-        message: 'The timer is in your list, but it has not reached the server. It will sync when you are back online — keep Dagitab open, because closing it drops the change.',
+        message: "Keep Dagitab open until you're online.",
       });
       return { success: true, pending: true };
     }
@@ -141,7 +141,7 @@ const ScheduleScreen = ({ navigation }) => {
             icon: '📡',
             tone: 'warning',
             title: 'Removed here, not sent yet',
-            message: 'The timer is gone from your list, but the server has not been told. It will sync when you are back online — keep Dagitab open, because closing it drops the change.',
+            message: "Keep Dagitab open until you're online.",
           });
           return;
         }
@@ -166,7 +166,7 @@ const ScheduleScreen = ({ navigation }) => {
         icon: '📡',
         tone: 'warning',
         title: 'Changed here, not sent yet',
-        message: 'The switch has moved, but the server has not been told, so the timer will not run until this reaches it. Keep Dagitab open until you are back online.',
+        message: "The timer won't run until you're online. Keep Dagitab open.",
       });
       return;
     }

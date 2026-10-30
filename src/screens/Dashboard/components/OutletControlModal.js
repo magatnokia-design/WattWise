@@ -48,7 +48,7 @@ const OutletControlModal = ({
           <Text style={styles.message}>
             {newStatus 
               ? `This will turn on ${outletName} and start consuming power.`
-              : `This will turn off ${outletName} and stop power consumption.`
+              : `This will turn off ${outletName} and cut its power.`
             }
           </Text>
 

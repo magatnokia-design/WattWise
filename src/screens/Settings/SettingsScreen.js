@@ -231,7 +231,7 @@ const SettingsScreen = ({ navigation }) => {
       icon: '🔔',
       title: 'Android is blocking these',
       message:
-        'Dagitab will send safety cut-offs, budget alerts and device events to this account. Android is set to hide notifications from this app, so they will not appear on your phone until you allow them.',
+        'Dagitab will send safety shut-offs, budget alerts and device events to this account. Android is set to hide notifications from this app, so they will not appear on your phone until you allow them.',
       tone: 'warning',
       confirmLabel: 'Open settings',
       cancelLabel: 'Not now',
@@ -810,7 +810,7 @@ const SettingsScreen = ({ navigation }) => {
         visible={renamingAppliance !== null}
         currentName={renamingAppliance || ''}
         title="Rename Appliance"
-        subtitle="The learned power signature is kept, and any outlet using this name is renamed with it."
+        subtitle="Outlets using this name change too."
         placeholder="Appliance name"
         fieldLabel="Appliance name"
         onClose={() => setRenamingAppliance(null)}

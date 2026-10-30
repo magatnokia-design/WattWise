@@ -62,7 +62,7 @@ const PowerSafetyScreen = ({ navigation }) => {
         </TouchableOpacity>
         <View style={styles.headerTitles}>
           <Text style={styles.headerTitle}>Power Safety</Text>
-          <Text style={styles.headerSub}>Limits and cut-off for your outlets</Text>
+          <Text style={styles.headerSub}>Limits and auto shut-off</Text>
         </View>
       </View>
 

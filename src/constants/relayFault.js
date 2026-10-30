@@ -19,7 +19,7 @@
  * What was wrong was the sentence, not the latch. "current is still flowing"
  * is a present-tense measurement, and it was printed while the Hub was silent -
  * four lines under a Power Safety card correctly saying "The Dagitab Hub has
- * stopped reporting, so nothing can be graded right now". Two cards on one
+ * Hub offline. No readings.". Two cards on one
  * screen disagreeing about whether the app knows anything at all.
  *
  * That is the shape this project has been caught by three times already
@@ -34,7 +34,7 @@
 const ACTION = 'Unplug the appliance at the wall and have the wiring checked before using it again.';
 
 const CANNOT_PROTECT =
-  'The relay may be stuck closed, so the safety cut-off cannot protect this outlet either.';
+  'The switch may be stuck, so auto shut-off cannot protect this outlet.';
 
 export const RELAY_FAULT_LIVE =
   `It was told to switch off and current is still flowing. ${CANNOT_PROTECT} ${ACTION}`;

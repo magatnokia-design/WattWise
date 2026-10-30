@@ -101,7 +101,7 @@ const slides = [
     id: '9',
     icon: 'receipt',
     title: 'Rates Are Automatic',
-    description: "Every peso figure in Dagitab is computed on the PELCO III residential tariff.\n\nDagitab reads PELCO III's official rate every month, so there is nothing to look up or type. If your bill ever shows a different rate, you can enter your own in Settings.",
+    description: "Every peso figure in Dagitab is based on PELCO III home rates.\n\nDagitab reads PELCO III's official rate every month, so there is nothing to look up or type. If your bill ever shows a different rate, you can enter your own in Settings.",
   },
 ];
 

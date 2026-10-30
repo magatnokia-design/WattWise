@@ -219,7 +219,7 @@ const SupplyRateModal = ({
               </View>
               <View style={styles.headerText}>
                 <Text style={styles.title}>Electricity rate</Text>
-                <Text style={styles.subtitle}>PELCO III residential tariff</Text>
+                <Text style={styles.subtitle}>PELCO III home rates</Text>
               </View>
               <TouchableOpacity onPress={onClose} activeOpacity={0.7} accessibilityLabel="Close">
                 <Ionicons name="close" size={22} color={COLORS.textLight} />

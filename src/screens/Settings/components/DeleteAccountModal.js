@@ -39,7 +39,7 @@ const DELETED_ITEMS = [
   ['person-outline', 'Your account', 'Email, name and sign-in. You will not be able to sign in again.'],
   ['flash-outline', 'All energy readings', 'Every voltage, current and power measurement recorded for both outlets.'],
   ['receipt-outline', 'Usage history and bills', 'Daily records, monthly statements and any past bills you entered for comparison.'],
-  ['pricetags-outline', 'Learned appliances', 'Every appliance signature Dagitab measured and you confirmed.'],
+  ['pricetags-outline', 'Learned appliances', 'Appliances Dagitab learned.'],
   ['wallet-outline', 'Budget and alerts', 'Your monthly budget, spending records and all notifications.'],
   ['timer-outline', 'Schedules and safety settings', 'Timers, countdowns and your power safety thresholds.'],
 ];
