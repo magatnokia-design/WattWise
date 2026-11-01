@@ -10,10 +10,12 @@
 	// pulls in, secrets.h among them.
 	//
 	// Both files now use ${env:LOCALAPPDATA} and a * for the core version, so
-	// neither is tied to one machine or one core release.
+	// neither is tied to one machine or one core release. The one exception is
+	// sketch libraries, which arduino-cli keeps in its user directory (OneDrive
+	// Documents here), not under Arduino15.
 	"C_Cpp.default.includePath": [
 		"${workspaceFolder}/**",
-		"${env:LOCALAPPDATA}/Arduino15/libraries/**",
+		"${env:USERPROFILE}/OneDrive/Documents/Arduino/libraries/**",
 		"${env:LOCALAPPDATA}/Arduino15/packages/esp32/hardware/esp32/*/cores/esp32",
 		"${env:LOCALAPPDATA}/Arduino15/packages/esp32/hardware/esp32/*/libraries/**",
 		"${env:LOCALAPPDATA}/Arduino15/packages/esp32/hardware/esp32/*/variants/esp32",

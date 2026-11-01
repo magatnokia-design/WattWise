@@ -615,9 +615,11 @@ the code over that doc for data flow). Current top-level structure under `users/
 
 ## ESP32 toolchain (arduino-cli)
 
-The Hub is built with **arduino-cli**, not the Arduino IDE. Core and libraries live under
-`%LOCALAPPDATA%\Arduino15`, which is machine-local and not in the repo - a fresh machine
-rebuilds it from scratch:
+The Hub is built with **arduino-cli**, not the Arduino IDE. The core lives under
+`%LOCALAPPDATA%\Arduino15`; sketch libraries live in arduino-cli's user directory,
+`%USERPROFILE%\OneDrive\Documents\Arduino\libraries` on this machine (OneDrive redirects
+Documents - `arduino-cli config get directories.user` prints it). Both are machine-local and
+not in the repo - a fresh machine rebuilds them from scratch:
 
 **The capstone paper says the firmware was written in the Arduino IDE, and that is
 correct - do not "fix" it to say arduino-cli.** The sketch was authored in the IDE from
@@ -632,9 +634,14 @@ arduino-cli lib install "ArduinoJson@6.21.5"  # pinned - see below
 arduino-cli lib install "PZEM004Tv30"         # index name, NOT "PZEM-004T-v30"
 $build = "$PWD\.arduino-build"
 arduino-cli compile --fqbn esp32:esp32:esp32 docs/esp32/WattWise_ESP32_Relay_Cloud `
-  --libraries "$env:LOCALAPPDATA\Arduino15\libraries" --build-path $build
+  --build-path $build
 arduino-cli upload  --fqbn esp32:esp32:esp32 -p COM<n> --input-dir $build
 ```
+
+No `--libraries` flag: arduino-cli already searches its user directory, which is where
+`lib install` puts them. The flag this command used to carry pointed at
+`%LOCALAPPDATA%\Arduino15\libraries`, a folder that does not exist - harmless to the CLI,
+but the same path in `.vscode/` left IntelliSense unable to find any library header.
 
 **Compile and upload must share an explicit `--build-path` / `--input-dir`.** The
 default cache directory is a hash of the build options, so a `compile` that passes

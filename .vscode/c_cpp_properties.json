@@ -17,8 +17,10 @@
 
         // Sketch libraries. The Arduino IDE injects this path; the CLI needs it
         // passed as --libraries, and IntelliSense needs it listed here. It was
-        // missing from this file entirely.
-        "${env:LOCALAPPDATA}/Arduino15/libraries/**",
+        // missing from this file entirely. They live in arduino-cli's user
+        // directory (`arduino-cli config get directories.user`), not under
+        // Arduino15 - on this machine OneDrive redirects Documents.
+        "${env:USERPROFILE}/OneDrive/Documents/Arduino/libraries/**",
 
         // ESP32 Arduino core.
         "${env:LOCALAPPDATA}/Arduino15/packages/esp32/hardware/esp32/*/cores/esp32",
