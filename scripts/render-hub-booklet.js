@@ -12,8 +12,8 @@ const html = fs.readFileSync(input, 'utf8');
 const style = html.match(/<style>[\s\S]*?<\/style>/i);
 const pages = html.match(/<section class="page(?: [^"]*)?"[\s\S]*?<\/section>/gi);
 
-if (!style || !pages || pages.length !== 9) {
-  throw new Error(`Expected the filled booklet to contain 9 pages; found ${pages ? pages.length : 0}.`);
+if (!style || !pages || pages.length !== 10) {
+  throw new Error(`Expected the filled booklet to contain 10 pages; found ${pages ? pages.length : 0}.`);
 }
 
 fs.mkdirSync(outputDir, { recursive: true });

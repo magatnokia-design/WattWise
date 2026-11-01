@@ -290,8 +290,8 @@
     <span class="label">Mains inside · in an emergency</span>
     <p><strong>Never open the unit while it is plugged in.</strong> It carries
     mains voltage for the two switched outlets. Nothing inside is meant to be
-    adjusted — the one exception is changing the Wi-Fi network, and page 8 says
-    how to do that safely. If the housing or a lead is damaged, or either has
+    adjusted — the two exceptions are changing the Wi-Fi network (page 8) and
+    replacing the fuse (page 10), and those pages say how to do it safely. If the housing or a lead is damaged, or either has
     been wet, leave it unplugged and have it checked.</p>
     <p><strong>Fire, smoke or a burning smell:</strong> switch off at the wall
     only if it is safe to reach, leave the room, then call.</p>
@@ -516,6 +516,11 @@
         — that page explains why.</td>
       </tr>
       <tr>
+        <td>No lights, and both outlets dead</td>
+        <td>The fuse inside may have blown. Page 10 shows how to replace it —
+        <strong>unplug from the wall first.</strong></td>
+      </tr>
+      <tr>
         <td>App shows the Hub offline</td>
         <td>Check the Reason line on the Hub card, then confirm the token
         matches page 5 exactly.</td>
@@ -529,14 +534,14 @@
         <td>An outlet stays on after switching it off</td>
         <td>The app says <strong>“Outlet is not switching off”</strong>. Treat
         it as live — <strong>unplug at the wall.</strong> Neither the Hub nor
-        the cut-off can protect that socket. Have it checked.</td>
+        auto shut-off can protect that socket. Have it checked.</td>
       </tr>
     </tbody>
   </table>
 
   <div class="grow-fill"></div>
 
-  <p class="small">Firmware <code>relay-cloud-dualpzem-1.5.1</code></p>
+  <p class="small">Firmware <code>relay-cloud-dualpzem-1.5.2</code></p>
 
   <div class="folio"><span>Troubleshooting</span><span>7</span></div>
 </section>
@@ -641,6 +646,70 @@
   <div class="grow-fill"></div>
 
   <div class="folio"><span>Change the Wi-Fi network · 2 of 2</span><span>9</span></div>
+</section>
+
+<!-- ============ 10 · REPLACING THE FUSE ============ -->
+<section class="page">
+  <p class="kicker">No power at all</p>
+  <h2>Replace the fuse</h2>
+
+  <p class="small">The Hub shows no lights, the app says <strong>Hub
+  offline</strong>, and neither outlet works — even though the wall socket is
+  on. The fuse inside has most likely blown. It protects everything after the
+  plug, so when it goes, both the Hub and the outlets go dead.</p>
+
+  <div class="note warn">
+    <span class="label">Unplug from the wall first — this is not optional</span>
+    <p><strong>Never open the Hub while it is plugged into a mains
+    socket.</strong></p>
+  </div>
+
+  <div class="step">
+    <div class="step-n">1</div>
+    <div class="step-body">
+      <h2>Unplug everything</h2>
+      <p class="small">The two outlets first, then the Hub's own plug. Wait
+      five seconds, then open the lid.</p>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-n">2</div>
+    <div class="step-body">
+      <h2>Twist open the black fuse holder</h2>
+      <p class="small">Take out the old fuse. A blown one usually has a broken
+      wire or a dark mark inside the glass.</p>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-n">3</div>
+    <div class="step-body">
+      <h2>Fit a new 3.15&nbsp;A fuse</h2>
+      <p class="small">Same size and type as the old one. Never a higher
+      number, and never a wire or foil in its place.</p>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-n">4</div>
+    <div class="step-body">
+      <h2>Close it and plug it back in</h2>
+      <p class="small">Twist the holder shut, close the lid, plug the Hub into
+      the wall. Within a minute the app shows it reporting again.</p>
+    </div>
+  </div>
+
+  <div class="note warn">
+    <span class="label">If the new fuse blows too</span>
+    <p>Stop. Something is drawing too much or has a fault — often an appliance
+    too big for Dagitab, which is for low-power appliances only. Leave the Hub
+    unplugged and have it checked.</p>
+  </div>
+
+  <div class="grow-fill"></div>
+
+  <div class="folio"><span>Replace the fuse</span><span>10</span></div>
 </section>
 
 </div>
