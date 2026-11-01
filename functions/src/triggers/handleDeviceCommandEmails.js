@@ -7,6 +7,32 @@ const NOTIFIABLE_STATUSES = new Set(['failed', 'rejected', 'timeout']);
 
 const normalizeStatus = (value) => String(value || '').trim().toLowerCase();
 
+/**
+ * What a failed switch says to the user (Nov 2026: plain words, on request).
+ *
+ * The old alert printed the machinery - status "timeout", reason
+ * "manual_toggle", source, device and command id - and left the reader to work
+ * out what it meant. A timeout almost always means the Hub is offline
+ * (unplugged or off Wi-Fi), so it says that. failed/rejected mean the Hub
+ * answered and could not do it, which is a different instruction.
+ */
+const describeFailure = ({ status, action, outletNumber }) => {
+  const outlet = Number.isInteger(outletNumber) ? `Outlet ${outletNumber}` : 'Your outlet';
+  const verb = action === 'off' ? 'turn off' : action === 'on' ? 'turn on' : 'switch';
+  const title = `${outlet} didn't ${verb}`;
+
+  if (status === 'timeout') {
+    return {
+      title,
+      message: 'The Hub may be offline. Check that it is plugged in and on Wi-Fi, then try again.',
+    };
+  }
+  return {
+    title,
+    message: 'The Hub could not do it. Try again, and check the Hub if it keeps happening.',
+  };
+};
+
 async function handleDeviceCommandEmails(event) {
   // See the note in handleDailyReceiptEmails: v2 passes one event, not
   // (change, context). This threw on `context.params` every time, which is why
@@ -52,17 +78,21 @@ async function handleDeviceCommandEmails(event) {
     // A toggle that never reached the ESP32 is the one failure the user most
     // needs to know about immediately - they think the outlet switched and it
     // did not. Push first, then fall through to the email.
+    const action = String(after.action || '').trim().toLowerCase();
+    const copy = describeFailure({ status, action, outletNumber });
+
+    // The details sit in a nested object on purpose: both clients' notification
+    // detail lists skip objects, so they stay on record without being printed
+    // under the alert as "Reason  manual_toggle".
     await createNotification({
       userId,
       type: 'device',
-      title: 'Outlet command failed',
-      message: `The ${String(after.action || 'toggle').trim()} command for ${outletId || 'your outlet'} reported "${status}".`,
+      title: copy.title,
+      message: copy.message,
       outlet: Number.isNaN(outletNumber) ? null : outletNumber,
       metadata: {
         commandId,
-        status,
-        action: String(after.action || '').trim(),
-        reason: String(after.reason || '').trim(),
+        command: { status, action, reason: String(after.reason || '').trim() },
       },
     });
 
@@ -74,22 +104,11 @@ async function handleDeviceCommandEmails(event) {
 
     await enqueueEmail({
       toEmail: contact.email,
-      subject: `Dagitab: outlet command ${status}`,
-      heading: 'Outlet command did not complete',
-      intro: `A command sent to ${outletId || 'your outlet'} reported status "${status}".`,
-      rows: [
-        ['Outlet', outletId],
-        ['Action', String(after.action || '').trim()],
-        ['Status', status],
-        ['Reason', String(after.reason || '').trim()],
-        ['Source', String(after.source || '').trim()],
-        ['Device', String(after.deviceId || '').trim()],
-        ['Command ID', commandId],
-      ],
-      note:
-        'The outlet did not change state. Check the ESP32 has power and wi-fi, then try again - '
-        + 'the app shows a live device status in Settings. Nothing was switched, so the outlet is '
-        + 'still in whatever state it was already in.',
+      subject: `Dagitab: ${copy.title}`,
+      heading: copy.title,
+      intro: copy.message,
+      rows: [],
+      note: 'Nothing was switched, so the outlet is still the way it was.',
       tag: 'device',
     });
 
@@ -103,4 +122,4 @@ async function handleDeviceCommandEmails(event) {
   }
 }
 
-module.exports = { handleDeviceCommandEmails };
+module.exports = { handleDeviceCommandEmails, describeFailure };
