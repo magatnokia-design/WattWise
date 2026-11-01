@@ -92,7 +92,7 @@ const main = () => {
   // Left in place it would be false on this copy, and the warning it carries
   // matters more here than it does there.
   html = html.replace(
-    'GENERATED FILE — do not edit by hand. Source template and build script live\n  in the scratchpad.',
+    'TRACKED TEMPLATE — edit this file directly. scripts/build-hub-booklet.js\n  fills it into the private copy below.',
     'FILLED COPY - contains the device token, setup password and pairing QR.\n  Built by scripts/build-hub-booklet.js from the tracked template. Gitignored.\n  Do not commit it, publish it, or put it in the paper appendices.'
   );
 
