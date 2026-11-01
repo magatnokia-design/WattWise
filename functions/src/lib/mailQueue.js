@@ -250,7 +250,7 @@ ${noteBlock}
           <td style="padding:16px 24px 22px;border-top:1px solid ${THEME.border};">
 ${footerLink}
             <p style="margin:0 0 4px;color:${THEME.textLight};font-size:12px;line-height:1.5;">
-              Sent automatically by Dagitab. Energy figures are measured at your outlets; peso amounts follow the PELCO III residential tariff.
+              Sent automatically by Dagitab. Energy figures are measured at your outlets; peso amounts follow PELCO III home rates.
             </p>
             <p style="margin:0;color:${THEME.textFaint};font-size:11px;line-height:1.5;">
               Reply to this email if something looks wrong.
@@ -296,7 +296,7 @@ const buildEmailText = ({ heading, intro, rows, action, tag, note }) => {
   }
 
   lines.push('', '--', 'Sent automatically by Dagitab.');
-  lines.push('Peso amounts follow the PELCO III residential tariff.');
+  lines.push('Peso amounts follow PELCO III home rates.');
 
   if (!isAuthMail(tag)) {
     lines.push(`Open Dagitab on the web: ${APP_WEB_URL}`);
