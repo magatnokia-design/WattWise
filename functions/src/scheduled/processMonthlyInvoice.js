@@ -71,6 +71,67 @@ const upsertInvoice = async ({ db, userId, billingMonth, todayKey, isLifeline, u
 };
 
 /**
+ * The words around a statement email, from the invoice's own status (Nov 2026).
+ *
+ * This used to be estimate wording unconditionally, which was right for the
+ * month's close and wrong for a resend: re-sending a FINALIZED month mailed a
+ * PDF stamped FINAL inside an email calling it "an estimate" that Dagitab
+ * "will update", and left an "estimated bill" notification in the app. The
+ * final wording matches applyPelcoRates' own final email.
+ */
+const statementEmailCopy = ({ invoice, billingMonth }) => {
+  const monthName = formatMonthName(billingMonth);
+  const kwh = `${Number(invoice.totalKwh || 0).toFixed(2)} kWh`;
+
+  if (invoice.status === STATUS.FINALIZED) {
+    const generation = Number(invoice.supplyRates?.generation);
+    return {
+      notification: null,
+      subject: `Your final Dagitab statement for ${monthName}`,
+      heading: `${monthName} statement - final`,
+      intro: `Here is your ${monthName} statement, priced at PELCO III's official rate for the month.`,
+      rows: [
+        ['Billing month', monthName],
+        ['Reading period', `${invoice.readingDateFrom} to ${invoice.readingDateTo}`],
+        ['Total kWh used', kwh],
+        ['Amount due', peso(invoice.totalAmountDue)],
+        Number.isFinite(generation) ? ['Generation rate', `${peso(generation)} / kWh (official)`] : null,
+      ].filter(Boolean),
+      note: null,
+    };
+  }
+
+  return {
+    notification: {
+      title: `${monthName} statement ready`,
+      message:
+        `Your estimated bill is ${peso(invoice.totalAmountDue)} for ${kwh}. ` +
+        'Dagitab updates it to the official rate as soon as PELCO III posts it.',
+    },
+    subject: `Your Dagitab statement for ${monthName}`,
+    heading: `${monthName} statement`,
+    intro:
+      `Your billing period has closed. This statement is an estimate of ${peso(invoice.totalAmountDue)} ` +
+      'based on the most recent rate - PELCO III releases each month\'s official rate a few days after the ' +
+      'period ends. Dagitab will update it and send you the final statement then - nothing for you to do.',
+    rows: [
+      ['Billing month', monthName],
+      ['Reading period', `${invoice.readingDateFrom} to ${invoice.readingDateTo}`],
+      ['Billing days', String(invoice.billingDays)],
+      ['Total kWh used', kwh],
+      ['Estimated amount due', peso(invoice.totalAmountDue)],
+      ['Effective rate', `${peso(invoice.effectiveRate)} / kWh`],
+    ],
+    // Finalizing is automatic since Oct 2026 (applyPelcoRates reads PELCO
+    // III's posted rate), so the note no longer sends the reader to enter it.
+    note:
+      'The final statement arrives by itself once PELCO III posts the month\'s rate. '
+      + 'If your paper bill shows a different generation rate, you can enter it in Dagitab: '
+      + 'Settings > Monthly statements.',
+  };
+};
+
+/**
  * Scheduled: runs shortly after midnight Manila on the 1st of each month.
  *
  * Closes the month that just ended, moving it to PENDING, and emails the user a
@@ -116,19 +177,22 @@ async function processInvoiceForUser({
     return { sent: false, reason: 'no_usage' };
   }
 
-  await createNotification({
-    userId,
-    type: 'invoice',
-    title: `${formatMonthName(billingMonth)} statement ready`,
-    message:
-      `Your estimated bill is ${peso(invoice.totalAmountDue)} for ${invoice.totalKwh.toFixed(2)} kWh. ` +
-      'Dagitab updates it to the official rate as soon as PELCO III posts it.',
-    metadata: {
-      billingMonth,
-      totalKwh: invoice.totalKwh,
-      totalAmountDue: invoice.totalAmountDue,
-    },
-  });
+  const copy = statementEmailCopy({ invoice, billingMonth });
+
+  // Only the month's close announces a statement. A FINALIZED month reaches
+  // this path only through a resend, which already says "Sent." on screen.
+  if (copy.notification) {
+    await createNotification({
+      userId,
+      type: 'invoice',
+      ...copy.notification,
+      metadata: {
+        billingMonth,
+        totalKwh: invoice.totalKwh,
+        totalAmountDue: invoice.totalAmountDue,
+      },
+    });
+  }
 
   const contact = await resolveUserContact(userId);
   if (!contact?.email) return { sent: false, reason: 'no_email' };
@@ -140,32 +204,17 @@ async function processInvoiceForUser({
 
   await enqueueEmail({
     toEmail: contact.email,
-    subject: `Your Dagitab statement for ${formatMonthName(billingMonth)}`,
-    heading: `${formatMonthName(billingMonth)} statement`,
-    intro:
-      `Your billing period has closed. This statement is an estimate of ${peso(invoice.totalAmountDue)} ` +
-      'based on the most recent rate - PELCO III releases each month\'s official rate a few days after the ' +
-      'period ends. Dagitab will update it and send you the final statement then - nothing for you to do.',
-    rows: [
-      ['Billing month', formatMonthName(billingMonth)],
-      ['Reading period', `${invoice.readingDateFrom} to ${invoice.readingDateTo}`],
-      ['Billing days', String(invoice.billingDays)],
-      ['Total kWh used', `${invoice.totalKwh.toFixed(2)} kWh`],
-      ['Estimated amount due', peso(invoice.totalAmountDue)],
-      ['Effective rate', `${peso(invoice.effectiveRate)} / kWh`],
-    ],
+    subject: copy.subject,
+    heading: copy.heading,
+    intro: copy.intro,
+    rows: copy.rows,
     attachments: [{
       filename: `Dagitab-${billingMonth}.pdf`,
       content: pdf.toString('base64'),
       encoding: 'base64',
       contentType: 'application/pdf',
     }],
-    // Finalizing is automatic since Oct 2026 (applyPelcoRates reads PELCO
-    // III's posted rate), so the note no longer sends the reader to enter it.
-    note:
-      'The final statement arrives by itself once PELCO III posts the month\'s rate. '
-      + 'If your paper bill shows a different generation rate, you can enter it in Dagitab: '
-      + 'Settings > Monthly statements.',
+    note: copy.note,
     tag: 'invoice',
   });
 
@@ -214,4 +263,4 @@ async function processMonthlyInvoice() {
   return { success: true, billingMonth, sent };
 }
 
-module.exports = { processMonthlyInvoice, processInvoiceForUser, upsertInvoice };
+module.exports = { processMonthlyInvoice, processInvoiceForUser, upsertInvoice, statementEmailCopy };
