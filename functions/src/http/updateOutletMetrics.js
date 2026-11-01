@@ -509,7 +509,7 @@ async function updateOutletMetrics(req, res) {
         dispatchedOutletIds.add(number);
 
         await createSafetyNotification({
-          title: 'Outlet over-power cut-off',
+          title: 'Outlet over-power shut-off',
           message: `Outlet ${number} exceeded ${MAX_OUTLET_POWER_W}W and was turned off.`,
           outlet: number,
           metadata: {

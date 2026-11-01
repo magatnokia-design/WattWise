@@ -110,13 +110,12 @@ async function handleSafetyAlerts(event) {
         // all - so with protection disabled the user was told their outlets
         // were safe while the appliance carried on drawing.
         if (protectionEnabled) {
-          title = 'Auto cut-off triggered';
-          message = 'Power has been automatically cut off for your safety. Dangerous levels detected.';
+          title = 'Auto shut-off triggered';
+          message = 'Power was too high, so the outlet was switched off for your safety.';
         } else {
-          title = 'Cut-off level reached';
-          message = 'Power reached the cut-off level, but auto cut-off is switched off, so '
-            + 'nothing was disconnected. Switch the outlet off yourself, or turn auto cut-off '
-            + 'on in Power Safety.';
+          title = 'Shut-off level reached';
+          message = 'Power reached the shut-off level, but auto shut-off is off, so nothing was '
+            + 'switched off. Switch the outlet off yourself, or turn on auto shut-off in Power Safety.';
         }
         type = 'cutoff';
         break;
