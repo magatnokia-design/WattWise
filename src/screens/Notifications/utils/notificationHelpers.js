@@ -207,7 +207,7 @@ export const describeNotificationDetails = (item) => {
     if (has('outletPowerW')) {
       rows.push({ label: 'This outlet', value: watts(metadata.outletPowerW) });
     }
-    rows.push({ label: 'Cut-off limit', value: watts(metadata.limitW) });
+    rows.push({ label: 'Shut-off limit', value: watts(metadata.limitW) });
     return rows;
   }
 
