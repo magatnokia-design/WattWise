@@ -65,6 +65,7 @@ const OutletCard = ({
   onChoose,
   onToggle,
   disabled,
+  hubOffline,
 }) => {
   const tone = TONES[badge.tone] || TONES.off;
   const live = hasReading;
@@ -144,19 +145,33 @@ const OutletCard = ({
         onChoose={onChoose}
       />
 
-      <TouchableOpacity
-        style={[styles.toggle, isOn ? styles.toggleOff : styles.toggleOn]}
-        onPress={onToggle}
-        disabled={disabled}
-        activeOpacity={0.85}
-        accessibilityRole="button"
-        accessibilityLabel={`${isOn ? 'Turn off' : 'Turn on'} outlet ${number}`}
-      >
-        <Ionicons name="power" size={20} color={isOn ? COLORS.error : COLORS.white} />
-        <Text style={[styles.toggleText, isOn && styles.toggleTextOff]}>
-          {isOn ? 'Turn off' : 'Turn on'}
-        </Text>
-      </TouchableOpacity>
+      {/* No switching while the Hub is silent (Nov 2026). The command could
+          not reach it - it would time out after about a minute - and if the
+          Hub came back inside that minute the outlet would switch late, with
+          nobody watching. The button returns as soon as readings do. */}
+      {hubOffline ? (
+        <>
+          <View style={[styles.toggle, styles.toggleBlocked]} accessibilityLabel={`Outlet ${number}: Hub offline, can't switch`}>
+            <Ionicons name="cloud-offline-outline" size={20} color={COLORS.textLight} />
+            <Text style={[styles.toggleText, styles.toggleTextBlocked]}>Hub offline</Text>
+          </View>
+          <Text style={styles.toggleNote}>Can&apos;t switch while the Hub is offline.</Text>
+        </>
+      ) : (
+        <TouchableOpacity
+          style={[styles.toggle, isOn ? styles.toggleOff : styles.toggleOn]}
+          onPress={onToggle}
+          disabled={disabled}
+          activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityLabel={`${isOn ? 'Turn off' : 'Turn on'} outlet ${number}`}
+        >
+          <Ionicons name="power" size={20} color={isOn ? COLORS.error : COLORS.white} />
+          <Text style={[styles.toggleText, isOn && styles.toggleTextOff]}>
+            {isOn ? 'Turn off' : 'Turn on'}
+          </Text>
+        </TouchableOpacity>
+      )}
     </View>
   );
 };
@@ -228,6 +243,7 @@ const OutletsScreen = ({ navigation }) => {
         unsupportedReason: suggestion.unsupportedReason,
         measuredPowerW: suggestion.measuredPowerW,
       }),
+      switching: Boolean(one ? outlet1SwitchingTo : outlet2SwitchingTo),
       applianceMuted: !hasLoad || !applianceName,
       applianceName: String(applianceName || '').trim(),
       hasLoad,
@@ -245,6 +261,22 @@ const OutletsScreen = ({ navigation }) => {
   const handleConfirmToggle = async () => {
     const { outlet } = controlModal;
     const current = outlet === 1 ? outlet1Status : outlet2Status;
+
+    // The Hub can go quiet while this dialog is open; the card's block only
+    // covers opening it.
+    if (!(outlet === 1 ? outlet1HasReading : outlet2HasReading)) {
+      setControlModal({ visible: false, outlet: null });
+      setTimeout(() => {
+        setDialog({
+          icon: '📡',
+          tone: 'warning',
+          title: 'Hub offline',
+          message: "The outlet didn't change. Try again when the Hub is back.",
+        });
+      }, 300);
+      return;
+    }
+
     const result = await toggleOutlet(outlet, !current);
 
     setControlModal({ visible: false, outlet: null });
@@ -438,6 +470,9 @@ const OutletsScreen = ({ navigation }) => {
               onChoose={(name) => handleChooseAppliance(o.number, name)}
               onToggle={() => setControlModal({ visible: true, outlet: o.number })}
               disabled={isToggling}
+              // A switch already in flight keeps its button; only an idle
+              // outlet with no readings is blocked.
+              hubOffline={!o.hasReading && !o.switching}
             />
           ))
         )}
@@ -665,6 +700,20 @@ const styles = StyleSheet.create({
   },
   toggleTextOff: {
     color: COLORS.error,
+  },
+  toggleBlocked: {
+    backgroundColor: COLORS.background,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  toggleTextBlocked: {
+    color: COLORS.textLight,
+  },
+  toggleNote: {
+    marginTop: 6,
+    fontSize: 12,
+    color: COLORS.textLight,
+    textAlign: 'center',
   },
 });
 
